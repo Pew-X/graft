@@ -6,8 +6,23 @@ edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
+[features]
+# Helpers that create a throwaway database per test; enabled by test crates only.
+test-support = []
+
 [dependencies]
 graft-domain.workspace = true
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "postgres", "migrate", "macros"] }
+tokio = { version = "1", features = ["time"] }
+thiserror = "2"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+getrandom = "0.3"
 
 [lints]
 workspace = true
+
+[[test]]
+name = "postgres"
+required-features = ["test-support"]
