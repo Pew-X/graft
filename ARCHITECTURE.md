@@ -58,7 +58,7 @@ exports:  memory, graft_version() -> u32,
 imports:  none
 ```
 
-Only 32-bit integers cross the boundary and the caller owns both buffers. Return values are frames written, or a negative status: `-1` for bad parameters, input over the ceiling, an unknown method, or a pointer mistake the module can detect (null, odd-aligned, wrapping the address space, or overlapping buffers), `-2` for an output buffer that is too small. Checks run in that order: parameters and ceiling, then method, then capacity. A trap means the renderer failed.
+Only 32-bit integers cross the boundary and the caller owns both buffers. Return values are frames written, or a negative status: `-1` for bad parameters, input over the ceiling, an unknown method, or a pointer mistake the module can detect (null, odd-aligned, wrapping the address space, or overlapping buffers), `-2` for an output buffer that is too small. Checks run in that order: parameters and ceiling, then method, then capacity, then (in the C-ABI only) the pointer checks. A trap means the renderer failed.
 
 Output frame `k` reads input position `k*p/q` exactly:
 
@@ -81,7 +81,7 @@ The table also holds the error codes and their order, the exact limits, `out_len
 
 ### Identity and the pin
 
-The renderer identity recorded in a content record is `{name, version, wasm_sha256}`: `graft_render::NAME`, `graft_render::VERSION`, and the hash pinned for that version in `fixtures/renderer/PINS`. The pin file is append-only. CI builds the artefact, compares its hash with the pin for the current version, and fails if a hash changed without a new version, if a version has no pin, or if a published pin line was edited.
+The renderer identity recorded in a content record is `{name, version, wasm_sha256}`. A host reads the version from the loaded artefact's `graft_version()` export and computes the SHA-256 of the exact bytes it loaded; the pair must match the line for that version in `fixtures/renderer/PINS`, and a mismatch is a startup error (the render host, ticket 03, implements this; `graft-render` itself is not a dependency of the service). The pin file is append-only. CI builds the artefact, compares its hash with the pin for the current version, and fails if a hash changed without a new version, if a version has no pin, or if a published pin line was edited.
 
 ### Reproducible build
 
@@ -96,7 +96,7 @@ The renderer identity recorded in a content record is `{name, version, wasm_sha2
 
 ### One-day exit checkpoint (ticket 02)
 
-The agreed exit to a TypeScript renderer applies if the artefact will not instantiate, hashes differ across hosts, the build is not reproducible, the toolchain cannot be pinned or the server cannot call it. At the end of the first day: the artefact instantiates with zero imports under wasmtime; native and wasmtime agree on every vector; two builds from different directories are byte-identical; the toolchain is pinned by `rust-toolchain.toml`. None of the exit conditions holds. The browser leg is added by ticket 04.
+The agreed exit to a TypeScript renderer applies if the artefact will not instantiate, hashes differ across hosts, the build is not reproducible, the toolchain cannot be pinned or the server cannot call it. At the end of the first day: the artefact instantiates with zero imports under wasmtime; native and wasmtime agree on every vector; two builds from different directories are byte-identical; the toolchain is pinned by `rust-toolchain.toml`. The same artefact was also instantiated in Node (V8, the engine behind Chromium) with an empty import object, and all 44 render vectors matched; that was a one-off run and is not part of CI. Firefox and WebKit have not run this artefact yet, so condition (a) and (b) stay open for browsers until ticket 04 adds them to CI. No exit condition holds for the hosts tested so far.
 
 ## Render host
 
