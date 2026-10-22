@@ -3,19 +3,32 @@
 //! Parents are immutable and children only insert, so forks of one stage never contend on the
 //! parent's row. What can still go wrong is the rules that look across children: the per-stage
 //! fork cap, the parent's permission and hidden state, and the retry key. They are enforced inside
-//! one SERIALIZABLE transaction that first takes a transaction-scoped advisory lock keyed on the
-//! parent, so forks of the same stage mostly queue instead of aborting each other. The lock does
-//! not remove every conflict (the transaction's snapshot is taken before the lock wait ends), so
-//! serialization failures are expected, retried a bounded number of times, and reported as a
-//! retryable error when they persist. Serializable isolation is what keeps the answer correct
-//! either way.
+//! one SERIALIZABLE transaction, which keeps the answer correct whatever the interleaving.
+//!
+//! To make forks of the same stage queue instead of aborting each other, a lock keyed on the
+//! parent is taken *before* the transaction begins. It has to be a session-level advisory lock on
+//! the same connection: a transaction-scoped lock taken inside a serializable transaction is
+//! acquired after the transaction's snapshot, so every waiter would read stale data and be
+//! aborted (measured: 24 concurrent forks took 65 attempts that way). Everything in the critical
+//! section uses that one connection, because a holder that needed a second connection from a full
+//! pool of waiters would deadlock. The write runs in its own task so a dropped request cannot
+//! leave the lock held, and the lock is always released, with the connection discarded if
+//! releasing it fails.
+//!
+//! Serialization failures can still happen (a concurrent hide, a replayed key); they are retried a
+//! bounded number of times and surfaced as a retryable error if they persist.
 
 use crate::gate::points;
-use crate::postgres::{NewPublication, Store, StoreError, db, insert_publication, insert_record};
+use crate::postgres::{
+    NewPublication, Store, StoreError, db, fetch_stage, insert_publication, insert_record,
+};
 use graft_domain::chain::StoredStage;
 use graft_domain::ids::PublicationId;
-use sqlx::Row;
+use sqlx::{Connection, PgConnection, Row};
 use std::time::Duration;
+
+/// How long a fork waits for the lock on its parent before giving up with a retryable error.
+const LOCK_WAIT: &str = "10s";
 
 /// A flip to create.
 #[derive(Debug, Clone)]
@@ -59,7 +72,18 @@ pub enum FlipOutcome {
 
 impl Store {
     /// Create a flip, idempotently by retry key, enforcing the rules that look across children.
+    ///
+    /// The work runs in its own task, so dropping the returned future does not abandon a
+    /// transaction half way.
     pub async fn create_flip(&self, flip: &NewFlip) -> Result<FlipOutcome, StoreError> {
+        let store = self.clone();
+        let flip = flip.clone();
+        tokio::spawn(async move { store.create_flip_with_retries(&flip).await })
+            .await
+            .map_err(|_| StoreError::Db("the write task failed".into()))?
+    }
+
+    async fn create_flip_with_retries(&self, flip: &NewFlip) -> Result<FlipOutcome, StoreError> {
         let mut attempt = 0;
         loop {
             match self.try_create_flip(flip).await {
@@ -75,27 +99,58 @@ impl Store {
     }
 
     async fn try_create_flip(&self, flip: &NewFlip) -> Result<FlipOutcome, StoreError> {
+        let Some(parent) = flip.publication.record.parent() else {
+            return Err(StoreError::Corrupt("a flip must name a parent".into()));
+        };
+        let mut conn = self.pool.acquire().await.map_err(db)?;
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "SET lock_timeout = '{LOCK_WAIT}'"
+        )))
+        .execute(&mut *conn)
+        .await
+        .map_err(db)?;
+        // Taken outside any transaction, so the snapshot of the transaction below is taken after
+        // every earlier fork of this parent has committed.
+        sqlx::query("SELECT pg_advisory_lock(hashtextextended($1, 0))")
+            .bind(parent.as_str())
+            .execute(&mut *conn)
+            .await
+            .map_err(db)?;
+        self.gate.reached(points::LOCKED).await;
+        let outcome = self.flip_in_transaction(&mut conn, flip).await;
+        let released = sqlx::query("SELECT pg_advisory_unlock(hashtextextended($1, 0))")
+            .bind(parent.as_str())
+            .execute(&mut *conn)
+            .await;
+        if released.is_err() {
+            // A connection that may still hold the lock must not go back to the pool; closing it
+            // releases every session lock it owns.
+            let _ = conn.detach().close().await;
+        }
+        outcome
+    }
+
+    async fn flip_in_transaction(
+        &self,
+        conn: &mut PgConnection,
+        flip: &NewFlip,
+    ) -> Result<FlipOutcome, StoreError> {
         let new = &flip.publication;
         let Some(parent) = new.record.parent() else {
             return Err(StoreError::Corrupt("a flip must name a parent".into()));
         };
-        let mut tx = self.pool.begin().await.map_err(db)?;
+        let mut tx = conn.begin().await.map_err(db)?;
         sqlx::query("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
             .execute(&mut *tx)
             .await
             .map_err(db)?;
-        sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
-            .bind(parent.as_str())
-            .execute(&mut *tx)
-            .await
-            .map_err(db)?;
-        self.gate.reached(points::LOCKED).await;
 
         // An idempotent replay is answered before any rule is applied: a retry after the parent
         // revoked forking, or after the cap filled, must still return what was already created.
         if let Some(existing) = existing_by_key(&mut tx, &new.retry_key).await? {
+            let outcome = replay(&mut tx, existing, new).await;
             tx.rollback().await.map_err(db)?;
-            return self.replay(existing, new).await;
+            return outcome;
         }
         let row =
             sqlx::query("SELECT fork_permitted, hidden_reason FROM publications WHERE id = $1")
@@ -133,45 +188,36 @@ impl Store {
         insert_record(&mut tx, &new.record).await?;
         if !insert_publication(&mut tx, new).await? {
             // The key was taken between the check and the insert; answer as a replay.
+            let existing = existing_by_key(&mut tx, &new.retry_key)
+                .await?
+                .ok_or_else(|| StoreError::Corrupt("a conflicting key vanished".into()))?;
+            let outcome = replay(&mut tx, existing, new).await;
             tx.rollback().await.map_err(db)?;
-            let existing = self.existing_by_key_outside(&new.retry_key).await?;
-            return self.replay(existing, new).await;
+            return outcome;
         }
         self.gate.reached(points::BEFORE_COMMIT).await;
         tx.commit().await.map_err(db)?;
-        let stage = self.publication(&new.id).await?.ok_or_else(|| {
+        // Read on the same connection, still under the lock: asking the pool for another
+        // connection here could wait behind the very requests that are waiting for this lock.
+        let stage = fetch_stage(&mut *conn, &new.id).await?.ok_or_else(|| {
             StoreError::Corrupt("a publication vanished right after it was written".into())
         })?;
         Ok(FlipOutcome::Created(Box::new(stage)))
     }
+}
 
-    async fn existing_by_key_outside(
-        &self,
-        key: &str,
-    ) -> Result<(PublicationId, Vec<u8>), StoreError> {
-        let row: (String, Vec<u8>) =
-            sqlx::query_as("SELECT id, content_id FROM publications WHERE retry_key = $1")
-                .bind(key)
-                .fetch_one(&self.pool)
-                .await
-                .map_err(db)?;
-        let id = PublicationId::parse(&row.0).map_err(|e| StoreError::Corrupt(e.to_string()))?;
-        Ok((id, row.1))
+async fn replay(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    existing: (PublicationId, Vec<u8>),
+    new: &NewPublication,
+) -> Result<FlipOutcome, StoreError> {
+    if existing.1 != new.record.id().as_bytes().as_slice() {
+        return Ok(FlipOutcome::KeyConflict);
     }
-
-    async fn replay(
-        &self,
-        existing: (PublicationId, Vec<u8>),
-        new: &NewPublication,
-    ) -> Result<FlipOutcome, StoreError> {
-        if existing.1 != new.record.id().as_bytes().as_slice() {
-            return Ok(FlipOutcome::KeyConflict);
-        }
-        let stage = self.publication(&existing.0).await?.ok_or_else(|| {
-            StoreError::Corrupt("a publication vanished while it was read".into())
-        })?;
-        Ok(FlipOutcome::Existing(Box::new(stage)))
-    }
+    let stage = fetch_stage(&mut **tx, &existing.0)
+        .await?
+        .ok_or_else(|| StoreError::Corrupt("a publication vanished while it was read".into()))?;
+    Ok(FlipOutcome::Existing(Box::new(stage)))
 }
 
 async fn existing_by_key(

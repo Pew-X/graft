@@ -21,7 +21,7 @@ impl Gate for NoGate {
 
 /// Points a flip transaction announces, in order.
 pub mod points {
-    /// The parent's advisory lock is held; nothing has been read yet.
+    /// The lock on the parent is held and no transaction has begun yet.
     pub const LOCKED: &str = "locked";
     /// Permission, hidden state and the fork cap were checked; nothing is written yet.
     pub const CHECKED: &str = "checked";

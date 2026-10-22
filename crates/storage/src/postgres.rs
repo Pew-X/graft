@@ -199,16 +199,7 @@ impl Store {
 
     /// One publication with its record, or `None`.
     pub async fn publication(&self, id: &PublicationId) -> Result<Option<StoredStage>, StoreError> {
-        let sql = format!(
-            "SELECT {STAGE_COLUMNS} FROM publications p JOIN content_records c ON c.id = p.content_id \
-             WHERE p.id = $1"
-        );
-        let row = sqlx::query(sqlx::AssertSqlSafe(sql))
-            .bind(id.as_str())
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(db)?;
-        row.map(|r| stage_from_row(&r)).transpose()
+        fetch_stage(&self.pool, id).await
     }
 
     /// The chain ending at `leaf`, read as one statement and so one consistent snapshot.
@@ -244,6 +235,27 @@ impl Store {
             .collect::<Result<Vec<_>, _>>()?;
         Ok(chain::assemble(leaf, stages, max_depth))
     }
+}
+
+/// One publication read through any executor, so a caller that holds a connection (and a lock)
+/// reads on that connection instead of waiting for a second one from the pool.
+pub(crate) async fn fetch_stage<'e, E>(
+    executor: E,
+    id: &PublicationId,
+) -> Result<Option<StoredStage>, StoreError>
+where
+    E: sqlx::Executor<'e, Database = Postgres>,
+{
+    let sql = format!(
+        "SELECT {STAGE_COLUMNS} FROM publications p JOIN content_records c ON c.id = p.content_id \
+         WHERE p.id = $1"
+    );
+    let row = sqlx::query(sqlx::AssertSqlSafe(sql))
+        .bind(id.as_str())
+        .fetch_optional(executor)
+        .await
+        .map_err(db)?;
+    row.map(|r| stage_from_row(&r)).transpose()
 }
 
 pub(crate) async fn insert_record(
