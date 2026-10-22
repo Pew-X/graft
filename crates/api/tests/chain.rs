@@ -1,3 +1,4 @@
+#![allow(clippy::expect_used, clippy::panic)] // test helpers fail loudly
 //! Seam 1: the public HTTP API against a real Postgres. Each test names the guarantee it protects.
 
 mod common;

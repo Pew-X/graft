@@ -1,3 +1,4 @@
+#![allow(clippy::expect_used, clippy::panic)] // test helpers fail loudly
 //! Operational baseline: logs are JSON, carry the request id, and hold no secrets.
 
 mod common;

@@ -10,16 +10,16 @@ One deployable Rust service plus a Next.js UI, built as a Cargo workspace. The a
 |---|---|---|
 | `graft-domain` | nothing in the workspace | content record, publication, ancestry rules, honesty states, limits |
 | `graft-render` | nothing at all | the integer renderer and its C-ABI wrapper, compiled to the canonical `.wasm` |
-| `graft-storage` | domain | Postgres and blob store access behind traits |
+| `graft-storage` | domain | Postgres store (migrations, idempotent writes, the chain read) and the blob store trait with an in-memory and a directory-backed implementation |
 | `graft-render-host` | domain | runs the canonical `.wasm` under wasmtime |
-| `graft-events` | domain | outbox, relay, consumer, rollups behind an event-sink trait |
+| `graft-events` | domain | the event-sink trait and a no-op sink; the ledger, relay, consumer and rollups arrive with their tickets |
 | `graft-vectors` | render, render-host | the renderer vector table: loader, generators, and the native, wasmtime and render-host harnesses (test support; nothing ships it) |
 | `graft-host-check` | render-host, vectors | throwaway check service for the first deployment (see "Check on the target host"); removed by the deploy pipeline ticket |
-| `graft-api` | domain, storage, render-host, events | HTTP layer, OpenAPI, rate limits, admin routes, configuration |
+| `graft-api` | domain, storage, render-host, events | HTTP layer, OpenAPI document, configuration, the seed script; rate limits and admin routes arrive with their tickets |
 
 Nothing depends on `graft-api`. `graft-render` is deliberately kept apart: the renderer is one artefact that must build alone, with no dependencies, to a reproducible `.wasm`.
 
-Written by ticket 01.
+Written by ticket 01; rows for storage, events and api updated by ticket 05.
 
 ## Toolchain and repository conventions
 
@@ -168,6 +168,66 @@ Not checked:
 - Input canonicalisation across browsers' audio decoders: only the rule applied to given floats is checked, not what a decoder produces from a compressed file.
 - Anything about listening quality; the vectors check bytes, not sound.
 
-## Data model, concurrency, events, operations, security
+## Data model
 
-_Not written yet. Tickets 05 onwards; consolidated by ticket 37 write it._
+Written by ticket 05.
+
+**Content record and publication.** A *content record* is the immutable description of the work done in one stage: its format version, kind (source or flip), the parent *publication* (absent for a source), the hash of the audio the cut was taken from, the cut as a half-open frame range, the transform (the exact fraction `p/q` and the method id), the renderer (name, version and the SHA-256 of the `.wasm`) and the hash of the output. It carries no creation time and no maker. A *publication* is a maker's credited claim on a content record: public id, title and name as typed, creation time, a retry key, and for sources the declared evidence. Publications are not hashed.
+
+**Why forks point at publications.** A flip names its parent publication, not the parent's audio. The roll can then show the exact credit line that was forked, and two makers who publish the same flip of the same parent get two publications that share one content record and one stored audio blob. The consequence is deliberate: because a child's record includes its parent's publication id, the same cut and speed of two different parents is two different records.
+
+**Canonical encoding and the hash.** The record is encoded as canonical JSON, the subset of RFC 8785 that graft uses: objects, integers and strings only; keys ordered by UTF-16 code unit; minimal string escapes; integers limited to plus or minus 2^53 - 1; no whitespace. The record id is the SHA-256 of those bytes. `graft-domain` tests the encoder against hand-derived literals (including the UTF-16 key order that differs from UTF-8 byte order) and a shuffle property, and pins two whole records to byte-exact JSON and to digests computed outside Rust with Python's `hashlib`. A valid record id says which bytes were described, nothing about who made them or whether they may be shared.
+
+**Identifiers.** A publication id is 60 bits shown as 12 characters from `0-9a-z` without `i`, `l`, `o` and `u`: opaque, non-sequential and URL-safe. Visitor publications get random ids from the service. *Seeded* publications get ids derived from their deterministic retry key (`SHA-256("graft-seeded-publication-v1:" + key)`, first eight bytes, low 60 bits). This is a small documented exception to "ids are random": it makes ids, content hashes and the shipped static snapshot identical in every environment, because a child's hash includes its parent's id. A test seeds two independent databases and compares ids, record ids and the chain read.
+
+**Idempotent creation.** `create_publication` inserts the record (`ON CONFLICT DO NOTHING`, since records are content-addressed) and the publication (`ON CONFLICT (retry_key) DO NOTHING`) in one transaction. If the key already exists with the same record it returns the existing publication; with a different record it rolls back and reports a conflict, leaving no record behind. Isolation level, the per-parent advisory lock and the fork caps arrive with the publish ticket.
+
+**Reading a chain.** The chain read is one SQL statement: a recursive walk from the requested publication up its parent links, bounded by the depth cap plus one row, joined to the records and counting children in the same snapshot. Assembly (`graft_domain::chain::assemble`) is pure: it orders stages source first, marks a named parent that could not be read as *unavailable* rather than shortening the chain, and reports `truncated: depth_cap` when the walk was cut short. A read past the cap is truncated with a stated reason and not refused, because publishing refuses to build deeper chains, so stored data never exceeds the cap and the read stays total. A chain exactly at the cap is not reported as truncated. A stored row whose record does not hash to its id is reported as damaged and not served.
+
+**The count.** "Flipped N times" is the number of publications whose record names this one as parent, computed from publications data at read time (an index on the parent column), never from events.
+
+**Why there is no closure table.** Ancestry is a bounded recursive walk of at most 12 rows per request. A closure table would be needed if the product needed whole-subtree reads (every descendant of a stage) or if the depth cap grew from 12 towards hundreds; neither is in scope.
+
+**Honesty in the read model.** Every credit line carries `declared`, `computed` or `unknown`. Names, titles and notes are declared and are sent as plain text as typed, never as a handle. The cut and the speed are computed. Rights are `unknown` ("not established"). A test fails if any credit line contains one of the claim words the project never uses.
+
+**What is not here yet.** The manage key and fork permission (ticket 08), hiding and held descendants (ticket 09), the render and publish path (ticket 06), the real object-store client and signed URLs (ticket 11), and the events ledger (ticket 13). The columns for the first two exist in the schema; no route reads or writes them yet, and a test checks that responses never contain the manage-key hash.
+
+## Configuration
+
+Written by ticket 05; later tickets add rows. Every value is read from the environment at start-up; only the database URL is required, and it is a secret that is never logged or echoed in an error.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `GRAFT_DATABASE_URL` | none (required) | Postgres connection string |
+| `GRAFT_BIND` | `127.0.0.1:8080` | listen address |
+| `GRAFT_CORS_ORIGINS` | empty | comma-separated origins allowed cross-origin; empty means none |
+| `GRAFT_MAX_CHAIN_DEPTH` | 12 | deepest chain, source counted as stage 1 |
+| `GRAFT_MAX_SOURCE_FRAMES` | 720,000 | longest source (15 s at 48 kHz) |
+| `GRAFT_MAX_CUT_FRAMES` | 480,000 | longest cut (10 s) |
+| `GRAFT_MAX_OUTPUT_FRAMES` | 960,000 | longest rendered output (20 s) |
+| `GRAFT_MIN_FRAMES` | 480 | shortest cut and output (10 ms) |
+| `GRAFT_MAX_TITLE_CHARS` / `GRAFT_MAX_AUTHOR_CHARS` | 60 / 32 | public text limits |
+| `GRAFT_BLOB_URL_TTL_SECS` | 300 | lifetime of an issued blob URL |
+| `GRAFT_BLOB_DIR` | unset | local directory for audio (optional; see below) |
+
+`GRAFT_BLOB_DIR` (optional) names a directory that holds audio for local runs, shared by the service and the seed script; without it the service keeps audio in memory. The seed script also reads `GRAFT_RENDERER_WASM` (the artefact, checked against the pins).
+
+## Interface contract
+
+Written by ticket 05.
+
+The service generates its OpenAPI 3.1 document from the handlers' annotations (utoipa). The document is committed as `openapi/openapi.json`; CI regenerates it and fails on any difference. The typed TypeScript client types (`web/lib/api/schema.d.ts`) are generated from the committed document with openapi-typescript, CI regenerates them and fails on a difference, and the web build typechecks real uses of the client (`web/lib/api/chain.ts`), so renaming or removing a response field fails the UI build. This was shown once on purpose: renaming `title` in the Rust view changed the OpenAPI document (the drift check fails) and, after regenerating, the client no longer typechecked (`Property 'title' does not exist`); the change was then reverted. Errors are RFC 9457 problem details (`application/problem+json`) with a stable `type` URN. An id that is malformed and an id that does not exist get the same 404 body.
+
+## Operational baseline
+
+Written by ticket 05; ticket 16 deepens it.
+
+- Logs are JSON, one line per event, each inside a span that carries a per-request id (also returned as `x-request-id`); a test parses every line of a real request and checks the id, and that no connection string appears.
+- `GET /health` answers without touching the database; `GET /ready` pings it and returns 503 problem details when it fails, without echoing the connection string (tested against a closed pool).
+- `GET /metrics` serves the Prometheus text format: a request counter by method, route pattern and status, and a latency histogram by route pattern, so label cardinality stays bounded.
+- Every response carries `content-security-policy: default-src 'none'; frame-ancestors 'none'`, `x-content-type-options: nosniff`, `referrer-policy: no-referrer` and `cache-control: no-store`. CORS allows nothing unless origins are configured.
+- Tests run through the public HTTP API against a real Postgres 16 (a fresh database per test; a service container in CI), with an in-memory blob store and a no-op event sink. Queries are runtime queries, so building needs no database and no offline query data.
+
+## Concurrency, events, security
+
+_Not written yet. Tickets 06 onwards; consolidated by ticket 37._

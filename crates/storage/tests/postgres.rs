@@ -1,3 +1,4 @@
+#![allow(clippy::expect_used, clippy::panic)] // test helpers fail loudly
 //! The store against a real Postgres. Run with `cargo test -p graft-storage --features test-support`
 //! (CI runs the whole workspace with all features); a server is expected at
 //! `GRAFT_TEST_DATABASE_URL`, by default the local development container.

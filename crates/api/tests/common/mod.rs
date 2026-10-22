@@ -1,6 +1,6 @@
 //! Shared fixtures for the HTTP seam tests: a router over a real, private Postgres and an
 //! in-memory blob store.
-#![allow(dead_code)]
+#![allow(dead_code, clippy::expect_used, clippy::panic)] // shared by several test binaries; helpers fail loudly
 
 use axum::Router;
 use axum::body::Body;

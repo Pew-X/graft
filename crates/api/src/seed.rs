@@ -63,7 +63,7 @@ pub async fn seed_source(
         min: limits.min_frames,
         max: limits.max_source_frames,
     };
-    if source.audio.len() % 2 != 0 {
+    if !source.audio.len().is_multiple_of(2) {
         return Err(bad);
     }
     let frames = u32::try_from(source.audio.len() / 2).map_err(|_| SeedError::BadAudio {
