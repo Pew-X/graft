@@ -1,0 +1,10 @@
+# Only code and relevant scripts are committed. Docs, specs, plans, decisions stay local.
+SPEC.md
+.claude/
+vault/
+.obsidian/
+docs/
+GLOSSARY*.md
+*.md.local
+.DS_Store
+.scratch/
