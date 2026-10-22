@@ -11,6 +11,7 @@ export const ALLOWED = {
   "graft-storage": ["graft-domain"],
   "graft-render-host": ["graft-domain"],
   "graft-events": ["graft-domain"],
+  "graft-vectors": ["graft-render"],
   "graft-api": ["graft-domain", "graft-storage", "graft-render-host", "graft-events"],
 };
 

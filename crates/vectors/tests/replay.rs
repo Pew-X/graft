@@ -1,0 +1,114 @@
+#![allow(clippy::expect_used)] // test helpers fail loudly
+
+//! Seam 2: the committed vector table replayed on every host this repository can run.
+
+use graft_vectors::native::NativeHost;
+use graft_vectors::run::{Check, run_canonicalisation, run_table};
+use graft_vectors::table::Table;
+use graft_vectors::wasm::WasmtimeHost;
+use std::path::PathBuf;
+use std::process::Command;
+
+fn root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+fn table() -> Table {
+    Table::load(&root().join("fixtures/vectors/vectors.json")).expect("vector table loads")
+}
+
+/// The canonical artefact, always rebuilt first (cargo makes that a no-op when nothing changed) so a
+/// stale file can never stand in for the current source.
+fn artefact() -> Vec<u8> {
+    let status = Command::new("sh")
+        .arg(root().join("scripts/build-wasm.sh"))
+        .status()
+        .expect("run scripts/build-wasm.sh");
+    assert!(status.success(), "scripts/build-wasm.sh failed");
+    let path = root().join("target/wasm32-unknown-unknown/wasm/graft_render.wasm");
+    std::fs::read(path).expect("read the built artefact")
+}
+
+fn assert_all_pass(host: &str, checks: &[Check]) {
+    let failed: Vec<String> = checks
+        .iter()
+        .filter(|c| !c.passed)
+        .map(|c| {
+            format!(
+                "  {host}: {}\n    expected {}\n    actual   {}",
+                c.name, c.expected, c.actual
+            )
+        })
+        .collect();
+    assert!(
+        failed.is_empty(),
+        "{} of {} checks failed:\n{}",
+        failed.len(),
+        checks.len(),
+        failed.join("\n")
+    );
+}
+
+#[test]
+fn table_is_well_formed() {
+    let t = table();
+    let mut names: Vec<&str> = t.vectors.iter().map(|v| v.name.as_str()).collect();
+    names.sort_unstable();
+    let before = names.len();
+    names.dedup();
+    assert_eq!(before, names.len(), "vector names must be unique");
+    assert!(
+        t.vectors.iter().filter(|v| v.expect.status < 0).count() >= 10,
+        "error vectors present"
+    );
+    assert_eq!(
+        t.vectors
+            .iter()
+            .filter(|v| v.name.starts_with("hand-"))
+            .count(),
+        4
+    );
+}
+
+#[test]
+fn native_renderer_reproduces_every_vector() {
+    assert_all_pass("native", &run_table(&table(), &mut NativeHost));
+}
+
+#[test]
+fn wasm_artefact_under_wasmtime_reproduces_every_vector() {
+    let mut host = WasmtimeHost::new(&artefact()).expect("artefact instantiates with no imports");
+    assert_all_pass("wasmtime", &run_table(&table(), &mut host));
+}
+
+#[test]
+fn canonicalisation_rules_match_their_vectors() {
+    assert_all_pass("canon", &run_canonicalisation(&table()));
+}
+
+#[test]
+fn large_renders_really_grow_the_instance_memory() {
+    // The growth scenario only means something if one instance's memory actually grows.
+    use graft_vectors::host::Host;
+    let t = table();
+    let big = t.vector("big-cr").expect("big-cr exists");
+    let mut host = WasmtimeHost::new(&artefact()).expect("artefact instantiates");
+    let before = host.memory_pages().expect("wasm hosts report pages");
+    let _ = host.render(&big.input.generate(), big.p, big.q, big.method, big.out_cap);
+    let after = host.memory_pages().expect("wasm hosts report pages");
+    assert!(
+        after > before,
+        "memory stayed at {before} pages after a 2^21 frame render"
+    );
+}
+
+#[test]
+fn table_belongs_to_the_renderer_version_being_built() {
+    let t = table();
+    assert_eq!(t.renderer.name, graft_render::NAME);
+    assert_eq!(
+        t.renderer.version,
+        graft_render::VERSION,
+        "regenerate the table for a new version"
+    );
+}
