@@ -25,6 +25,10 @@ pub trait BlobStore: Send + Sync {
     /// Store `bytes` under their SHA-256 unless already present; returns the hash either way.
     fn put_if_absent(&self, bytes: Vec<u8>) -> BoxFuture<'_, Result<Sha256Hash, BlobError>>;
 
+    /// The bytes stored under `hash`, or `None`. A store that finds bytes that do not hash to
+    /// `hash` reports an error and never returns them.
+    fn get(&self, hash: Sha256Hash) -> BoxFuture<'_, Result<Option<Vec<u8>>, BlobError>>;
+
     /// A URL from which `hash` can be fetched for `ttl`. Issued only after the caller has checked
     /// that the publication asking for it is available; a blob hash alone never grants access.
     fn signed_url(
@@ -71,6 +75,10 @@ impl BlobStore for MemoryBlobStore {
             blobs.entry(hash).or_insert(bytes);
             Ok(hash)
         })
+    }
+
+    fn get(&self, hash: Sha256Hash) -> BoxFuture<'_, Result<Option<Vec<u8>>, BlobError>> {
+        Box::pin(async move { Ok(MemoryBlobStore::get(self, &hash)) })
     }
 
     fn signed_url(
@@ -148,6 +156,23 @@ impl BlobStore for FsBlobStore {
         })
     }
 
+    fn get(&self, hash: Sha256Hash) -> BoxFuture<'_, Result<Option<Vec<u8>>, BlobError>> {
+        Box::pin(async move {
+            let bytes = match tokio::fs::read(self.path(&hash)).await {
+                Ok(bytes) => bytes,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+                Err(e) => return Err(BlobError::Store(e.kind().to_string())),
+            };
+            // Content addressing is only worth something if it is checked on the way out.
+            if Sha256Hash::of(&bytes) != hash {
+                return Err(BlobError::Store(
+                    "a stored blob does not match its hash".into(),
+                ));
+            }
+            Ok(Some(bytes))
+        })
+    }
+
     fn signed_url(
         &self,
         hash: Sha256Hash,
@@ -184,6 +209,29 @@ mod fs_tests {
             1,
             "no temp files left behind"
         );
+        std::fs::remove_dir_all(&dir).expect("cleanup");
+    }
+
+    #[tokio::test]
+    async fn a_blob_reads_back_and_an_unknown_one_is_none() {
+        let dir = std::env::temp_dir().join(format!("graft-fs-get-{}", std::process::id()));
+        let store = FsBlobStore::open(&dir).expect("open");
+        let hash = store.put_if_absent(vec![1, 2, 3]).await.expect("put");
+        assert_eq!(store.get(hash).await.expect("get"), Some(vec![1, 2, 3]));
+        assert_eq!(
+            store.get(Sha256Hash::of(b"nothing")).await.expect("get"),
+            None
+        );
+        std::fs::remove_dir_all(&dir).expect("cleanup");
+    }
+
+    #[tokio::test]
+    async fn a_file_whose_bytes_do_not_match_its_name_is_an_error_never_served() {
+        let dir = std::env::temp_dir().join(format!("graft-fs-bad-{}", std::process::id()));
+        let store = FsBlobStore::open(&dir).expect("open");
+        let hash = store.put_if_absent(vec![1, 2, 3]).await.expect("put");
+        std::fs::write(dir.join(hash.to_hex()), [9, 9, 9]).expect("tamper");
+        assert!(store.get(hash).await.is_err());
         std::fs::remove_dir_all(&dir).expect("cleanup");
     }
 
