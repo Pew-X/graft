@@ -124,12 +124,39 @@
         ],
         "type": "object"
       },
+      "DeclarationRequest": {
+        "additionalProperties": false,
+        "description": "The declaration the visitor accepted.",
+        "properties": {
+          "basis": {
+            "description": "`own_recording` or `right_to_share`.",
+            "type": "string"
+          },
+          "statement": {
+            "description": "The statement, exactly as shown: it must equal the service's declaration text.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "statement",
+          "basis"
+        ],
+        "type": "object"
+      },
       "DetailsView": {
         "description": "The exact facts, one level down from the credit lines.",
         "properties": {
           "cut": {
             "$ref": "#/components/schemas/CutView",
             "description": "The cut, computed."
+          },
+          "declared_at_ms": {
+            "description": "For a source a visitor published: when they accepted the rights declaration, milliseconds\nsince the Unix epoch. The declaration is shown as declared, never as established.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "output_blob": {
             "description": "SHA-256 of this stage's audio.",
@@ -448,6 +475,46 @@
         ],
         "type": "object"
       },
+      "PublishSourceRequest": {
+        "additionalProperties": false,
+        "description": "A source to publish.",
+        "properties": {
+          "audio": {
+            "description": "Base64 (standard alphabet, no line breaks) of canonical audio: 48 kHz, mono, signed 16-bit\nlittle-endian, no header; at most 15 seconds.",
+            "type": "string"
+          },
+          "author": {
+            "description": "The maker's name as typed. Plain text, never a handle.",
+            "type": "string"
+          },
+          "declaration": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DeclarationRequest",
+                "description": "The rights declaration. Required."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retry_key": {
+            "description": "Chosen by the client when the publish step opens: 16 to 128 characters from `A-Z a-z 0-9 . _ : -`.",
+            "type": "string"
+          },
+          "title": {
+            "description": "Title as typed; links and handles are removed, and the response says so.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "audio",
+          "title",
+          "author",
+          "retry_key"
+        ],
+        "type": "object"
+      },
       "PublishedFlip": {
         "description": "The result of publishing.",
         "properties": {
@@ -469,6 +536,34 @@
             "description": "Whether the client's preview hash matched the server's render; absent when none was sent.\nOn a mismatch the server's audio is what was stored.",
             "type": [
               "boolean",
+              "null"
+            ]
+          },
+          "publication": {
+            "$ref": "#/components/schemas/EntryView",
+            "description": "The new publication, as one entry of a chain."
+          }
+        },
+        "required": [
+          "publication",
+          "adjusted_fields"
+        ],
+        "type": "object"
+      },
+      "PublishedSource": {
+        "description": "The result of publishing a source.",
+        "properties": {
+          "adjusted_fields": {
+            "description": "Fields whose text was changed by removing a link or a handle.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "manage_key": {
+            "description": "The key that manages this publication. Shown once, in the response that creates it. Absent\nwhen the request was a replay.",
+            "type": [
+              "string",
               "null"
             ]
           },
@@ -1172,6 +1267,97 @@
         "summary": "File a report about a publication. No account; no identity is collected.",
         "tags": [
           "moderation"
+        ]
+      }
+    },
+    "/v1/sources": {
+      "post": {
+        "operationId": "publish_source",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishSourceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishedSource"
+                }
+              }
+            },
+            "description": "The same request was already published; nothing changed"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishedSource"
+                }
+              }
+            },
+            "description": "Published; the manage key is in this response only"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The retry key belongs to a different sound"
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The body is larger than any allowed source"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "A field or the audio breaks a rule; `field` and `rule` say which"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "This visitor published too often, or everyone together reached the publish cap"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Uploads are switched off (`uploads-off`), publishing is switched off (`publishing-off`), there is no room (`storage-full`), or busy (`retry-later`)"
+          }
+        },
+        "summary": "Publish a sound the visitor made.",
+        "tags": [
+          "crate::source"
         ]
       }
     }

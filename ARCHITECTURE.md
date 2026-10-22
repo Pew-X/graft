@@ -227,6 +227,7 @@ Written by ticket 05; later tickets add rows. Every value is read from the envir
 | `GRAFT_MAX_CONCURRENT_RENDERS` | 4 | most renders running at once; a request that waits over 5 s for a turn gets 503 retry-later |
 | `GRAFT_LOCK_WAIT_MS` | 10000 | how long a publish or a flag change waits for the lock on its stage before answering 503 |
 | `GRAFT_PUBLISHING` | `on` | whether publishing is open until the operator sets the kill switch (`on` or `off`) |
+| `GRAFT_UPLOADS` | `off` | whether visitors may publish their own sources (`on` or `off`); off until the launch gate passes |
 | `GRAFT_SWITCH_CACHE_MS` | 2000 | how long a read of the kill switch is reused; the most a change made on another instance needs to be seen |
 | `GRAFT_TRUSTED_PROXY_HOPS` | 0 | trusted proxies in front of the service; with 1 behind a load balancer the visitor is the last `X-Forwarded-For` entry |
 | `GRAFT_PUBLISH_PER_IP`, `GRAFT_PUBLISH_WINDOW_SECS` | 20, 3600 | publishes one address may make within the window |
@@ -319,6 +320,7 @@ The public write surface is anonymous, so what keeps it safe and cheap is a smal
 | Guardrail | Default | Refusal |
 |---|---|---|
 | Kill switch (publishing) | open | 503 `publishing-off` |
+| Visitor uploads | off | 503 `uploads-off` |
 | Per-address publish limit | 20 per hour | 429 `rate-limited` |
 | Per-address report limit | 10 per hour | 429 `rate-limited` |
 | Per-address failed admin attempts | 10 per 15 minutes | 429 `rate-limited` |
@@ -327,7 +329,7 @@ The public write surface is anonymous, so what keeps it safe and cheap is a smal
 | Global publish cap | 120 per hour, burst 30 | 429 `publish-cap` |
 | Storage admission threshold | 8 GB minus the overshoot bound | 503 `storage-full` |
 
-**The kill switch** is a row in the database (`runtime_settings`), read through a short cache, and set through the operator's `PUT /admin/switch` (`GET` reads it). It needs no redeploy. It closes every route that adds to what is published: flips, client event batches, and the source upload route when it exists. Reads, reports, a maker's own withdrawal and the operator's routes stay open, so a bad moment can always be reported, undone and reopened. A test lists every write route, checks the list against the public interface document, and asserts the switch closes exactly the routes marked as closed; a new write route fails it until someone decides which kind it is. An instance sees its own change at once and another instance's within `GRAFT_SWITCH_CACHE_MS`. If the database cannot be read the last known state stands; before any read, the configured default.
+**The kill switch** is a row in the database (`runtime_settings`), read through a short cache, and set through the operator's `PUT /admin/switch` (`GET` reads it). It needs no redeploy. It closes every route that adds to what is published: flips, source uploads and client event batches. Reads, reports, a maker's own withdrawal and the operator's routes stay open, so a bad moment can always be reported, undone and reopened. A test lists every write route, checks the list against the public interface document, and asserts the switch closes exactly the routes marked as closed; a new write route fails it until someone decides which kind it is. An instance sees its own change at once and another instance's within `GRAFT_SWITCH_CACHE_MS`. If the database cannot be read the last known state stands; before any read, the configured default.
 
 **Per-address limits** count in the memory of one process, in a sliding window, and are forgotten when the window passes or the process restarts. An address is never written to a row, a log line or a metric label, and not stored in any other form either, hashed included; a test dumps every table, the log and the metrics after a mixed run and looks for it. IPv6 visitors count by their /64. With one instance behind a load balancer the connecting address is the balancer, so `GRAFT_TRUSTED_PROXY_HOPS` says how many proxies to trust: the visitor is the `X-Forwarded-For` entry that many places from the right, and anything the visitor wrote further left is ignored. Because the counts are per process, a second instance gives each visitor a second allowance; the global cap, which lives in the database, is what holds across instances. The table of tracked addresses is bounded; when it is full new addresses are not tracked, and the global cap still applies. Failed admin attempts are counted, successes are not, so the operator is not locked out by using the routes.
 
@@ -466,6 +468,20 @@ Written by ticket 15.
 **Privacy.** The ledger has no column for an address or a user agent, and the handler stores only the event's own fields: a test sends a batch with a distinctive address, forwarding header and user agent and finds none of them in the row.
 
 **A stated bound, not a claim of scale.** A test sends 40 full batches at once while a flip is published and checks the publish finishes well inside ten seconds. It is a sanity check that event ingest does not hold up publishing, and it says nothing about load.
+
+## Visitor sources and the launch gate
+
+Written by ticket 12.
+
+A visitor can publish their own sound as a root publication, through the same model, the same retry-key idempotency and the same one-time manage key as a flip. `POST /v1/sources` carries the sound as base64 of canonical audio (48 kHz, mono, signed 16-bit little-endian, no header), because the browser decodes it first, with a title, a name as typed, a retry key and a rights declaration.
+
+**Off by default, and the door is not opened here.** The route answers 503 `uploads-off` ("uploads are switched off for now; you can still flip the sounds that are already here") until `GRAFT_UPLOADS=on`, and the kill switch closes it like every other write. The two are independent: with the flag off and the kill switch open, flips work and uploads refuse; with the kill switch closed both refuse (a test shows each). Both run before the body is read. Turning uploads on in any deployed environment is a decision at the launch gate, after the report and hide flow and the operator procedure have been rehearsed end to end and the kill switch has been checked to close every publishing path.
+
+**Validated before a byte is stored.** In order, cheapest first: the title and name (links and handles are removed and the response says so; nothing left is refused), the retry key, the declaration, the encoding, and then the sound itself: whole 16-bit samples, at least 10 ms and at most 15 s, not silent (the loudest sample within 32 of zero), not a flat line (the whole recording within 64 of one level), not mostly clipping noise (more than half the samples on the rails). A refusal is a 422 naming the field and the rule, with a sentence a person can read, and writes nothing: no blob, no row, no event (a test covers each). A pure steady tone is not detected; that is a stated limit. The body limit is derived from the source cap (the base64 of the longest allowed source, plus a small envelope), so a forged oversized body is cut off at that limit and not read in full: a test streams 128 MB through a counter and finds the service pulled only the limit.
+
+**Declared, never established.** The declaration is a fixed statement ("I made this sound or I have the right to share it. It does not contain anyone's private conversation.") and the request must carry it character for character, so what is stored is what was shown, with the time it was accepted and the basis the visitor named (own recording, or the right to share). It appears in the chain as a line marked declared, and `rights` stays unknown. Nothing in a response says anyone checked it. The server computes from what was submitted: it cannot verify that a client decoded honestly, nor that the sound is what the visitor says it is. The stored sound is the submitted bytes, and its hash is what the details layer shows.
+
+**Residual risk.** Someone can still upload what they should not: a sound that is not theirs, or one that holds a private conversation despite the declaration. The limits (per address, the global cap, the storage threshold), the report and hide flow and the kill switch cap how much damage and for how long; they do not make it impossible. An uploaded source can be flipped like any other, and a hide for rights holds the flips built on it.
 
 ## Rollups and the analytical read path
 

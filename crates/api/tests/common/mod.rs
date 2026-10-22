@@ -154,6 +154,7 @@ impl Harness {
                     work_title: Some("door".into()),
                     work_author: Some("pat".into()),
                     url: None,
+                    declaration: None,
                 },
                 audio: audio_frames(frames, seed_audio),
                 renderer: renderer(),

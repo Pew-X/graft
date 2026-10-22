@@ -63,6 +63,8 @@ pub struct AppState {
     pub consumer_stats: Arc<graft_events::ConsumerStats>,
     /// Most events in one client batch.
     pub ingest_max_batch: usize,
+    /// Whether visitors may publish their own source audio.
+    pub uploads_enabled: bool,
 }
 
 /// Settings the publish route reads.
@@ -115,6 +117,7 @@ impl AppState {
             blobs,
             consumer_stats: Arc::new(graft_events::ConsumerStats::default()),
             ingest_max_batch: config.events.ingest_max_batch as usize,
+            uploads_enabled: config.guardrails.uploads_enabled,
             limits: config.limits.clone(),
             blob_url_ttl: std::time::Duration::from_secs(config.blob_url_ttl_secs),
             renderer,
@@ -170,6 +173,17 @@ pub fn router(state: AppState, config: &Config) -> Router {
                 .layer(middleware::from_fn_with_state(state.clone(), report_guard)),
         )
         .merge(admin_routes(state.clone()))
+        .route(
+            "/v1/sources",
+            post(crate::source::publish_source)
+                .layer(axum::extract::DefaultBodyLimit::max(
+                    crate::source::max_body_bytes(&config.limits),
+                ))
+                .layer(middleware::from_fn_with_state(
+                    state.clone(),
+                    crate::source::upload_guard,
+                )),
+        )
         .route(
             "/v1/events",
             post(crate::ingest::ingest_events)

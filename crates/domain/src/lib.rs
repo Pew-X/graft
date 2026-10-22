@@ -2,6 +2,7 @@
 //!
 //! This crate is the centre of the dependency graph and depends on nothing in the workspace.
 
+pub mod audio;
 pub mod canonical;
 pub mod chain;
 pub mod hash;

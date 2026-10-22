@@ -14,4 +14,5 @@ pub mod problem;
 pub mod publish;
 pub mod routes;
 pub mod seed;
+pub mod source;
 pub mod views;

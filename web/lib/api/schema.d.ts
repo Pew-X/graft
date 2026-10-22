@@ -126,6 +126,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/sources": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Publish a sound the visitor made. */
+    post: operations["publish_source"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -196,10 +213,23 @@ export interface components {
        */
       start: number;
     };
+    /** @description The declaration the visitor accepted. */
+    DeclarationRequest: {
+      /** @description `own_recording` or `right_to_share`. */
+      basis: string;
+      /** @description The statement, exactly as shown: it must equal the service's declaration text. */
+      statement: string;
+    };
     /** @description The exact facts, one level down from the credit lines. */
     DetailsView: {
       /** @description The cut, computed. */
       cut: components["schemas"]["CutView"];
+      /**
+       * Format: int64
+       * @description For a source a visitor published: when they accepted the rights declaration, milliseconds
+       *     since the Unix epoch. The declaration is shown as declared, never as established.
+       */
+      declared_at_ms?: number | null;
       /** @description SHA-256 of this stage's audio. */
       output_blob: string;
       /** @description The content record id: SHA-256 of its canonical bytes. It proves which bytes, nothing more. */
@@ -308,6 +338,21 @@ export interface components {
       /** @description Title as typed; links and handles are removed, and the response says so. */
       title: string;
     };
+    /** @description A source to publish. */
+    PublishSourceRequest: {
+      /**
+       * @description Base64 (standard alphabet, no line breaks) of canonical audio: 48 kHz, mono, signed 16-bit
+       *     little-endian, no header; at most 15 seconds.
+       */
+      audio: string;
+      /** @description The maker's name as typed. Plain text, never a handle. */
+      author: string;
+      declaration?: components["schemas"]["DeclarationRequest"] | null;
+      /** @description Chosen by the client when the publish step opens: 16 to 128 characters from `A-Z a-z 0-9 . _ : -`. */
+      retry_key: string;
+      /** @description Title as typed; links and handles are removed, and the response says so. */
+      title: string;
+    };
     /** @description The result of publishing. */
     PublishedFlip: {
       /** @description Fields whose text was changed by removing a link or a handle. */
@@ -322,6 +367,18 @@ export interface components {
        *     On a mismatch the server's audio is what was stored.
        */
       preview_matches?: boolean | null;
+      /** @description The new publication, as one entry of a chain. */
+      publication: components["schemas"]["EntryView"];
+    };
+    /** @description The result of publishing a source. */
+    PublishedSource: {
+      /** @description Fields whose text was changed by removing a link or a handle. */
+      adjusted_fields: string[];
+      /**
+       * @description The key that manages this publication. Shown once, in the response that creates it. Absent
+       *     when the request was a replay.
+       */
+      manage_key?: string | null;
       /** @description The new publication, as one entry of a chain. */
       publication: components["schemas"]["EntryView"];
     };
@@ -783,6 +840,84 @@ export interface operations {
       };
       /** @description This visitor has filed too many reports lately; `Retry-After` says when to try again */
       429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  publish_source: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PublishSourceRequest"];
+      };
+    };
+    responses: {
+      /** @description The same request was already published; nothing changed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PublishedSource"];
+        };
+      };
+      /** @description Published; the manage key is in this response only */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PublishedSource"];
+        };
+      };
+      /** @description The retry key belongs to a different sound */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description The body is larger than any allowed source */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description A field or the audio breaks a rule; `field` and `rule` say which */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description This visitor published too often, or everyone together reached the publish cap */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Uploads are switched off (`uploads-off`), publishing is switched off (`publishing-off`), there is no room (`storage-full`), or busy (`retry-later`) */
+      503: {
         headers: {
           [name: string]: unknown;
         };

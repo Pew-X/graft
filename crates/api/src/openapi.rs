@@ -24,7 +24,8 @@ use utoipa::OpenApi;
         maker::set_fork_permission,
         maker::withdraw,
         moderation::file_report,
-        crate::ingest::ingest_events
+        crate::ingest::ingest_events,
+        crate::source::publish_source
     ),
     components(schemas(
         Problem,
@@ -39,7 +40,10 @@ use utoipa::OpenApi;
         AudioView,
         crate::ingest::IngestRequest,
         crate::ingest::ClientEvent,
-        crate::ingest::IngestReceipt
+        crate::ingest::IngestReceipt,
+        crate::source::PublishSourceRequest,
+        crate::source::DeclarationRequest,
+        crate::source::PublishedSource
     ))
 )]
 struct ApiDoc;

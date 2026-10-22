@@ -235,6 +235,17 @@ impl Problem {
         )
     }
 
+    /// 503: visitor uploads are not open yet.
+    #[must_use]
+    pub fn uploads_off() -> Self {
+        Self::base(
+            "urn:graft:problem:uploads-off",
+            "Uploads are switched off",
+            503,
+            "uploads are switched off for now; you can still flip the sounds that are already here",
+        )
+    }
+
     /// 429: this visitor has done this too often within the window.
     #[must_use]
     pub fn rate_limited(retry_after_secs: u32) -> Self {

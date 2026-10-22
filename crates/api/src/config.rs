@@ -152,6 +152,8 @@ pub struct Guardrails {
     pub report_per_ip: Rate,
     /// Per visitor address: refused admin attempts before further attempts wait.
     pub admin_failures_per_ip: Rate,
+    /// Whether visitors may publish their own source audio. Off until the launch gate passes.
+    pub uploads_enabled: bool,
     /// Per visitor address: client event batches.
     pub ingest_per_ip: Rate,
     /// Per session id: client events (not batches) within the window.
@@ -193,6 +195,7 @@ fn guardrails(
 ) -> Result<Guardrails, ConfigError> {
     let mut g = Guardrails {
         publishing_default: true,
+        uploads_enabled: false,
         switch_cache_ms: 2000,
         trusted_proxy_hops: 0,
         publish_per_ip: Rate {
@@ -226,6 +229,16 @@ fn guardrails(
         Some(_) => {
             return Err(ConfigError::Invalid {
                 name: "GRAFT_PUBLISHING",
+                reason: "must be `on` or `off`".to_owned(),
+            });
+        }
+    }
+    match lookup("GRAFT_UPLOADS").as_deref().map(str::trim) {
+        None | Some("off") => {}
+        Some("on") => g.uploads_enabled = true,
+        Some(_) => {
+            return Err(ConfigError::Invalid {
+                name: "GRAFT_UPLOADS",
                 reason: "must be `on` or `off`".to_owned(),
             });
         }
@@ -801,6 +814,7 @@ mod tests {
             8_000_000_000 - 32 * 1_920_000
         );
         assert!(g.publishing_default);
+        assert!(!g.uploads_enabled, "visitor uploads are off by default");
         assert_eq!(g.trusted_proxy_hops, 0);
     }
 
@@ -838,6 +852,7 @@ mod tests {
         );
         for (name, value) in [
             ("GRAFT_PUBLISHING", "maybe"),
+            ("GRAFT_UPLOADS", "yes"),
             ("GRAFT_PUBLISH_PER_IP", "0"),
             ("GRAFT_GLOBAL_PUBLISH_BURST", "0"),
             ("GRAFT_STORAGE_REFRESH_SECS", "0"),

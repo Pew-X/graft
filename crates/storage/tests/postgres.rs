@@ -28,6 +28,7 @@ fn evidence() -> SourceEvidence {
         work_title: Some("a door".into()),
         work_author: Some("pat".into()),
         url: None,
+        declaration: None,
     }
 }
 

@@ -59,6 +59,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             work_title: a.get("work-title").cloned(),
             work_author: a.get("work-author").cloned(),
             url: a.get("url").cloned(),
+            declaration: None,
         },
         audio: std::fs::read(need("audio")?)?,
         renderer,

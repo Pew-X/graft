@@ -116,7 +116,9 @@ pub struct Store {
 
 const STAGE_COLUMNS: &str = "p.id AS pub_id, c.id AS content_id, p.title, p.author, \
     (extract(epoch from p.created_at) * 1000)::bigint AS created_ms, \
-    p.licence, p.work_title, p.work_author, p.work_url, p.fork_permitted, p.hidden_reason, \
+    p.licence, p.work_title, p.work_author, p.work_url, p.declaration, \
+    (extract(epoch from p.declared_at) * 1000)::bigint AS declared_ms, \
+    p.fork_permitted, p.hidden_reason, \
     c.kind, c.parent_publication_id, c.source_blob, c.cut_start, c.cut_end, c.p, c.q, c.method, \
     c.renderer_name, c.renderer_version, c.renderer_sha256, c.output_blob, \
     (SELECT count(*) FROM content_records k JOIN publications kp ON kp.content_id = k.id \
@@ -359,7 +361,9 @@ pub(crate) async fn insert_publication(
     let ev = n.evidence.as_ref();
     let row = sqlx::query(
         "INSERT INTO publications (id, content_id, retry_key, title, author, licence, work_title, \
-           work_author, work_url, manage_key_hash) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) \
+           work_author, work_url, manage_key_hash, declaration, declared_at) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, \
+                 CASE WHEN $11::text IS NULL THEN NULL ELSE now() END) \
          ON CONFLICT (retry_key) DO NOTHING RETURNING id",
     )
     .bind(n.id.as_str())
@@ -372,6 +376,10 @@ pub(crate) async fn insert_publication(
     .bind(ev.and_then(|e| e.work_author.as_deref()))
     .bind(ev.and_then(|e| e.url.as_deref()))
     .bind(n.manage_key_hash.as_ref().map(<[u8; 32]>::as_slice))
+    .bind(
+        ev.and_then(|e| e.declaration.as_ref())
+            .map(|d| d.text.as_str()),
+    )
     .fetch_optional(&mut **tx)
     .await
     .map_err(db)?;
@@ -440,6 +448,16 @@ fn stage_from_row(row: &PgRow) -> Result<StoredStage, StoreError> {
             work_title: row.try_get("work_title").map_err(db)?,
             work_author: row.try_get("work_author").map_err(db)?,
             url: row.try_get("work_url").map_err(db)?,
+            declaration: row
+                .try_get::<Option<String>, _>("declaration")
+                .map_err(db)?
+                .map(|text| {
+                    Ok::<_, StoreError>(graft_domain::chain::Declaration {
+                        text,
+                        at_ms: row.try_get("declared_ms").map_err(db)?,
+                    })
+                })
+                .transpose()?,
         }),
         None => None,
     };

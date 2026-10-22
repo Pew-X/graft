@@ -439,12 +439,12 @@ fn parent_not_found() -> Problem {
     Problem::not_found("there is no stage with this id to flip")
 }
 
-fn internal(context: &str, error: &dyn std::fmt::Display) -> Problem {
+pub(crate) fn internal(context: &str, error: &dyn std::fmt::Display) -> Problem {
     tracing::error!(%error, context, "publish failed");
     Problem::internal()
 }
 
-fn clean(
+pub(crate) fn clean(
     field: &'static str,
     input: &str,
     max: usize,
@@ -454,7 +454,7 @@ fn clean(
         .map_err(|e| Problem::invalid(field, e.rule(), format!("the {field} is not valid: {e}")))
 }
 
-fn check_retry_key(key: &str) -> Result<(), Problem> {
+pub(crate) fn check_retry_key(key: &str) -> Result<(), Problem> {
     let ok = (16..=128).contains(&key.len())
         && key
             .bytes()
@@ -533,13 +533,13 @@ fn check_cut_and_speed(
 }
 
 /// 32 random bytes as 64 hex characters. Only the SHA-256 of this text is ever stored.
-fn new_manage_key() -> Result<String, getrandom::Error> {
+pub(crate) fn new_manage_key() -> Result<String, getrandom::Error> {
     let mut bytes = [0u8; 32];
     getrandom::fill(&mut bytes)?;
     Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
 }
 
-fn random_id() -> Result<PublicationId, getrandom::Error> {
+pub(crate) fn random_id() -> Result<PublicationId, getrandom::Error> {
     let mut bytes = [0u8; 8];
     getrandom::fill(&mut bytes)?;
     Ok(PublicationId::from_bits(u64::from_be_bytes(bytes)))

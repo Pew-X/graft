@@ -9,6 +9,8 @@ mod events;
 mod guardrails;
 #[path = "publish/ingest.rs"]
 mod ingest;
+#[path = "publish/sources.rs"]
+mod sources;
 
 use axum::http::StatusCode;
 use common::{Harness, is_problem};
