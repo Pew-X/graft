@@ -148,7 +148,7 @@ jobs:
   cross-host-macos:
     name: cross-host vectors (macos-15)
     # macOS minutes cost ten times Linux minutes, so this runs after merges and on demand.
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.title, 'macos-trial')
+    if: github.event_name != 'pull_request'
     runs-on: macos-15
     timeout-minutes: 25
     defaults:
