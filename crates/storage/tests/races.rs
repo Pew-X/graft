@@ -182,6 +182,11 @@ async fn a_serialization_failure_is_retried_and_the_flip_then_succeeds_exactly_o
         hook.attempts.load(Ordering::SeqCst) > 1,
         "the conflict must really have happened and been retried"
     );
+    assert!(
+        store.stats().serialization_retries() >= 1,
+        "and it was counted"
+    );
+    assert_eq!(store.stats().retries_exhausted(), 0, "but not as a failure");
     assert_eq!(
         publications(db.store.pool()).await,
         2,
@@ -217,6 +222,12 @@ async fn when_every_attempt_conflicts_the_error_is_retryable_and_the_same_key_th
         3,
         "the first try and two retries"
     );
+    assert_eq!(
+        store.stats().serialization_retries(),
+        2,
+        "two retries counted"
+    );
+    assert_eq!(store.stats().retries_exhausted(), 1, "and the running out");
     assert_eq!(
         publications(db.store.pool()).await,
         1,

@@ -21,6 +21,19 @@ pub struct SourceEvidence {
     pub work_author: Option<String>,
     /// Where the original can be found.
     pub url: Option<String>,
+    /// The rights declaration a visitor accepted when publishing their own source; `None` for
+    /// seeded sources, which carry licence evidence instead.
+    pub declaration: Option<Declaration>,
+}
+
+/// What a visitor declared about a sound they published. It is a statement by a person: it is
+/// shown as declared, and nothing here says anyone checked it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Declaration {
+    /// The statement exactly as accepted.
+    pub text: String,
+    /// When it was accepted, milliseconds since the Unix epoch; filled in by the store.
+    pub at_ms: i64,
 }
 
 /// A publication joined with its content record: one stage as stored.
@@ -204,6 +217,13 @@ pub fn credit_lines(stage: &StoredStage) -> Vec<CreditLine> {
                         honesty: Honesty::Declared,
                     });
                 }
+                if let Some(declaration) = &ev.declaration {
+                    lines.push(CreditLine {
+                        role: "declaration",
+                        value: declaration.text.clone(),
+                        honesty: Honesty::Declared,
+                    });
+                }
             }
         }
         Kind::Flip => {
@@ -276,6 +296,7 @@ mod tests {
                 work_title: None,
                 work_author: Some("someone".into()),
                 url: None,
+                declaration: None,
             }),
             flipped_count: 0,
             fork_permitted: true,

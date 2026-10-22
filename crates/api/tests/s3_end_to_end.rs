@@ -144,6 +144,7 @@ async fn audio_published_through_the_api_is_served_from_a_signed_url_and_equals_
                 work_title: None,
                 work_author: None,
                 url: None,
+                declaration: None,
             },
             audio: common::audio(0),
             renderer: common::renderer(),

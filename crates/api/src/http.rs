@@ -1,6 +1,7 @@
 //! The HTTP surface: routing, request ids, security headers, CORS, health, readiness and metrics.
 
 use crate::config::Config;
+use crate::guard::{Class, Clock, Guards, SystemClock};
 use crate::maker;
 use crate::metrics::Metrics;
 use crate::moderation;
@@ -56,6 +57,14 @@ pub struct AppState {
     pub publish: PublishSettings,
     /// SHA-256 of the operator secret; `None` when admin access is not configured.
     pub admin_secret_hash: Option<[u8; 32]>,
+    /// The kill switch, the per-visitor limits, the global cap and the storage threshold.
+    pub guards: Arc<Guards>,
+    /// What the consumer has counted, for the operator's read and the metrics.
+    pub consumer_stats: Arc<graft_events::ConsumerStats>,
+    /// Most events in one client batch.
+    pub ingest_max_batch: usize,
+    /// Whether visitors may publish their own source audio.
+    pub uploads_enabled: bool,
 }
 
 /// Settings the publish route reads.
@@ -80,11 +89,35 @@ impl AppState {
         blobs: Arc<dyn BlobStore>,
         renderer: Arc<dyn Render>,
     ) -> Self {
+        Self::with_clock(config, store, blobs, renderer, Arc::new(SystemClock))
+    }
+
+    /// As `new`, with the time source the guardrails read, so a test can move time.
+    #[must_use]
+    pub fn with_clock(
+        config: &Config,
+        store: Store,
+        blobs: Arc<dyn BlobStore>,
+        renderer: Arc<dyn Render>,
+        clock: Arc<dyn Clock>,
+    ) -> Self {
+        let metrics = Arc::new(Metrics::default());
+        metrics.set_publishing_open(config.guardrails.publishing_default);
         Self {
             readiness: Arc::new(StoreReadiness(store.clone())),
-            metrics: Arc::new(Metrics::default()),
+            metrics,
+            guards: Arc::new(Guards::new(
+                &config.guardrails,
+                &config.limits,
+                store.clone(),
+                blobs.clone(),
+                clock,
+            )),
             store,
             blobs,
+            consumer_stats: Arc::new(graft_events::ConsumerStats::default()),
+            ingest_max_batch: config.events.ingest_max_batch as usize,
+            uploads_enabled: config.guardrails.uploads_enabled,
             limits: config.limits.clone(),
             blob_url_ttl: std::time::Duration::from_secs(config.blob_url_ttl_secs),
             renderer,
@@ -133,19 +166,51 @@ pub fn router(state: AppState, config: &Config) -> Router {
         )
         .route(
             "/v1/reports",
-            post(moderation::file_report).layer(axum::extract::DefaultBodyLimit::max(
-                moderation::MAX_BODY_BYTES,
-            )),
+            post(moderation::file_report)
+                .layer(axum::extract::DefaultBodyLimit::max(
+                    moderation::MAX_BODY_BYTES,
+                ))
+                .layer(middleware::from_fn_with_state(state.clone(), report_guard)),
         )
         .merge(admin_routes(state.clone()))
         .route(
+            "/v1/sources",
+            post(crate::source::publish_source)
+                .layer(axum::extract::DefaultBodyLimit::max(
+                    crate::source::max_body_bytes(&config.limits),
+                ))
+                .layer(middleware::from_fn_with_state(
+                    state.clone(),
+                    crate::source::upload_guard,
+                )),
+        )
+        .route(
+            "/v1/events",
+            post(crate::ingest::ingest_events)
+                .layer(axum::extract::DefaultBodyLimit::max(
+                    crate::ingest::MAX_BODY_BYTES,
+                ))
+                .layer(middleware::from_fn_with_state(state.clone(), ingest_guard)),
+        )
+        .route(
             "/v1/publications",
-            post(publish::publish_flip).layer(axum::extract::DefaultBodyLimit::max(
-                publish::MAX_BODY_BYTES,
-            )),
+            post(publish::publish_flip)
+                .layer(axum::extract::DefaultBodyLimit::max(
+                    publish::MAX_BODY_BYTES,
+                ))
+                .layer(middleware::from_fn_with_state(state.clone(), publish_guard)),
         )
         .fallback(|| async { Problem::not_found("there is nothing at this address") })
         .method_not_allowed_fallback(|| async { Problem::method_not_allowed() })
+        .layer(tower_http::catch_panic::CatchPanicLayer::custom(
+            |_panic: Box<dyn std::any::Any + Send + 'static>| {
+                // Only that it happened: the payload of a panic can hold anything.
+                // Logged as a warning: the tracker already has the panic from its own hook, and the
+                // 500 that follows is the one report-worthy event.
+                tracing::warn!("a request handler panicked");
+                Problem::internal().into_response()
+            },
+        ))
         .layer(middleware::from_fn_with_state(state.clone(), observe))
         .layer(cors(config))
         .with_state(state)
@@ -155,6 +220,15 @@ pub fn router(state: AppState, config: &Config) -> Router {
 fn admin_routes(state: AppState) -> Router<AppState> {
     Router::new()
         .route("/admin/reports", get(moderation::list_reports))
+        .route("/admin/rollups", get(crate::events::get_rollups))
+        .route(
+            "/admin/switch",
+            get(moderation::get_switch)
+                .put(moderation::set_switch)
+                .layer(axum::extract::DefaultBodyLimit::max(
+                    moderation::MAX_BODY_BYTES,
+                )),
+        )
         .route(
             "/admin/publications/{id}/hide",
             post(moderation::hide)
@@ -167,6 +241,86 @@ fn admin_routes(state: AppState) -> Router<AppState> {
             state,
             moderation::require_admin,
         ))
+}
+
+/// The guard in front of every route that adds to what is published: the kill switch first, then
+/// the visitor's own limit. Both run before the body is read, so a refused request costs nothing.
+/// A new publishing route (a source upload, client events) is added here and in `WRITE_ROUTES`.
+pub(crate) async fn publish_guard(
+    State(state): State<AppState>,
+    request: Request,
+    next: Next,
+) -> Response {
+    write_guard(
+        &state,
+        Class::Publish,
+        "rate_limited_publish",
+        request,
+        next,
+    )
+    .await
+}
+
+/// The same guard in front of the client event batches, with their own limit.
+async fn ingest_guard(State(state): State<AppState>, request: Request, next: Next) -> Response {
+    write_guard(&state, Class::Ingest, "rate_limited_ingest", request, next).await
+}
+
+async fn write_guard(
+    state: &AppState,
+    class: Class,
+    refusal: &'static str,
+    request: Request,
+    next: Next,
+) -> Response {
+    if let Some(refusal) = publishing_closed(state).await {
+        return refusal;
+    }
+    let ip = state
+        .guards
+        .client_ip(request.extensions(), request.headers());
+    match state
+        .guards
+        .limiter
+        .try_admit(class, ip, state.guards.clock.now_secs())
+    {
+        Ok(()) => next.run(request).await,
+        Err(wait) => {
+            state.metrics.refusal(refusal);
+            Problem::rate_limited(wait).into_response()
+        }
+    }
+}
+
+/// The guard in front of reports: the visitor's own limit only. Reports stay open when publishing
+/// is switched off, because they are how a problem is raised.
+async fn report_guard(State(state): State<AppState>, request: Request, next: Next) -> Response {
+    let ip = state
+        .guards
+        .client_ip(request.extensions(), request.headers());
+    match state
+        .guards
+        .limiter
+        .try_admit(Class::Report, ip, state.guards.clock.now_secs())
+    {
+        Ok(()) => next.run(request).await,
+        Err(wait) => {
+            state.metrics.refusal("rate_limited_report");
+            Problem::rate_limited(wait).into_response()
+        }
+    }
+}
+
+/// The refusal to send when the kill switch is closed, or `None` when publishing is open.
+pub(crate) async fn publishing_closed(state: &AppState) -> Option<Response> {
+    let open = state.guards.switch.publishing_open().await;
+    state.metrics.set_publishing_open(open);
+    if open {
+        None
+    } else {
+        state.metrics.refusal("publishing_off");
+        Some(Problem::publishing_off().into_response())
+    }
 }
 
 fn cors(config: &Config) -> CorsLayer {
@@ -201,7 +355,9 @@ async fn ready(State(state): State<AppState>) -> Response {
 }
 
 async fn metrics(State(state): State<AppState>) -> Response {
-    let mut response = state.metrics.render().into_response();
+    let mut text = state.metrics.render();
+    text.push_str(&crate::events::metrics_text(&state).await);
+    let mut response = text.into_response();
     response.headers_mut().insert(
         header::CONTENT_TYPE,
         HeaderValue::from_static("text/plain; version=0.0.4; charset=utf-8"),
@@ -217,7 +373,18 @@ async fn observe(State(state): State<AppState>, request: Request, next: Next) ->
         .extensions()
         .get::<MatchedPath>()
         .map_or_else(|| "unmatched".to_owned(), |p| p.as_str().to_owned());
-    let span = tracing::info_span!("request", %request_id, %method, route = %route);
+    let span = tracing::info_span!(
+        "request",
+        %request_id,
+        %method,
+        route = %route,
+        trace_id = tracing::field::Empty
+    );
+    // Next to the request id, the trace id, when spans are being exported, so a log line leads to
+    // its trace and back.
+    if let Some(trace) = crate::observability::trace_id(&span) {
+        span.record("trace_id", trace.as_str());
+    }
     let started = Instant::now();
     let mut response = next.run(request).instrument(span.clone()).await;
     let status = response.status();
@@ -230,7 +397,19 @@ async fn observe(State(state): State<AppState>, request: Request, next: Next) ->
             status = status.as_u16(),
             elapsed_ms = elapsed * 1000.0,
             "request finished"
-        )
+        );
+        // The one event that becomes an error report: which request, which route, nothing from
+        // inside it. A busy or refused request is not an error; a 500 is.
+        if status == StatusCode::INTERNAL_SERVER_ERROR {
+            // The ids are in the message itself, so the report names the request whichever
+            // fields the tracker keeps.
+            tracing::error!(
+                target: crate::observability::REPORT_TARGET,
+                request_id = %request_id,
+                route = %route,
+                "a request ended in a server error (request {request_id}, route {route})"
+            );
+        }
     });
     let headers = response.headers_mut();
     if let Ok(v) = HeaderValue::from_str(&request_id) {

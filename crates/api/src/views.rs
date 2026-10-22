@@ -64,6 +64,9 @@ pub struct DetailsView {
     pub speed: Option<SpeedView>,
     /// The renderer.
     pub renderer: RendererView,
+    /// For a source a visitor published: when they accepted the rights declaration, milliseconds
+    /// since the Unix epoch. The declaration is shown as declared, never as established.
+    pub declared_at_ms: Option<i64>,
 }
 
 /// A short-lived URL for a stage's audio: canonical 48 kHz mono signed 16-bit little-endian PCM.
@@ -198,6 +201,11 @@ pub fn stage_view(stage: &StoredStage, audio: AudioView) -> StageView {
                 version: r.renderer().version,
                 wasm_sha256: r.renderer().wasm_sha256.to_hex(),
             },
+            declared_at_ms: stage
+                .evidence
+                .as_ref()
+                .and_then(|e| e.declaration.as_ref())
+                .map(|d| d.at_ms),
         },
         audio,
     }

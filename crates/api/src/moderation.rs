@@ -66,6 +66,7 @@ pub struct ReportReceived {
         (status = 201, description = "The report was stored", body = ReportReceived),
         (status = 404, description = "No such publication", body = Problem, content_type = "application/problem+json"),
         (status = 422, description = "A field breaks a rule; `field` and `rule` say which", body = Problem, content_type = "application/problem+json"),
+        (status = 429, description = "This visitor has filed too many reports lately; `Retry-After` says when to try again", body = Problem, content_type = "application/problem+json"),
     )
 )]
 pub async fn file_report(
@@ -284,15 +285,70 @@ pub async fn clear_hide(
 }
 
 /// Middleware for the admin routes: the secret is checked before any query or body is looked at, so
-/// every unauthorised request gets the identical refusal, whatever else is wrong with it.
+/// every unauthorised request gets the identical refusal, whatever else is wrong with it. Refused
+/// attempts are counted per visitor address (in memory only); an address that has failed too often
+/// waits, whatever it sends next.
 pub async fn require_admin(
     State(state): State<AppState>,
     request: axum::extract::Request,
     next: axum::middleware::Next,
 ) -> axum::response::Response {
+    use crate::guard::Class;
     use axum::response::IntoResponse;
+    let ip = state
+        .guards
+        .client_ip(request.extensions(), request.headers());
+    let now = state.guards.clock.now_secs();
+    // The attempt is counted before it is judged, so simultaneous guesses cannot all pass a check
+    // that has not yet seen the others; a good one is forgiven afterwards.
+    if let Err(wait) = state.guards.limiter.try_admit(Class::AdminFailure, ip, now) {
+        state.metrics.refusal("rate_limited_admin");
+        return Problem::rate_limited(wait).into_response();
+    }
     match authorize_admin(&state, request.headers()) {
-        Ok(()) => next.run(request).await,
+        Ok(()) => {
+            state.guards.limiter.release(Class::AdminFailure, ip);
+            next.run(request).await
+        }
         Err(problem) => problem.into_response(),
     }
+}
+
+/// The kill switch as the operator sees and sets it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SwitchState {
+    /// Whether publishing is open. Closing it refuses flips, sources, client events and uploads;
+    /// reads, reports, withdrawals and these admin routes keep working.
+    pub publishing: bool,
+}
+
+/// Whether publishing is open right now.
+pub async fn get_switch(State(state): State<AppState>) -> Json<SwitchState> {
+    let publishing = state.guards.switch.publishing_open().await;
+    state.metrics.set_publishing_open(publishing);
+    Json(SwitchState { publishing })
+}
+
+/// Open or close publishing. Takes effect on the next request to this instance and, on others,
+/// within the configured cache time.
+pub async fn set_switch(
+    State(state): State<AppState>,
+    ApiJson(request): ApiJson<SwitchState>,
+) -> Result<Json<SwitchState>, Problem> {
+    state
+        .guards
+        .switch
+        .set_publishing_open(request.publishing)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "setting the kill switch failed");
+            Problem::internal()
+        })?;
+    state.metrics.set_publishing_open(request.publishing);
+    tracing::warn!(
+        publishing = request.publishing,
+        "the operator changed the kill switch"
+    );
+    Ok(Json(request))
 }

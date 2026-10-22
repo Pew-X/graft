@@ -3,6 +3,8 @@
 //! computed at read time. Each test names the guarantee it protects.
 
 mod common;
+#[path = "moderation/rollups.rs"]
+mod rollups;
 
 use axum::http::StatusCode;
 use common::{Harness, is_problem};

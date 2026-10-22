@@ -12,7 +12,7 @@ One deployable Rust service plus a Next.js UI, built as a Cargo workspace. The a
 | `graft-render` | nothing at all | the integer renderer and its C-ABI wrapper, compiled to the canonical `.wasm` |
 | `graft-storage` | domain | Postgres store (migrations, idempotent writes, flip creation under the stage lock, maker and operator flag changes, reports, the chain read), the blob store trait with an in-memory, a directory-backed and an S3-compatible implementation, and the orphan cleanup. `Store` is a concrete type on purpose: the test seam is a real Postgres, so a trait would never have a second implementation. The blob store and the event sink are traits because they do have fakes |
 | `graft-render-host` | domain | runs the canonical `.wasm` under wasmtime |
-| `graft-events` | domain | the event-sink trait and a no-op sink; the ledger, relay, consumer and rollups arrive with their tickets |
+| `graft-events` | domain, storage | the event-sink trait, the Postgres-only sink and a recording sink, the relay that delivers claimed ledger rows to a sink, the idempotent consumer and the retention job. The ledger's SQL stays in `graft-storage` so that a server event commits in the same transaction as its write |
 | `graft-vectors` | render, render-host | the renderer vector table: loader, generators, and the native, wasmtime and render-host harnesses (test support; nothing ships it) |
 | `graft-host-check` | render-host, vectors | throwaway check service for the first deployment (see "Check on the target host"); removed by the deploy pipeline ticket |
 | `graft-api` | domain, storage, render-host, events | HTTP layer: reads, publishing, maker actions, reports and the operator routes; the OpenAPI document; configuration; the seed script and the cleanup command. Rate limits arrive with the abuse-guardrail ticket |
@@ -179,7 +179,7 @@ Written by ticket 05.
 
 **Canonical encoding and the hash.** The record is encoded as canonical JSON, the subset of RFC 8785 that graft uses: objects, integers and strings only; keys ordered by UTF-16 code unit; minimal string escapes; integers limited to plus or minus 2^53 - 1; no whitespace. The record id is the SHA-256 of those bytes. `graft-domain` tests the encoder against hand-derived literals (including the UTF-16 key order that differs from UTF-8 byte order) and a shuffle property, and pins two whole records to byte-exact JSON and to digests computed outside Rust with Python's `hashlib`. A valid record id says which bytes were described, nothing about who made them or whether they may be shared.
 
-**Identifiers.** A publication id is 60 bits shown as 12 characters from `0-9a-z` without `i`, `l`, `o` and `u`: opaque, non-sequential and URL-safe. Visitor publications get random ids from the service. *Seeded* publications get ids derived from their deterministic retry key (`SHA-256("graft-seeded-publication-v1:" + key)`, first eight bytes, low 60 bits). This is a small documented exception to "ids are random": it makes ids, content hashes and the shipped static snapshot identical in every environment, because a child's hash includes its parent's id. A test seeds two independent databases and compares ids, record ids and the chain read.
+**Identifiers.** A publication id is 60 bits shown as 12 characters from `0-9a-z` without `i`, `l`, `o` and `u`: opaque, non-sequential and URL-safe. Visitor publications get random ids from the service. *Seeded* publications (the source and the three flips of the seeded chain) get ids derived from their deterministic retry key (`SHA-256("graft-seeded-publication-v1:" + key)`, first eight bytes, low 60 bits). This is a small documented exception to "ids are random": it makes ids, content hashes and the shipped static snapshot identical in every environment, because a child's hash includes its parent's id. A test seeds two independent databases and compares ids, record ids and the chain read.
 
 **Idempotent creation.** `create_publication` inserts the record (`ON CONFLICT DO NOTHING`, since records are content-addressed) and the publication (`ON CONFLICT (retry_key) DO NOTHING`) in one transaction. If the key already exists with the same record it returns the existing publication; with a different record it rolls back and reports a conflict, leaving no record behind. Isolation level, the per-parent advisory lock and the fork caps arrive with the publish ticket.
 
@@ -226,6 +226,26 @@ Written by ticket 05; later tickets add rows. Every value is read from the envir
 | `GRAFT_ADMIN_SECRET` | unset | the operator secret (at least 24 characters); when unset every admin request is refused |
 | `GRAFT_MAX_CONCURRENT_RENDERS` | 4 | most renders running at once; a request that waits over 5 s for a turn gets 503 retry-later |
 | `GRAFT_LOCK_WAIT_MS` | 10000 | how long a publish or a flag change waits for the lock on its stage before answering 503 |
+| `GRAFT_PUBLISHING` | `on` | whether publishing is open until the operator sets the kill switch (`on` or `off`) |
+| `GRAFT_UPLOADS` | `off` | whether visitors may publish their own sources (`on` or `off`); off until the launch gate passes |
+| `GRAFT_SWITCH_CACHE_MS` | 2000 | how long a read of the kill switch is reused; the most a change made on another instance needs to be seen |
+| `GRAFT_TRUSTED_PROXY_HOPS` | 0 | trusted proxies in front of the service; with 1 behind a load balancer the visitor is the last `X-Forwarded-For` entry |
+| `GRAFT_PUBLISH_PER_IP`, `GRAFT_PUBLISH_WINDOW_SECS` | 20, 3600 | publishes one address may make within the window |
+| `GRAFT_REPORT_PER_IP`, `GRAFT_REPORT_WINDOW_SECS` | 10, 3600 | reports one address may file within the window |
+| `GRAFT_ADMIN_FAILURES_PER_IP`, `GRAFT_ADMIN_WINDOW_SECS` | 10, 900 | refused admin attempts one address may make before it waits |
+| `GRAFT_GLOBAL_PUBLISH_PER_HOUR`, `GRAFT_GLOBAL_PUBLISH_BURST` | 120, 30 | the global publish cap: tokens refilled per hour, and the most admitted in one burst |
+| `GRAFT_STORAGE_LIMIT_BYTES` | 8,000,000,000 | what the host allows for audio; the admission threshold is this minus the overshoot bound |
+| `GRAFT_STORAGE_REFRESH_SECS` | 60 | how often the stored total is read again |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | unset | base address of an OTLP/HTTP collector; unset means no spans are exported |
+| `GRAFT_TRACE_SAMPLE` | 0.1 | the share of traces exported, 0 to 1 |
+| `GRAFT_ERROR_TRACKER_DSN` | unset | a Sentry-compatible tracker address; a secret, never logged; unset means no reports are sent |
+| `GRAFT_ENVIRONMENT` | `development` | the environment name error reports carry |
+| `GRAFT_INGEST_PER_IP`, `GRAFT_INGEST_WINDOW_SECS` | 30, 60 | client event batches one address may send within the window |
+| `GRAFT_INGEST_SESSION_EVENTS`, `GRAFT_INGEST_SESSION_WINDOW_SECS` | 300, 3600 | events one session id may send within the window |
+| `GRAFT_INGEST_MAX_BATCH` | 20 | most events in one client batch |
+| `GRAFT_EVENT_PIPELINE` | `on` | whether this process runs the relay, the consumer and the retention job (`on` or `off`) |
+| `GRAFT_RELAY_BATCH`, `GRAFT_RELAY_INTERVAL_MS` | 100, 1000 | events per delivered batch, and the pause between relay passes |
+| `GRAFT_EVENT_RETENTION_DAYS`, `GRAFT_RETENTION_INTERVAL_SECS` | 30, 3600 | how long raw events are kept, and how often the retention job runs |
 
 Without a bucket or `GRAFT_BLOB_DIR` the service keeps audio in memory and says so in its log. The seed script refuses to seed into memory, and also reads `GRAFT_RENDERER_WASM` (the artefact, checked against the pins).
 
@@ -243,7 +263,34 @@ Written by ticket 05; ticket 16 deepens it.
 - `GET /health` answers without touching the database; `GET /ready` pings it and returns 503 problem details when it fails, without echoing the connection string (tested against a closed pool).
 - `GET /metrics` serves the Prometheus text format: a request counter by method, route pattern and status, and a latency histogram by route pattern, so label cardinality stays bounded.
 - Every response carries `content-security-policy: default-src 'none'; frame-ancestors 'none'`, `x-content-type-options: nosniff`, `referrer-policy: no-referrer` and `cache-control: no-store`. CORS allows nothing unless origins are configured.
-- Tests run through the public HTTP API against a real Postgres 16 (a fresh database per test; a service container in CI), with an in-memory blob store and a no-op event sink. Queries are runtime queries, so building needs no database and no offline query data.
+- Tests run through the public HTTP API against a real Postgres 16 (a fresh database per test; a service container in CI), with an in-memory blob store. Queries are runtime queries, so building needs no database and no offline query data.
+
+## Observability and operations
+
+Written by ticket 16, deepening "Operational baseline".
+
+**Traces.** The service's spans are `tracing` spans: `request` (with the request id and, when spans are exported, the trace id, so a log line leads to its trace and back), `publish` (flip or source), `render` (the input size and the duration in microseconds, never audio), `blob.put`, `db.create_flip` with its `db.transaction`, `event.insert`, and `relay.batch`. A serialization conflict and its retry are events on the `db.create_flip` span. Two places would lose the parent by default and are handled: the database work runs in its own task (so a dropped request cannot abandon a transaction), which is instrumented with the publish span by hand, and the render runs on a blocking thread, so its span is made in the async code and the future is instrumented, not the closure. When `OTEL_EXPORTER_OTLP_ENDPOINT` is set the spans are exported over OTLP/HTTP, sampled by `GRAFT_TRACE_SAMPLE` (a trace that arrives sampled stays sampled); with it unset no exporter exists and nothing is sent. A test runs one publish through the real export pipeline into an in-process exporter and asserts the tree (render, blob write and transaction under publish under request; the event insert under the transaction), the size and duration on the render span, one trace for the lot, and the trace id beside the request id in the log line. **Deviation to confirm:** the ticket asked for a local collector container; an in-process exporter exercises the same SDK and layers without a new CI service, but no real collector has been run against the OTLP exporter yet, so that last hop is untested until the service is first deployed.
+
+**Error tracking.** When `GRAFT_ERROR_TRACKER_DSN` is set, a request that ends in a 500 and a panic are reported to a Sentry-compatible tracker. The client is built with no default integrations (the contexts integration reports the operating system and host), no request integration (so no headers, cookies or bodies), no breadcrumbs, no user, no host name, no session replay and no performance data, and every string that is left passes through a scrubber that removes the secrets the process holds, any long hexadecimal run (a manage key), addresses of both families, and credentials in URLs. The 500 report is one event naming the request id and the route; the cause is in the log line with the same request id, which is where it is read. A busy or refused request is not an error and is not reported. The panic path (a catch layer that answers 500 and logs only that a handler panicked, plus the SDK's panic integration) is configured but has no test of its own. Server errors are logged without personal data whether or not a tracker is configured. A test sends a request carrying a manage key, an operator secret, an address, a forwarding header and a user agent into a service whose database has gone, then sends a message that contains the secrets, an address and a connection string through the same client, and searches the tracker's payload as the SDK serialised it, and every log line, for any of them.
+
+**Metrics** (Prometheus text at `/metrics`, labels from fixed sets only; a test checks no id, key or visitor text is ever a label): requests and latency by route; `graft_publish_outcomes_total{kind,outcome}` (created, replay, or the refusal's stable name); `graft_refusals_total{reason}` (the guardrails); `graft_render_duration_seconds` and `graft_render_failures_total`; `graft_preview_mismatch_total`; `graft_serialization_retries_total` and `graft_serialization_retries_exhausted_total`; `graft_publishing_open`; `graft_relay_backlog`, `graft_relay_oldest_unsent_age_seconds`, `graft_consumer_lag_seconds`, `graft_events_applied_total`, `graft_events_duplicates_total`. A scripted scenario shows the publish counters adding up to the requests made, the render count matching the renders done, and the gauge following the switch.
+
+**Proposed alert rules and service-level wording.** These are proposals with the reasoning stated, written as example rules; no paging system is stood up and nothing here claims one is. Thresholds are starting values to tune against the load test.
+
+| Alert | Example condition | Why this threshold |
+|---|---|---|
+| Server errors | `increase(graft_http_requests_total{status="500"}[5m]) > 5` | a handful in five minutes is noise; more is a fault |
+| Readiness failing | `/ready` answers 503 for 2 minutes | the database is unreachable; a restart will not fix it, so look at the database |
+| Retries exhausted | `increase(graft_serialization_retries_exhausted_total[10m]) > 0` | the retry budget is sized so that this should not happen at the expected load |
+| Consumer lag | `graft_consumer_lag_seconds > 300` for 10 minutes | rollups are minutes behind; the relay or consumer is stuck |
+| Relay backlog | `graft_relay_backlog > 1000` | events are piling up undelivered |
+| Dead-letter depth | any message in the dead-letter queue | applies once the queue leg (ticket 18) exists; until then there is no queue |
+| Render failures | `increase(graft_render_failures_total[10m]) > 0` | a render failing is a renderer or artefact fault, not a visitor's |
+| Publishing closed | `graft_publishing_open == 0` for longer than planned | the kill switch is a deliberate act; this reminds the operator it is still on |
+
+Wording for the service-level target, to be confirmed against measurements: "publishing and reading answer correctly for at least 99% of requests over a rolling 30 days, measured by requests that did not end in a 500 or a failed readiness check." It is a target for a one-person experiment, not a commitment to anyone.
+
+**Known limits, not hidden.** After the first rebuild of the rollups their table's constraint and index names drift from the migration's, so no later migration may name them. `/metrics` runs the ledger's lag query on every scrape, which is fine for one scraper at this scale. A request that finds the stored total stale waits for the blob store's listing to refresh it. A flip that reuses a retry key for different content still costs a render before the conflict shows (a source upload is checked first and writes nothing). When the per-address table is full of live entries every new address pays a scan of it and is then admitted; the global cap still bounds publishing, and failed admin attempts fail closed.
 
 ## Publishing a flip
 
@@ -296,6 +343,34 @@ Written by ticket 09.
 **A held stage cannot be flipped**; neither can a hidden one (409, with their own problem types). A fork accepted just before a hide on one of its ancestors becomes a descendant like any other and is held; a fork of a descendant cannot acquire the hidden stage's lock, because it is keyed on its own parent, so a rights hide above it can land a moment after a fork was accepted. That is harmless, because holding is computed when a chain is read, and it is tested.
 
 **What a takedown achieves.** New requests for the audio of a hidden or held stage are refused; URLs already issued expire within their short lifetime; copies already downloaded cannot be recalled. A rights hide also holds everything built on the hidden stage while it stands. The report path and the operator's decision are the whole procedure; they do not verify anything about rights, and graft states that plainly.
+
+## Abuse guardrails
+
+The public write surface is anonymous, so what keeps it safe and cheap is a small set of limits. Each refuses politely with a stated reason (a problem document with a stable `type`, and a `Retry-After` header where waiting helps); none loses a request silently and none answers with an opaque 500.
+
+| Guardrail | Default | Refusal |
+|---|---|---|
+| Kill switch (publishing) | open | 503 `publishing-off` |
+| Visitor uploads | off | 503 `uploads-off` |
+| Per-address publish limit | 20 per hour | 429 `rate-limited` |
+| Per-address report limit | 10 per hour | 429 `rate-limited` |
+| Per-address failed admin attempts | 10 per 15 minutes | 429 `rate-limited` |
+| Per-address client event batches | 30 per minute | 429 `rate-limited` |
+| Per-session client events | 300 per hour | 429 `rate-limited` |
+| Global publish cap | 120 per hour, burst 30 | 429 `publish-cap` |
+| Storage admission threshold | 8 GB minus the overshoot bound | 503 `storage-full` |
+
+**The kill switch** is a row in the database (`runtime_settings`), read through a short cache, and set through the operator's `PUT /admin/switch` (`GET` reads it). It needs no redeploy. It closes every route that adds to what is published: flips, source uploads and client event batches. Reads, reports, a maker's own withdrawal and the operator's routes stay open, so a bad moment can always be reported, undone and reopened. A test lists every write route, checks the list against the public interface document, and asserts the switch closes exactly the routes marked as closed; a new write route fails it until someone decides which kind it is. An instance sees its own change at once and another instance's within `GRAFT_SWITCH_CACHE_MS`. If the database cannot be read the last known state stands; before any read, the configured default.
+
+**Per-address limits** count in the memory of one process, in a sliding window, and are forgotten when the window passes or the process restarts. An address is never written to a row, a log line or a metric label, and not stored in any other form either, hashed included; a test dumps every table, the log and the metrics after a mixed run and looks for it. IPv6 visitors count by their /64. With one instance behind a load balancer the connecting address is the balancer, so `GRAFT_TRUSTED_PROXY_HOPS` says how many proxies to trust: the visitor is the `X-Forwarded-For` entry that many places from the right, and anything the visitor wrote further left is ignored. Because the counts are per process, a second instance gives each visitor a second allowance; the global cap, which lives in the database, is what holds across instances. The table of tracked addresses is bounded; when it is full new addresses are not tracked, and the global cap still applies. Failed admin attempts are counted, successes are not, so the operator is not locked out by using the routes.
+
+**The global publish cap** is a token bucket in one database row: a publish acquires one token, tokens refill at a fixed rate up to the burst. It is one conditional update, so any number of simultaneous publishers on any number of instances are admitted exactly as often as there are tokens (a test sends 40 at once against a burst of 7 and sees 7 admitted and 33 refused with a wait). A replay of a publish already made acquires no token and is never refused by the cap or the threshold. A publish that is refused later for another reason has still used its token, which only makes the bound conservative.
+
+**The storage threshold is an admission threshold, not a quota.** The stored total is read from the blob store at most once per `GRAFT_STORAGE_REFRESH_SECS` and compared with the threshold outside any transaction, so it never makes unrelated publishes conflict. Publishes admitted between two reads add to the total, and the global cap bounds how many: at most the burst plus what the cap refills in one refresh interval, each no larger than the largest blob the limits allow. That is the documented **overshoot bound**; with the defaults it is 32 blobs of 1.92 MB, about 61 MB, and the threshold is the host's limit minus it. The service refuses to start if the limit does not exceed the bound. A test publishes a burst while the total is frozen below the threshold and asserts the final total is within the bound of the threshold and under the host's limit, then asserts that after a refresh publishes are refused and store nothing. If the total cannot be read, the last known value is used, and with none, publishing is admitted: refusing everything over a failed listing would be worse than the bounded overshoot. Reading the total lists every audio object, which is cheap at this scale and is the thing to replace first if it grew.
+
+**Public text** policy is configuration (`GRAFT_DENY_WORDS`, on top of the built-in list) and is read at start-up; changing it needs a restart.
+
+**Residual risk, stated plainly.** Someone could still publish what they should not. These limits cap how fast, how much and from how many places, and the reports, the hide and the switch let the operator respond; they do not make misuse impossible. Addresses behind one shared connection share an allowance, and a person with many addresses can exceed the per-address limit, which is why the global cap exists.
 
 ## Blobs
 
@@ -393,6 +468,82 @@ Written by ticket 21. The code is in `web/lib/playback/`: a pure state machine (
 
 **Not tested here, by design.** Real iOS Safari: whether the context resumes on the first tap, and the behaviour with the silent switch on (Web Audio is muted by it on iOS). Phone performance. Headphones unplugged on a real device (the code pauses on the `devicechange` event and when the context is suspended or interrupted; only a device can show that those events fire in practice). These are manual checks for the builder's listening and cold-phone test, recorded as such.
 
-## Events, security
+## Events and the outbox
 
-_Not written yet. Tickets 13 onwards; consolidated by ticket 37._
+Written by ticket 13. The consumer, rollups and the operator's read are the next section (ticket 14); the client ingest endpoint is ticket 15.
+
+**The table is the source of truth; any queue is transport.** Every event is a row in one append-only `events` table with an origin (`server` or `client`) and a relay state (`unsent` or `sent`). A queue, if one is deployed, only carries copies of rows that already exist; a rebuild replays the table, never the queue. The sink the relay delivers to is a trait, so the deployed queue and the Postgres-only sink (the batch goes straight to the consumer in the same process, the default for tests and local runs) are interchangeable and the consumer is the same either way.
+
+**Five events, nothing else.** `publication_created` (detail `source` or `flip`) and `report_filed` (detail: the category, never the note) are server events; `roll_opened`, `stage_played` and `flip_started` are client events (ticket 15). A row holds an event id, a kind, a time, the publication or stage it is about and a short qualifier. It holds no address, no user agent and no email, and the schema has no column that could: a test lists the columns. A server event never carries a session id, and the database refuses one that does.
+
+**Server events are transactional.** The row is inserted in the same transaction as the write it describes, in the publish transaction (flips and sources, including the seed path, so a seeded source counts as a created publication, which it is) and in the report transaction. A publish refused by any rule, a replay and a key conflict write no event; a transaction that dies after its inserts leaves neither the publication nor the event (a test ends the backend between the inserts and the commit and finds neither). There is no write without its event and no event without its write. Client events are the exception by design: they are best-effort counts, and only server events can never diverge from their write.
+
+**The relay claims; it does not keep a cursor.** A relay reads unsent rows with `FOR UPDATE SKIP LOCKED` inside a transaction, hands the batch to the sink, and marks the rows sent in the same transaction when the sink acknowledges. It never remembers "the last id delivered": commit order is not id order, so a transaction that took a lower id can commit after a higher one was delivered, and a cursor would skip that row for good (a test holds such a transaction open, delivers the higher row, commits the lower one and finds it delivered on the next pass). Two relays over one backlog skip each other's rows and deliver every row (a test runs two over 200 rows with a slow sink and finds each delivered once).
+
+**Delivery is at least once.** The claim lasts as long as the transaction. If the sink refuses or the process dies between the claim and the acknowledgement, the rows are released still unsent and are delivered again (a test aborts a relay while its sink holds the batch and finds the same rows delivered by the next one). A sink must therefore treat a repeated event id as a repeat; the consumer in ticket 14 dedupes on it.
+
+**Retention.** Raw events are kept 30 days. The retention job deletes only events that were sent and are older than the window, and skips any row a relay is working on, so it can run alongside the relay and can never discard an event that was not delivered (tests: an old unsent event survives; a purge racing a relay loses and duplicates nothing).
+
+**Wiring.** The service starts the relay (to the in-process consumer), and the retention job, unless `GRAFT_EVENT_PIPELINE=off`; claims skip locked rows, so any number of instances may run them.
+
+## Client events are best-effort
+
+Written by ticket 15.
+
+`POST /v1/events` accepts a batch of the three events the browser reports: `roll_opened`, `stage_played` and `flip_started`. It writes into the same ledger as the server events, with origin `client`, and that is where the similarity ends. **Only server events can never diverge from their write.** A client event is a count the browser chose to send: it can be lost (the tab closed, the network failed, a privacy signal was on), repeated, or invented by anyone, so it never feeds a public fact. The public "flipped N times" is read from the publications; a test floods the endpoint and finds that count unchanged, and another looks through every public response for anything event-derived and finds nothing.
+
+**Guards, in the order they run.** The kill switch and the per-address batch limit run before the body is read. Then the body is capped at 16 KB and a batch at 20 events; an event needs a 16 to 64 character id (the dedupe key), a session id of 8 to 64 characters, one of the three client kinds (a server kind from a browser is refused) and no field beyond those, so nothing else can be stored. A batch whose browser signals Global Privacy Control or Do Not Track is ignored whole: the client sends nothing in that case (ticket 32), and honouring the signal on the server as well is defence in depth; the answer is the same receipt with nothing accepted. A session id may send 300 events an hour, counted in memory; it is a browser's choice, so this stops one page flooding and not someone who invents a new id each time, which is what the per-address limit and the rest are for. An event naming a publication that does not exist is dropped, not refused, so one stale id loses one event and not the batch, and the refusal does not tell a probe which ids exist. Timestamps are the browser's, clamped: more than five minutes ahead of the server becomes the server's now, older than a day becomes a day ago.
+
+**The receipt is minimal.** `{"accepted": n}`: the events newly stored. Fewer than sent means some were repeats, dropped, or ignored for a privacy signal; it does not say which. Limits refuse politely with a `Retry-After`.
+
+**Privacy.** The ledger has no column for an address or a user agent, and the handler stores only the event's own fields: a test sends a batch with a distinctive address, forwarding header and user agent and finds none of them in the row.
+
+**A stated bound, not a claim of scale.** A test sends 40 full batches at once while a flip is published and checks the publish finishes well inside ten seconds. It is a sanity check that event ingest does not hold up publishing, and it says nothing about load.
+
+## First open and the static snapshot
+
+Written by ticket 22.
+
+**The first open must not wait on the database.** The chain the roll opens on is shipped with the web app as static files, so the first open needs no API call and works while the database is asleep or the API is down. The roll plays and reads from the snapshot; everything that needs the service (flipping, publishing, reading another chain) says plainly that it cannot reach it, and the roll itself keeps working.
+
+**The chain is data.** `seed/chain.json` names one source and three flips (cuts in frames, speeds as fractions, titles, retry keys) and `seed/jazz-rhodes.pcm` is the source, a synthesized Dm9 electric piano chord of 1.2 s in canonical audio, made for graft (no third-party material). Swapping the sound after the listening gate means replacing the file and updating the manifest; no code changes.
+
+**Made by the real publish path.** `graft-seed-chain` seeds the source, then each flip, through the same pipeline every visitor's flip goes through: the server renders it with the canonical renderer, checks the caps and writes the record and its event in one transaction. The only differences are the identity (the public id is derived from the retry key, and there is no manage key, so nobody can manage a seeded stage; this deterministic id exists only on the seed path) and a cross-check: each flip's expected output hash in the manifest was worked out by the independent reference renderer (`scripts/vectors/reference.py`), not by the service, and the seed refuses to proceed if the service's render differs. Running it twice yields one chain (a test counts the rows). Two independent fresh databases seeded by it give identical publication ids, record ids and snapshot (a test compares them, one of them seeded at another time and after other work).
+
+**What the snapshot holds.** `web/snapshot/chain.json` holds, per stage, the public id, kind, title and name as typed, the parent, the credit lines with their honesty states, the record id, the source and output hashes, the cut, the speed, the renderer identity and the frame count, and where the stage's audio is. It holds nothing that varies between environments (no creation times, no flip counts, no signed URLs) and nothing secret (a test lists the exact fields and searches for manage, secret, key and address words). The audio is in `web/public/seed/`, each file named by the SHA-256 of its bytes, served with `Cache-Control: public, max-age=31536000, immutable`: a name that is its content can never serve different bytes, so a year is safe. A web test checks that every file is named for its hash, that nothing else is in the directory, that the chain links up, and that the header rule is there. The chain's public "flipped N times" is deliberately not in the snapshot: it changes as visitors flip, so the roll asks the API for it when it can.
+
+**The snapshot cannot drift.** A Rust test, in the `rust` job that already has Postgres, seeds a fresh database and builds the snapshot from what the service holds, then compares it with the committed files byte for byte, audio included. A change to a seeded flip's cut fails it with a line naming the stage and what changed (a test makes that change and finds `stage 4 ... cut`; the stages before it are not reported). `graft-seed-chain --check-snapshot web` asks the same question of any database from the command line, and `--write-snapshot web` regenerates the files to commit.
+
+## Visitor sources and the launch gate
+
+Written by ticket 12.
+
+A visitor can publish their own sound as a root publication, through the same model, the same retry-key idempotency and the same one-time manage key as a flip. `POST /v1/sources` carries the sound as base64 of canonical audio (48 kHz, mono, signed 16-bit little-endian, no header), because the browser decodes it first, with a title, a name as typed, a retry key and a rights declaration.
+
+**Off by default, and the door is not opened here.** The route answers 503 `uploads-off` ("uploads are switched off for now; you can still flip the sounds that are already here") until `GRAFT_UPLOADS=on`, and the kill switch closes it like every other write. The two are independent: with the flag off and the kill switch open, flips work and uploads refuse; with the kill switch closed both refuse (a test shows each). Both run before the body is read. Turning uploads on in any deployed environment is a decision at the launch gate, after the report and hide flow and the operator procedure have been rehearsed end to end and the kill switch has been checked to close every publishing path.
+
+**Validated before a byte is stored.** In order, cheapest first: the title and name (links and handles are removed and the response says so; nothing left is refused), the retry key, the declaration, the encoding, and then the sound itself: whole 16-bit samples, at least 10 ms and at most 15 s, not silent (the loudest sample within 32 of zero), not a flat line (the whole recording within 64 of one level), not mostly clipping noise (more than half the samples on the rails). A refusal is a 422 naming the field and the rule, with a sentence a person can read, and writes nothing: no blob, no row, no event (a test covers each). A pure steady tone is not detected; that is a stated limit. The body limit is derived from the source cap (the base64 of the longest allowed source, plus a small envelope), so a forged oversized body is cut off at that limit and not read in full: a test streams 128 MB through a counter and finds the service pulled only the limit.
+
+**Declared, never established.** The declaration is a fixed statement ("I made this sound or I have the right to share it. It does not contain anyone's private conversation.") and the request must carry it character for character, so what is stored is what was shown, with the time it was accepted and the basis the visitor named (own recording, or the right to share). It appears in the chain as a line marked declared, and `rights` stays unknown. Nothing in a response says anyone checked it. The server computes from what was submitted: it cannot verify that a client decoded honestly, nor that the sound is what the visitor says it is. The stored sound is the submitted bytes, and its hash is what the details layer shows.
+
+**Residual risk.** Someone can still upload what they should not: a sound that is not theirs, or one that holds a private conversation despite the declaration. The limits (per address, the global cap, the storage threshold), the report and hide flow and the kill switch cap how much damage and for how long; they do not make it impossible. An uploaded source can be flipped like any other, and a hide for rights holds the flips built on it.
+
+## Rollups and the analytical read path
+
+Written by ticket 14.
+
+**Two read paths, on purpose.** The lineage data (publications, content records) is the transactional store: what the public reads, and the only source of a public fact. A stage's "flipped N times" is counted from it and never from events; a test floods the ledger and then wipes every event-derived table and finds the public count unchanged. The rollups are derived, eventually consistent and rebuildable: they are an analytical read path that only the operator sees, through the secret-protected `GET /admin/rollups` and this document. This is the OLTP-versus-derived-state split in a deliberately small form. It is an engineering demonstration of the pattern, kept separate from the product contract: a small experimental product does not need a distributed design.
+
+**The consumer is idempotent on the event id.** It inserts each delivered id into a dedupe set (`processed_events`) and counts only those that were new, in one transaction, so a duplicate, a replay, a shuffled delivery or any batching gives the same counts. Rollup rows are keyed by hour (UTC), event kind and publication or stage, and hold counts only: no session id, address or agent (a test lists the columns and looks through the rows). The dedupe ids are kept at least as long as the events, and the retention job removes them with the events, except for ids of events still unsent.
+
+**The properties, stated as the tests state them.** Applying a generated stream once, twice, shuffled, in random batch sizes, and rebuilding from the ledger all give identical rollups, and those equal the counts worked out by hand from the generated specification.
+
+**Rebuild is a swap.** The rebuild command (`graft-rebuild-rollups`) locks the rollup and dedupe tables, snapshots the ledger in one statement, writes a fresh rollup table from the snapshot, and renames it over the live one in the same transaction, making the dedupe set equal to the snapshot's event ids. Consumers wait on the lock for that moment. The ledger is not locked, so events keep being accepted; one that arrived after the snapshot is not in the dedupe set and is counted once by the consumer when its turn comes, and one that arrived before it is already counted by the rebuild and recognised as a repeat. The approach is recorded as: apply the tail after the swap, by the ordinary consumer, with no pause of acceptance. A test forces that interleaving and finds each event exactly once; another shows a rebuild that fails part way leaves the live rollups and the table list untouched.
+
+**What cannot be rebuilt.** Raw events are kept for 30 days (`GRAFT_EVENT_RETENTION_DAYS`); hourly rollups are kept. When retention deletes events it records how far back the ledger has been trimmed, and a rebuild carries every hour at or before that point over as it is instead of recounting it from a ledger that no longer holds its events (the hour that straddles the point is carried over too). So a rebuild can fix recent counts but cannot recover rollups older than the window; a test shows an old hour surviving a rebuild after its events were deleted.
+
+**What the operator reads.** `GET /admin/rollups?hours=N` (1 to 720, default 24) returns hourly counts by kind, the relay backlog (events not yet delivered and the age of the oldest) and the consumer lag (events not yet counted and the age of the oldest: the event-to-rollup lag), computed against the service clock so tests can fix the time. Reports say sessions' events, never people, and the response says that client events are best-effort. The metrics endpoint exposes `graft_relay_backlog`, `graft_relay_oldest_unsent_age_seconds`, `graft_consumer_lag_seconds`, `graft_events_applied_total` and `graft_events_duplicates_total`.
+
+## Security
+
+_Not written yet. Tickets 17 onwards; consolidated by ticket 37._

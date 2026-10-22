@@ -2,6 +2,8 @@
 //! Seam 1: the public HTTP API against a real Postgres. Each test names the guarantee it protects.
 
 mod common;
+#[path = "chain/seeded.rs"]
+mod seeded;
 
 use axum::http::StatusCode;
 use common::{Harness, is_problem};

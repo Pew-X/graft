@@ -28,6 +28,7 @@ fn evidence() -> SourceEvidence {
         work_title: Some("a door".into()),
         work_author: Some("pat".into()),
         url: None,
+        declaration: None,
     }
 }
 
@@ -332,5 +333,127 @@ async fn a_value_too_large_for_the_database_is_refused_and_never_wrapped_into_a_
         rows, 0,
         "nothing was written, in particular nothing that wrapped"
     );
+    db.drop_db().await;
+}
+
+#[tokio::test]
+async fn a_setting_is_absent_until_set_and_set_again_replaces_it() {
+    let db = TestDb::create().await;
+    assert_eq!(db.store.setting("publishing").await.expect("read"), None);
+    db.store
+        .set_setting("publishing", "off")
+        .await
+        .expect("set");
+    assert_eq!(
+        db.store
+            .setting("publishing")
+            .await
+            .expect("read")
+            .as_deref(),
+        Some("off")
+    );
+    db.store.set_setting("publishing", "on").await.expect("set");
+    assert_eq!(
+        db.store
+            .setting("publishing")
+            .await
+            .expect("read")
+            .as_deref(),
+        Some("on")
+    );
+    db.drop_db().await;
+}
+
+/// The guarantee behind the global publish cap: however many publishers ask at once, exactly the
+/// burst is admitted and every other one is refused with a wait, none lost and none counted twice.
+#[tokio::test]
+async fn the_publish_budget_admits_exactly_the_burst_under_concurrent_demand() {
+    use graft_storage::PublishToken;
+    let db = TestDb::create().await;
+    let now = 1_800_000_000.0;
+    let tasks: Vec<_> = (0..40)
+        .map(|_| {
+            let store = db.store.clone();
+            tokio::spawn(async move { store.take_publish_token(now, 3600, 7).await })
+        })
+        .collect();
+    let (mut taken, mut refused) = (0, 0);
+    for task in tasks {
+        match task.await.expect("task").expect("a decision") {
+            PublishToken::Taken => taken += 1,
+            PublishToken::Empty { retry_after_secs } => {
+                assert!(retry_after_secs >= 1, "a refusal says how long to wait");
+                refused += 1;
+            }
+        }
+    }
+    assert_eq!(
+        (taken, refused),
+        (7, 33),
+        "accepted plus refused is every request"
+    );
+    db.drop_db().await;
+}
+
+#[tokio::test]
+async fn the_publish_budget_refills_at_its_rate_and_never_beyond_the_burst() {
+    use graft_storage::PublishToken;
+    let db = TestDb::create().await;
+    let t0 = 1_800_000_000.0;
+    // 3600 an hour is one a second; the burst is 2.
+    for _ in 0..2 {
+        assert_eq!(
+            db.store
+                .take_publish_token(t0, 3600, 2)
+                .await
+                .expect("take"),
+            PublishToken::Taken
+        );
+    }
+    assert_eq!(
+        db.store
+            .take_publish_token(t0, 3600, 2)
+            .await
+            .expect("take"),
+        PublishToken::Empty {
+            retry_after_secs: 1
+        }
+    );
+    // Half a second later there is still not a whole token, and the wait shrinks to one second.
+    assert_eq!(
+        db.store
+            .take_publish_token(t0 + 0.5, 3600, 2)
+            .await
+            .expect("take"),
+        PublishToken::Empty {
+            retry_after_secs: 1
+        }
+    );
+    // A second later there is one.
+    assert_eq!(
+        db.store
+            .take_publish_token(t0 + 1.0, 3600, 2)
+            .await
+            .expect("take"),
+        PublishToken::Taken
+    );
+    // A long quiet spell refills to the burst and no further.
+    let later = t0 + 100_000.0;
+    for _ in 0..2 {
+        assert_eq!(
+            db.store
+                .take_publish_token(later, 3600, 2)
+                .await
+                .expect("take"),
+            PublishToken::Taken
+        );
+    }
+    assert!(matches!(
+        db.store
+            .take_publish_token(later, 3600, 2)
+            .await
+            .expect("take"),
+        PublishToken::Empty { .. }
+    ));
     db.drop_db().await;
 }

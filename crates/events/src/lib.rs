@@ -1,26 +1,14 @@
-//! Outbox writer, relay, consumer and rollups behind an event-sink trait.
+//! The event path after the ledger: the sink trait, the relay that delivers claimed rows to a
+//! sink, the idempotent consumer, and the retention job. The ledger itself and its SQL live in `graft-storage`; this crate
+//! decides what to do with a claimed batch.
 //!
-//! Only the seam exists so far: writes call a sink, and the default sink does nothing. The ledger,
-//! relay and idempotent consumer arrive with their own tickets.
+//! Delivery is at least once. A sink must treat a repeated event id as a repeat.
 
-/// Where events go. Tests and local runs use the Postgres-only sink; the deployed environment adds
-/// the queue leg.
-pub trait EventSink: Send + Sync {
-    /// Record that something happened. Must not fail the write that caused it.
-    fn record(&self, event: &Event);
-}
+mod consumer;
+mod relay;
+mod sink;
 
-/// The events the service records, named in graft vocabulary. Only the first exists so far; the
-/// ledger ticket adds the rest.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Event {
-    /// A publication was created (server event, transactional once the ledger exists).
-    PublicationCreated,
-}
-
-/// A sink that discards everything: the default until the ledger exists.
-pub struct NoopSink;
-
-impl EventSink for NoopSink {
-    fn record(&self, _event: &Event) {}
-}
+pub use consumer::{Consumer, ConsumerStats};
+pub use graft_storage::EventKind;
+pub use relay::{Relay, RelayError, Retention};
+pub use sink::{BatchConsumer, ConsumerSink, EventSink, MemorySink, SinkError};

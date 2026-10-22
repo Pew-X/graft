@@ -6,6 +6,7 @@ use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, StatusCode, header};
 use graft_api::config::Config;
+use graft_api::guard::Clock;
 use graft_api::http::{AppState, router};
 use graft_api::seed::{SeedSource, seed_source};
 use graft_domain::chain::SourceEvidence;
@@ -45,6 +46,10 @@ pub struct Harness {
     pub app: Router,
     pub limits: Limits,
     pub metrics: Arc<graft_api::metrics::Metrics>,
+    /// The time the guardrails read; moves only when a test advances it.
+    pub clock: Arc<graft_api::guard::ManualClock>,
+    /// The state the router was built from, for tests that call the service's functions directly.
+    pub state: AppState,
 }
 
 pub fn renderer() -> RendererIdentity {
@@ -102,19 +107,35 @@ impl Harness {
         let mut config =
             Config::from_lookup(|n| (n == "GRAFT_DATABASE_URL").then(|| db.url.clone()))
                 .expect("config");
+        // The per-visitor limits are out of the way unless a test sets them: every request here
+        // comes from one unnamed address, and most tests are about something else.
+        config.guardrails.publish_per_ip.count = 1_000_000;
+        config.guardrails.report_per_ip.count = 1_000_000;
+        config.guardrails.ingest_per_ip.count = 1_000_000;
+        config.guardrails.ingest_session_events.count = 1_000_000;
+        config.guardrails.global_publish_per_hour = 1_000_000;
+        config.guardrails.global_publish_burst = 1_000_000;
+        // ...and so is the storage threshold: the limit sits above the overshoot bound of that burst.
+        config.guardrails.storage_limit_bytes =
+            config.guardrails.overshoot_bound_bytes(&config.limits) + 8_000_000_000;
         tweak(&mut config);
         let limits = config.limits.clone();
         let renderer: Arc<dyn Render> = host();
         let store = db.store.clone().with_gate(gate(db.store.pool().clone()));
-        let state = AppState::new(&config, store, blobs.clone(), renderer);
+        let clock = Arc::new(graft_api::guard::ManualClock::new(
+            graft_api::guard::SystemClock.now_secs(),
+        ));
+        let state = AppState::with_clock(&config, store, blobs.clone(), renderer, clock.clone());
         let metrics = state.metrics.clone();
-        let app = router(state, &config);
+        let app = router(state.clone(), &config);
         Self {
             db,
             blobs,
             app,
             limits,
             metrics,
+            clock,
+            state,
         }
     }
 
@@ -136,6 +157,7 @@ impl Harness {
                     work_title: Some("door".into()),
                     work_author: Some("pat".into()),
                     url: None,
+                    declaration: None,
                 },
                 audio: audio_frames(frames, seed_audio),
                 renderer: renderer(),
@@ -235,6 +257,20 @@ impl Harness {
         (parts.status, parts.headers, json)
     }
 
+    /// As `send`, from a stated visitor address (the connecting peer the service sees).
+    pub async fn send_from(
+        &self,
+        ip: &str,
+        method: &str,
+        uri: &str,
+        headers: &[(&str, &str)],
+        body: Option<&Value>,
+    ) -> (StatusCode, axum::http::HeaderMap, Value) {
+        self.client()
+            .send_from(ip, method, uri, headers, body)
+            .await
+    }
+
     pub async fn count(&self, table: &'static str) -> i64 {
         sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT count(*) FROM {table}")))
             .fetch_one(self.db.store.pool())
@@ -304,6 +340,39 @@ pub struct Client {
 }
 
 impl Client {
+    /// As `send`, from a stated visitor address (the connecting peer the service sees).
+    pub async fn send_from(
+        &self,
+        ip: &str,
+        method: &str,
+        uri: &str,
+        headers: &[(&str, &str)],
+        body: Option<&Value>,
+    ) -> (StatusCode, axum::http::HeaderMap, Value) {
+        let mut builder = Request::builder().method(method).uri(uri);
+        for (name, value) in headers {
+            builder = builder.header(*name, *value);
+        }
+        let body = match body {
+            Some(json) => {
+                builder = builder.header(header::CONTENT_TYPE, "application/json");
+                Body::from(json.to_string())
+            }
+            None => Body::empty(),
+        };
+        let mut request = builder.body(body).expect("request");
+        let peer: std::net::SocketAddr = format!("{ip}:40000").parse().expect("an address");
+        request
+            .extensions_mut()
+            .insert(axum::extract::ConnectInfo(peer));
+        let response = self.app.clone().oneshot(request).await.expect("response");
+        let (parts, body) = response.into_parts();
+        let bytes = body.collect().await.expect("body").to_bytes();
+        let json = serde_json::from_slice(&bytes)
+            .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&bytes).into()));
+        (parts.status, parts.headers, json)
+    }
+
     pub async fn send(
         &self,
         method: &str,

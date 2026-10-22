@@ -21,6 +21,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/events": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Report a batch of client events. */
+    post: operations["ingest_events"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/publications": {
     parameters: {
       query?: never;
@@ -109,6 +126,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/sources": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Publish a sound the visitor made. */
+    post: operations["publish_source"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -129,6 +163,29 @@ export interface components {
       stages: components["schemas"]["EntryView"][];
       /** @description Set to "depth_cap" when the walk stopped before reaching a source. */
       truncated?: string | null;
+    };
+    /** @description One event as the browser reports it. */
+    ClientEvent: {
+      /**
+       * @description Chosen by the browser, 16 to 64 characters from `A-Z a-z 0-9 _ -`. The dedupe key: an id
+       *     already stored is not stored again.
+       */
+      event_id: string;
+      /** @description One of `roll_opened`, `stage_played`, `flip_started`. */
+      kind: string;
+      /**
+       * Format: int64
+       * @description When it happened by the browser's clock, milliseconds since the Unix epoch. A time far from
+       *     the server's is replaced by the nearest acceptable one.
+       */
+      occurred_at_ms: number;
+      /**
+       * @description The public id of the stage (for a roll, its last stage). Events naming a publication that
+       *     does not exist are dropped.
+       */
+      publication_id: string;
+      /** @description The page load's session id, 8 to 64 characters from `A-Z a-z 0-9 _ -`. */
+      session_id: string;
     };
     /** @description A cut of the parent's audio, in frames of 48 kHz mono audio, half-open. */
     CutRequest: {
@@ -156,10 +213,23 @@ export interface components {
        */
       start: number;
     };
+    /** @description The declaration the visitor accepted. */
+    DeclarationRequest: {
+      /** @description `own_recording` or `right_to_share`. */
+      basis: string;
+      /** @description The statement, exactly as shown: it must equal the service's declaration text. */
+      statement: string;
+    };
     /** @description The exact facts, one level down from the credit lines. */
     DetailsView: {
       /** @description The cut, computed. */
       cut: components["schemas"]["CutView"];
+      /**
+       * Format: int64
+       * @description For a source a visitor published: when they accepted the rights declaration, milliseconds
+       *     since the Unix epoch. The declaration is shown as declared, never as established.
+       */
+      declared_at_ms?: number | null;
       /** @description SHA-256 of this stage's audio. */
       output_blob: string;
       /** @description The content record id: SHA-256 of its canonical bytes. It proves which bytes, nothing more. */
@@ -194,6 +264,20 @@ export interface components {
     ForkPermissionRequest: {
       /** @description True to allow new flips of this stage, false to close it. Existing flips are untouched. */
       permitted: boolean;
+    };
+    /** @description The receipt: deliberately all there is to learn. */
+    IngestReceipt: {
+      /**
+       * Format: int32
+       * @description Events newly stored. Fewer than sent when some were repeats, named a publication that does
+       *     not exist, or the browser signalled that it must not be measured.
+       */
+      accepted: number;
+    };
+    /** @description A batch of events. */
+    IngestRequest: {
+      /** @description The events, at most the configured batch size (20 by default). */
+      events: components["schemas"]["ClientEvent"][];
     };
     /** @description One line of a credit block. */
     LineView: {
@@ -254,6 +338,21 @@ export interface components {
       /** @description Title as typed; links and handles are removed, and the response says so. */
       title: string;
     };
+    /** @description A source to publish. */
+    PublishSourceRequest: {
+      /**
+       * @description Base64 (standard alphabet, no line breaks) of canonical audio: 48 kHz, mono, signed 16-bit
+       *     little-endian, no header; at most 15 seconds.
+       */
+      audio: string;
+      /** @description The maker's name as typed. Plain text, never a handle. */
+      author: string;
+      declaration?: components["schemas"]["DeclarationRequest"] | null;
+      /** @description Chosen by the client when the publish step opens: 16 to 128 characters from `A-Z a-z 0-9 . _ : -`. */
+      retry_key: string;
+      /** @description Title as typed; links and handles are removed, and the response says so. */
+      title: string;
+    };
     /** @description The result of publishing. */
     PublishedFlip: {
       /** @description Fields whose text was changed by removing a link or a handle. */
@@ -268,6 +367,18 @@ export interface components {
        *     On a mismatch the server's audio is what was stored.
        */
       preview_matches?: boolean | null;
+      /** @description The new publication, as one entry of a chain. */
+      publication: components["schemas"]["EntryView"];
+    };
+    /** @description The result of publishing a source. */
+    PublishedSource: {
+      /** @description Fields whose text was changed by removing a link or a handle. */
+      adjusted_fields: string[];
+      /**
+       * @description The key that manages this publication. Shown once, in the response that creates it. Absent
+       *     when the request was a replay.
+       */
+      manage_key?: string | null;
       /** @description The new publication, as one entry of a chain. */
       publication: components["schemas"]["EntryView"];
     };
@@ -425,6 +536,57 @@ export interface operations {
       };
     };
   };
+  ingest_events: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IngestRequest"];
+      };
+    };
+    responses: {
+      /** @description How many events were newly stored */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IngestReceipt"];
+        };
+      };
+      /** @description A field breaks a rule, or the batch is too large; `field` and `rule` say which */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description This visitor or session sent too much; `Retry-After` says when to try again */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Publishing, which includes event reporting, is switched off */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
   publish_flip: {
     parameters: {
       query?: never;
@@ -492,7 +654,7 @@ export interface operations {
           "application/problem+json": components["schemas"]["Problem"];
         };
       };
-      /** @description This stage was flipped too often this hour */
+      /** @description This stage was flipped too often this hour, this visitor published too often (`rate-limited`), or everyone together reached the publish cap (`publish-cap`); `Retry-After` says when to try again */
       429: {
         headers: {
           [name: string]: unknown;
@@ -501,7 +663,7 @@ export interface operations {
           "application/problem+json": components["schemas"]["Problem"];
         };
       };
-      /** @description Busy; send the same request again */
+      /** @description Busy, send the same request again (`retry-later`); publishing is switched off (`publishing-off`); or there is no room for new audio (`storage-full`) */
       503: {
         headers: {
           [name: string]: unknown;
@@ -669,6 +831,93 @@ export interface operations {
       };
       /** @description A field breaks a rule; `field` and `rule` say which */
       422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description This visitor has filed too many reports lately; `Retry-After` says when to try again */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  publish_source: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PublishSourceRequest"];
+      };
+    };
+    responses: {
+      /** @description The same request was already published; nothing changed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PublishedSource"];
+        };
+      };
+      /** @description Published; the manage key is in this response only */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PublishedSource"];
+        };
+      };
+      /** @description The retry key belongs to a different sound */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description The body is larger than any allowed source */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description A field or the audio breaks a rule; `field` and `rule` say which */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description This visitor published too often, or everyone together reached the publish cap */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Uploads are switched off (`uploads-off`), publishing is switched off (`publishing-off`), there is no room (`storage-full`), or busy (`retry-later`) */
+      503: {
         headers: {
           [name: string]: unknown;
         };

@@ -81,6 +81,7 @@ impl Store {
         category: ReportCategory,
         note: Option<&str>,
     ) -> Result<bool, StoreError> {
+        let mut tx = self.pool.begin().await.map_err(db)?;
         let inserted = sqlx::query(
             "INSERT INTO reports (publication_id, category, note) \
              SELECT id, $2, $3 FROM publications WHERE id = $1",
@@ -88,10 +89,26 @@ impl Store {
         .bind(publication.as_str())
         .bind(category.as_str())
         .bind(note)
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await
         .map_err(db)?;
-        Ok(inserted.rows_affected() == 1)
+        if inserted.rows_affected() != 1 {
+            tx.rollback().await.map_err(db)?;
+            return Ok(false);
+        }
+        // The event commits with the report or not at all. It carries the category and the
+        // publication, never the note.
+        crate::events::append(
+            &mut tx,
+            &crate::events::NewEvent::server(
+                crate::events::EventKind::ReportFiled,
+                publication.as_str(),
+                category.as_str(),
+            ),
+        )
+        .await?;
+        tx.commit().await.map_err(db)?;
+        Ok(true)
     }
 
     /// The newest reports first, at most `limit`, each with its publication's current state.

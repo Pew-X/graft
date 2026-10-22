@@ -127,19 +127,63 @@ where
         (status = 409, description = "Key conflict, hidden parent or chain too deep", body = Problem, content_type = "application/problem+json"),
         (status = 403, description = "The maker closed this stage to flips", body = Problem, content_type = "application/problem+json"),
         (status = 422, description = "A field breaks a rule; `field` and `rule` say which", body = Problem, content_type = "application/problem+json"),
-        (status = 429, description = "This stage was flipped too often this hour", body = Problem, content_type = "application/problem+json"),
-        (status = 503, description = "Busy; send the same request again", body = Problem, content_type = "application/problem+json"),
+        (status = 429, description = "This stage was flipped too often this hour, this visitor published too often (`rate-limited`), or everyone together reached the publish cap (`publish-cap`); `Retry-After` says when to try again", body = Problem, content_type = "application/problem+json"),
+        (status = 503, description = "Busy, send the same request again (`retry-later`); publishing is switched off (`publishing-off`); or there is no room for new audio (`storage-full`)", body = Problem, content_type = "application/problem+json"),
     )
 )]
 pub async fn publish_flip(
     State(state): State<AppState>,
     ApiJson(request): ApiJson<PublishFlipRequest>,
 ) -> Result<Response, Problem> {
+    use tracing::Instrument;
+    let result = publish_flip_as(&state, request, Identity::Visitor)
+        .instrument(tracing::info_span!("publish", kind = "flip"))
+        .await;
+    count_outcome(&state, "flip", result.as_ref().map(|(s, _)| *s));
+    let (status, body) = result?;
+    Ok((status, Json(body)).into_response())
+}
+
+/// Count a publish by what became of it: created, replayed, or the stable name of its refusal.
+pub(crate) fn count_outcome<E: std::borrow::Borrow<Problem>>(
+    state: &AppState,
+    kind: &'static str,
+    result: Result<StatusCode, E>,
+) {
+    let outcome = match result {
+        Ok(StatusCode::CREATED) => "created",
+        Ok(_) => "replay",
+        Err(problem) => problem
+            .borrow()
+            .kind
+            .trim_start_matches("urn:graft:problem:"),
+    };
+    state.metrics.publish_outcome(kind, outcome);
+}
+
+/// Who a publication is for, which decides how it is identified.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Identity {
+    /// A visitor: a random public id and a manage key shown once.
+    Visitor,
+    /// The seed script: the public id is derived from the retry key, so it is the same in every
+    /// environment, and there is no manage key, so nobody can manage a seeded stage. This is the
+    /// only way a deterministic id is ever made, and it is reachable only from the seed path.
+    Seeded,
+}
+
+/// The whole publish pipeline: the same code serves the route and the seed script, so a seeded
+/// stage is rendered, capped and recorded exactly as a visitor's is.
+pub(crate) async fn publish_flip_as(
+    state: &AppState,
+    request: PublishFlipRequest,
+    identity_kind: Identity,
+) -> Result<(StatusCode, PublishedFlip), Problem> {
     let limits = &state.limits;
 
     // 1. Everything that needs no I/O.
-    let title = clean("title", &request.title, limits.max_title_chars, &state)?;
-    let author = clean("author", &request.author, limits.max_author_chars, &state)?;
+    let title = clean("title", &request.title, limits.max_title_chars, state)?;
+    let author = clean("author", &request.author, limits.max_author_chars, state)?;
     check_retry_key(&request.retry_key)?;
     let preview = parse_preview(request.preview_hash.as_deref())?;
     check_cut_and_speed(limits, request.cut, request.speed)?;
@@ -247,6 +291,20 @@ pub async fn publish_flip(
             ),
         ));
     }
+    // Admission, after every check that needs no render (so a request that was never going to publish
+    // cannot spend the shared budget) and before the slow work: room to store the audio, and a token from the
+    // global budget. A replay adds nothing to storage, so it takes neither.
+    if !is_replay {
+        if state.guards.storage.is_full().await {
+            state.metrics.refusal("storage_full");
+            return Err(Problem::storage_full());
+        }
+        if let Err(problem) = state.guards.take_global_token(&state.store).await {
+            state.metrics.refusal("publish_cap");
+            return Err(problem);
+        }
+    }
+
     // At most a few renders at once: each holds the parent audio, the samples and the output in
     // memory and a thread, so an unbounded burst could starve everything else. Waiting too long for
     // a turn is a polite "busy, send it again".
@@ -258,21 +316,49 @@ pub async fn publish_flip(
     .map_err(|_| Problem::retry_later())?
     .map_err(|e| internal("waiting to render", &e))?;
     let renderer = state.renderer.clone();
-    let rendered =
+    // The render runs on a blocking thread, which does not carry the request's span: the span is
+    // made here, with the size of the input and no audio, and the future is instrumented, not the
+    // closure.
+    let render_span = tracing::info_span!(
+        "render",
+        input_frames = samples.len(),
+        duration_us = tracing::field::Empty
+    );
+    let render_started = std::time::Instant::now();
+    let render_result = {
+        use tracing::Instrument;
         tokio::task::spawn_blocking(move || renderer.render(&samples, ratio, Method::Hermite))
+            .instrument(render_span.clone())
             .await
-            .map_err(|e| internal("rendering", &e))?
-            .map_err(|e| match e {
-                RenderError::InvalidParameters => Problem::invalid(
-                    "speed",
-                    "rejected",
-                    "the renderer does not accept this cut and speed",
-                ),
-                other => internal("rendering", &other),
-            })?;
+    };
+    let render_elapsed = render_started.elapsed();
+    render_span.record("duration_us", render_elapsed.as_micros() as u64);
+    state.metrics.observe_render(
+        render_elapsed.as_secs_f64(),
+        matches!(render_result, Ok(Ok(_))),
+    );
+    let rendered = render_result
+        .map_err(|e| internal("rendering", &e))?
+        .map_err(|e| match e {
+            RenderError::InvalidParameters => Problem::invalid(
+                "speed",
+                "rejected",
+                "the renderer does not accept this cut and speed",
+            ),
+            other => internal("rendering", &other),
+        })?;
     let output_bytes: Vec<u8> = rendered.iter().flat_map(|s| s.to_le_bytes()).collect();
     let output_hash = Sha256Hash::of(&output_bytes);
     let preview_matches = preview.map(|p| p == output_hash);
+    // The seed path cross-checks against the independent reference and must refuse before anything
+    // is stored: a mismatch is a bug to see, not a chain to keep.
+    if identity_kind == Identity::Seeded && preview_matches == Some(false) {
+        return Err(Problem::invalid(
+            "preview_hash",
+            "differs",
+            "the render differs from the independent reference",
+        ));
+    }
     if preview_matches == Some(false) {
         state.metrics.preview_mismatch();
         tracing::warn!(
@@ -281,11 +367,15 @@ pub async fn publish_flip(
     }
     // Kept to write the blob once more after the commit (see below).
     let output_for_repair = output_bytes.clone();
-    let stored = state
-        .blobs
-        .put_if_absent(output_bytes)
-        .await
-        .map_err(|e| internal("storing the audio", &e))?;
+    let stored = {
+        use tracing::Instrument;
+        state
+            .blobs
+            .put_if_absent(output_bytes)
+            .instrument(tracing::info_span!("blob.put"))
+            .await
+            .map_err(|e| internal("storing the audio", &e))?
+    };
     if stored != output_hash {
         return Err(internal(
             "storing the audio",
@@ -317,15 +407,22 @@ pub async fn publish_flip(
     )
     .map_err(|e| Problem::invalid("speed", "record", e.to_string()))?;
 
-    let manage_key = new_manage_key().map_err(|e| internal("making a manage key", &e))?;
-    let key_hash = *Sha256Hash::of(manage_key.as_bytes()).as_bytes();
+    let (manage_key, key_hash) = match identity_kind {
+        Identity::Visitor => {
+            let key = new_manage_key().map_err(|e| internal("making a manage key", &e))?;
+            let hash = *Sha256Hash::of(key.as_bytes()).as_bytes();
+            (Some(key), Some(hash))
+        }
+        Identity::Seeded => (None, None),
+    };
     let outcome = create_with_fresh_id(
-        &state,
+        state,
         record,
         &request.retry_key,
         &title.value,
         &author.value,
         key_hash,
+        identity_kind,
     )
     .await?;
 
@@ -343,7 +440,7 @@ pub async fn publish_flip(
             if let Err(e) = state.blobs.put_if_absent(output_for_repair).await {
                 tracing::error!(error = %e, "re-checking the audio after commit failed");
             }
-            (StatusCode::CREATED, stage, Some(manage_key))
+            (StatusCode::CREATED, stage, manage_key)
         }
         FlipOutcome::Existing(stage) => (StatusCode::OK, stage, None),
         FlipOutcome::KeyConflict => return Err(Problem::key_conflict()),
@@ -353,7 +450,7 @@ pub async fn publish_flip(
     // been withdrawn or held gets no audio URL. If the view cannot be built after the flip was
     // committed (a signing failure, say), the one-time manage key must still reach the maker:
     // answer with the key and an entry that says to read the publication again.
-    let publication = match crate::routes::publication_view(&state, &stage.id).await {
+    let publication = match crate::routes::publication_view(state, &stage.id).await {
         Ok(Some(view)) => view,
         Ok(None) | Err(_) if status == StatusCode::CREATED => {
             tracing::error!(
@@ -372,28 +469,33 @@ pub async fn publish_flip(
         preview_matches,
         adjusted_fields,
     };
-    Ok((status, Json(body)).into_response())
+    Ok((status, body))
 }
 
-/// Create the flip under a fresh random id, choosing another if the id happens to be taken.
+/// Create the flip under a fresh random id (or the seeded one), choosing another random id if one happens to be taken.
 async fn create_with_fresh_id(
     state: &AppState,
     record: ContentRecord,
     retry_key: &str,
     title: &str,
     author: &str,
-    manage_key_hash: [u8; 32],
+    manage_key_hash: Option<[u8; 32]>,
+    identity_kind: Identity,
 ) -> Result<FlipOutcome, Problem> {
     for _ in 0..4 {
+        let id = match identity_kind {
+            Identity::Visitor => random_id().map_err(|e| internal("making an id", &e))?,
+            Identity::Seeded => PublicationId::seeded(retry_key),
+        };
         let flip = NewFlip {
             publication: NewPublication {
-                id: random_id().map_err(|e| internal("making an id", &e))?,
+                id,
                 record: record.clone(),
                 retry_key: retry_key.to_owned(),
                 title: title.to_owned(),
                 author: author.to_owned(),
                 evidence: None,
-                manage_key_hash: Some(manage_key_hash),
+                manage_key_hash,
             },
             max_forks_per_stage_per_hour: state.publish.max_forks_per_stage_per_hour,
             serialization_retries: state.publish.serialization_retries,
@@ -426,12 +528,12 @@ fn parent_not_found() -> Problem {
     Problem::not_found("there is no stage with this id to flip")
 }
 
-fn internal(context: &str, error: &dyn std::fmt::Display) -> Problem {
+pub(crate) fn internal(context: &str, error: &dyn std::fmt::Display) -> Problem {
     tracing::error!(%error, context, "publish failed");
     Problem::internal()
 }
 
-fn clean(
+pub(crate) fn clean(
     field: &'static str,
     input: &str,
     max: usize,
@@ -441,7 +543,7 @@ fn clean(
         .map_err(|e| Problem::invalid(field, e.rule(), format!("the {field} is not valid: {e}")))
 }
 
-fn check_retry_key(key: &str) -> Result<(), Problem> {
+pub(crate) fn check_retry_key(key: &str) -> Result<(), Problem> {
     let ok = (16..=128).contains(&key.len())
         && key
             .bytes()
@@ -520,13 +622,13 @@ fn check_cut_and_speed(
 }
 
 /// 32 random bytes as 64 hex characters. Only the SHA-256 of this text is ever stored.
-fn new_manage_key() -> Result<String, getrandom::Error> {
+pub(crate) fn new_manage_key() -> Result<String, getrandom::Error> {
     let mut bytes = [0u8; 32];
     getrandom::fill(&mut bytes)?;
     Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
 }
 
-fn random_id() -> Result<PublicationId, getrandom::Error> {
+pub(crate) fn random_id() -> Result<PublicationId, getrandom::Error> {
     let mut bytes = [0u8; 8];
     getrandom::fill(&mut bytes)?;
     Ok(PublicationId::from_bits(u64::from_be_bytes(bytes)))

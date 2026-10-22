@@ -3,6 +3,16 @@
 //! names the guarantee it protects.
 
 mod common;
+#[path = "publish/events.rs"]
+mod events;
+#[path = "publish/guardrails.rs"]
+mod guardrails;
+#[path = "publish/ingest.rs"]
+mod ingest;
+#[path = "publish/metrics.rs"]
+mod metrics;
+#[path = "publish/sources.rs"]
+mod sources;
 
 use axum::http::StatusCode;
 use common::{Harness, is_problem};

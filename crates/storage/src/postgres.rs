@@ -107,16 +107,50 @@ pub enum Outcome {
     KeyConflict,
 }
 
+/// Counters the store keeps for the metrics. They count events, never anything about a visitor.
+#[derive(Debug, Default)]
+pub struct StoreStats {
+    retries: std::sync::atomic::AtomicU64,
+    exhausted: std::sync::atomic::AtomicU64,
+}
+
+impl StoreStats {
+    /// Times a publish transaction conflicted with concurrent work and was tried again.
+    #[must_use]
+    pub fn serialization_retries(&self) -> u64 {
+        self.retries.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Times the retries ran out and the caller was told to send the request again.
+    #[must_use]
+    pub fn retries_exhausted(&self) -> u64 {
+        self.exhausted.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub(crate) fn retried(&self) {
+        self.retries
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub(crate) fn gave_up(&self) {
+        self.exhausted
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
 /// The Postgres store.
 #[derive(Clone)]
 pub struct Store {
     pub(crate) pool: PgPool,
     pub(crate) gate: std::sync::Arc<dyn crate::gate::Gate>,
+    pub(crate) stats: std::sync::Arc<StoreStats>,
 }
 
 const STAGE_COLUMNS: &str = "p.id AS pub_id, c.id AS content_id, p.title, p.author, \
     (extract(epoch from p.created_at) * 1000)::bigint AS created_ms, \
-    p.licence, p.work_title, p.work_author, p.work_url, p.fork_permitted, p.hidden_reason, \
+    p.licence, p.work_title, p.work_author, p.work_url, p.declaration, \
+    (extract(epoch from p.declared_at) * 1000)::bigint AS declared_ms, \
+    p.fork_permitted, p.hidden_reason, \
     c.kind, c.parent_publication_id, c.source_blob, c.cut_start, c.cut_end, c.p, c.q, c.method, \
     c.renderer_name, c.renderer_version, c.renderer_sha256, c.output_blob, \
     (SELECT count(*) FROM content_records k JOIN publications kp ON kp.content_id = k.id \
@@ -149,7 +183,14 @@ impl Store {
         Self {
             pool,
             gate: std::sync::Arc::new(crate::gate::NoGate),
+            stats: std::sync::Arc::new(StoreStats::default()),
         }
+    }
+
+    /// The store's counters.
+    #[must_use]
+    pub fn stats(&self) -> &StoreStats {
+        &self.stats
     }
 
     /// Replace the gate that test code uses to hold transactions at named points.
@@ -194,6 +235,7 @@ impl Store {
         insert_record(&mut tx, &new.record).await?;
         let inserted = insert_publication(&mut tx, new).await?;
         if inserted {
+            crate::events::append(&mut tx, &crate::flip::created_event(new)).await?;
             tx.commit().await.map_err(db)?;
             let stage = self.publication(&new.id).await?.ok_or_else(|| {
                 StoreError::Corrupt("a publication vanished right after it was written".into())
@@ -216,6 +258,22 @@ impl Store {
             StoreError::Corrupt("a publication vanished while it was read".into())
         })?;
         Ok(Outcome::Existing(Box::new(stage)))
+    }
+
+    /// Whether `key` already belongs to a publication of exactly this content record: a true
+    /// replay, as opposed to a key reused for something else.
+    pub async fn retry_key_matches(
+        &self,
+        key: &str,
+        record: &graft_domain::record::ContentRecord,
+    ) -> Result<bool, StoreError> {
+        let found: Option<Vec<u8>> =
+            sqlx::query_scalar("SELECT content_id FROM publications WHERE retry_key = $1")
+                .bind(key)
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(db)?;
+        Ok(found.is_some_and(|id| id == record.id().as_bytes().as_slice()))
     }
 
     /// The flags that decide whether a stage may be flipped, or `None` if it does not exist. A cheap
@@ -358,7 +416,9 @@ pub(crate) async fn insert_publication(
     let ev = n.evidence.as_ref();
     let row = sqlx::query(
         "INSERT INTO publications (id, content_id, retry_key, title, author, licence, work_title, \
-           work_author, work_url, manage_key_hash) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) \
+           work_author, work_url, manage_key_hash, declaration, declared_at) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, \
+                 CASE WHEN $11::text IS NULL THEN NULL ELSE now() END) \
          ON CONFLICT (retry_key) DO NOTHING RETURNING id",
     )
     .bind(n.id.as_str())
@@ -371,6 +431,10 @@ pub(crate) async fn insert_publication(
     .bind(ev.and_then(|e| e.work_author.as_deref()))
     .bind(ev.and_then(|e| e.url.as_deref()))
     .bind(n.manage_key_hash.as_ref().map(<[u8; 32]>::as_slice))
+    .bind(
+        ev.and_then(|e| e.declaration.as_ref())
+            .map(|d| d.text.as_str()),
+    )
     .fetch_optional(&mut **tx)
     .await
     .map_err(db)?;
@@ -439,6 +503,16 @@ fn stage_from_row(row: &PgRow) -> Result<StoredStage, StoreError> {
             work_title: row.try_get("work_title").map_err(db)?,
             work_author: row.try_get("work_author").map_err(db)?,
             url: row.try_get("work_url").map_err(db)?,
+            declaration: row
+                .try_get::<Option<String>, _>("declaration")
+                .map_err(db)?
+                .map(|text| {
+                    Ok::<_, StoreError>(graft_domain::chain::Declaration {
+                        text,
+                        at_ms: row.try_get("declared_ms").map_err(db)?,
+                    })
+                })
+                .transpose()?,
         }),
         None => None,
     };
