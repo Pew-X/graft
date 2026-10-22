@@ -5,6 +5,7 @@ on:
     types: [opened, synchronize, reopened, edited]
   push:
     branches: [dev, staging, main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -99,6 +100,85 @@ jobs:
           cargo run --release -q -p graft-render-host --example measure -- \
             target/wasm32-unknown-unknown/wasm/graft_render.wasm | tee measure.txt
           { echo '### Render host measurements'; echo '```'; cat measure.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+  cross-host-linux:
+    name: cross-host vectors (ubuntu-24.04)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    # The image carries the browsers' system libraries, which otherwise take ~9 minutes to install.
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:7852dc5a7d72f5fe458a597d690f6c42fbc8e9e26ddfa95f8e6ef552558d9bbf
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Tools the container lacks (C linker, curl)
+        run: apt-get update -qq && apt-get install -y -qq --no-install-recommends build-essential curl ca-certificates git
+      - name: Install the pinned toolchain (rustup 1.28.2, checksum pinned)
+        run: |
+          curl -sSfL -o /tmp/rustup-init https://static.rust-lang.org/rustup/archive/1.28.2/x86_64-unknown-linux-gnu/rustup-init
+          echo "20a06e644b0d9bd2fbdbfd52d42540bdde820ea7df86e92e533c073da0cdd43c  /tmp/rustup-init" | sha256sum -c -
+          chmod +x /tmp/rustup-init
+          /tmp/rustup-init -y --default-toolchain none --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          "$HOME/.cargo/bin/rustup" toolchain install
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: tools/vectors/package.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: tools/vectors/pnpm-lock.yaml
+      - name: Rust hosts, pin, replay command
+        env:
+          HOME: /root
+        run: sh scripts/cross-host.sh
+      - name: Node, TypeScript port, Chromium, Firefox, WebKit
+        working-directory: tools/vectors
+        env:
+          HOME: /root
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm typecheck
+          pnpm lint
+          pnpm format:check
+          pnpm audit --audit-level high
+          pnpm test
+
+  cross-host-macos:
+    name: cross-host vectors (macos-14)
+    # macOS minutes cost ten times Linux minutes, so this runs after merges and on demand.
+    if: github.event_name != 'pull_request'
+    runs-on: macos-14
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: tools/vectors
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: tools/vectors/package.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: tools/vectors/pnpm-lock.yaml
+      - name: Install the pinned toolchain
+        working-directory: .
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install chromium firefox webkit
+      - name: Rust hosts, pin, replay command
+        working-directory: .
+        run: sh scripts/cross-host.sh
+      - name: Node, TypeScript port, Chromium, Firefox, WebKit
+        run: |
+          pnpm typecheck
+          pnpm lint
+          pnpm audit --audit-level high
+          pnpm test
 
   supply-chain:
     name: supply chain

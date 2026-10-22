@@ -18,7 +18,15 @@ _Written by tickets 01 and 05._
 
 ## Vectors replay tool
 
-_Written by ticket 04._
+`vectors-replay` runs the renderer vector table against any artefact and exits non-zero on any difference, naming the vector with the expected and actual hash.
+
+```sh
+sh scripts/build-wasm.sh
+cargo run -q -p graft-vectors --bin vectors-replay -- target/wasm32-unknown-unknown/wasm/graft_render.wasm
+cargo run -q -p graft-vectors --bin vectors-replay -- --help
+```
+
+`--host native` replays the table against the Rust library instead; `--host render-host` uses the service's own host (and checks the artefact against the pinned hash); `--emit <vector>` writes one vector's raw output.
 
 ## Working on it
 

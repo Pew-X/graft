@@ -6,6 +6,7 @@
 //! not by the renderer under test.
 
 pub mod canon;
+pub mod cli;
 pub mod host;
 pub mod hosted;
 pub mod input;

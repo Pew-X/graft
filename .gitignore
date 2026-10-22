@@ -18,3 +18,7 @@ out/
 next-env.d.ts
 __pycache__/
 *.pyc
+
+# Vector tooling build output
+tools/vectors/dist/
+tools/vectors/test-results/

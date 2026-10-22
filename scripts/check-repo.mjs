@@ -16,6 +16,9 @@ const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b
 // Words that belong to the audited product or overclaim; never graft vocabulary.
 const BANNED = /\b(drop|drops|stack|stacks|take|takes|recipe|recipes|kitchen|chef|verified|proven|certified|owned by|cleared)\b/i;
 
+// The TypeScript port and the browser harness are test support; the UI must never import them.
+const WEB_BOUNDARY = /tools\/vectors|graft-vectors-tools/;
+
 /** Files whose prose is user-facing: documentation and the web app's copy. */
 const isProse = (path) => ALLOWED_MARKDOWN.has(path) || /^web\/.*\.(tsx?|mdx)$/.test(path) && !/\.(test|spec)\.|\/node_modules\//.test(path);
 
@@ -40,6 +43,10 @@ export function checkFiles(files, read) {
     if (!LOCKFILES.test(path)) {
       const email = text.match(EMAIL);
       if (email) found.push(`${path}: contains an email address (${email[0]})`);
+    }
+    if (path.startsWith("web/") && !path.endsWith("pnpm-lock.yaml")) {
+      const hit = text.match(WEB_BOUNDARY);
+      if (hit) found.push(`${path}: the web app must not reference the test tooling (${hit[0]})`);
     }
     if (isProse(path)) {
       text.split("\n").forEach((line, i) => {

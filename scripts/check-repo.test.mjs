@@ -63,3 +63,14 @@ test("vocabulary is also checked in any web source file, not only page component
 test("words that only contain a banned word are fine", () => {
   assert.deepEqual(run({ "README.md": "an unverified host, a stacked bar, undropped\n" }), []);
 });
+
+test("the web app may not import or depend on the test tooling", () => {
+  const found = run({
+    "web/app/page.tsx": 'import { render } from "../../tools/vectors/src/port.ts";',
+    "web/package.json": '{ "dependencies": { "graft-vectors-tools": "workspace:*" } }',
+    "web/app/ok.tsx": "export const ok = 1;",
+  }).join("\n");
+  assert.match(found, /web\/app\/page\.tsx: the web app must not reference the test tooling/);
+  assert.match(found, /web\/package\.json: the web app must not reference the test tooling/);
+  assert.doesNotMatch(found, /ok\.tsx/);
+});
