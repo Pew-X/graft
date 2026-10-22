@@ -10,8 +10,7 @@
 
 use crate::http::AppState;
 use crate::problem::Problem;
-use crate::routes::audio_for;
-use crate::views::{self, EntryView};
+use crate::views::EntryView;
 use axum::Json;
 use axum::extract::{FromRequest, Request, State, rejection::JsonRejection};
 use axum::http::StatusCode;
@@ -159,28 +158,24 @@ pub async fn publish_flip(
     let Some(graft_domain::chain::Entry::Present(parent)) = chain.entries.last() else {
         return Err(parent_not_found());
     };
-    // A stage built on one hidden for rights is held: it cannot be flipped while the hide stands.
-    // (A replay is answered regardless: it returns what was already created.)
-    if let Some(Some(graft_domain::chain::Availability::Held)) =
-        graft_domain::chain::availability(&chain).last()
-        && !state
-            .store
-            .retry_key_exists(&request.retry_key)
-            .await
-            .map_err(|e| internal("looking up the retry key", &e))?
-    {
-        return Err(Problem::parent_held());
-    }
-
-    // A closed or hidden parent is refused before any render, so it costs nothing and leaves no
-    // audio behind. The transaction decides again, because the flags can change in between. A
-    // request whose retry key is already known skips this: an idempotent replay must return what
-    // was created even if the parent has since been closed.
+    // Whether this retry key is already in use: an idempotent replay returns what was created, so
+    // the checks below that would refuse a new flip do not apply to it.
     let is_replay = state
         .store
         .retry_key_exists(&request.retry_key)
         .await
         .map_err(|e| internal("looking up the retry key", &e))?;
+    // A stage built on one hidden for rights is held: it cannot be flipped while the hide stands.
+    // This is decided from the chain as read; a rights hide that lands a moment after it can still
+    // let one fork through, which is harmless because holding is computed whenever a chain is read.
+    if !is_replay
+        && let Some(Some(graft_domain::chain::Availability::Held)) =
+            graft_domain::chain::availability(&chain).last()
+    {
+        return Err(Problem::parent_held());
+    }
+    // A closed or hidden parent is refused before any render, so it costs nothing and leaves no
+    // audio behind. The transaction decides again, because the flags can change in between.
     if !is_replay {
         match state
             .store
@@ -252,6 +247,16 @@ pub async fn publish_flip(
             ),
         ));
     }
+    // At most a few renders at once: each holds the parent audio, the samples and the output in
+    // memory and a thread, so an unbounded burst could starve everything else. Waiting too long for
+    // a turn is a polite "busy, send it again".
+    let _permit = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        state.renders.clone().acquire_owned(),
+    )
+    .await
+    .map_err(|_| Problem::retry_later())?
+    .map_err(|e| internal("waiting to render", &e))?;
     let renderer = state.renderer.clone();
     let rendered =
         tokio::task::spawn_blocking(move || renderer.render(&samples, ratio, Method::Hermite))
@@ -344,9 +349,25 @@ pub async fn publish_flip(
         FlipOutcome::KeyConflict => return Err(Problem::key_conflict()),
         FlipOutcome::Refused(why) => return Err(refusal(why)),
     };
-    let audio = audio_for(&state, &stage).await?;
+    // Answer as every read does, through the availability rule, so a replay of a flip that has since
+    // been withdrawn or held gets no audio URL. If the view cannot be built after the flip was
+    // committed (a signing failure, say), the one-time manage key must still reach the maker:
+    // answer with the key and an entry that says to read the publication again.
+    let publication = match crate::routes::publication_view(&state, &stage.id).await {
+        Ok(Some(view)) => view,
+        Ok(None) | Err(_) if status == StatusCode::CREATED => {
+            tracing::error!(
+                "the new publication's view could not be built; answering with the key only"
+            );
+            EntryView::Unavailable {
+                id: stage.id.to_string(),
+            }
+        }
+        Ok(None) => return Err(parent_not_found()),
+        Err(problem) => return Err(problem),
+    };
     let body = PublishedFlip {
-        publication: EntryView::Available(Box::new(views::stage_view(&stage, audio))),
+        publication,
         manage_key: key,
         preview_matches,
         adjusted_fields,

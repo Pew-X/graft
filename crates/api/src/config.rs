@@ -41,6 +41,9 @@ pub struct Config {
     pub serialization_retries: u32,
     /// How long a publish waits for the lock on its parent stage, in milliseconds.
     pub lock_wait_ms: u64,
+    /// Most renders running at once.
+    pub max_concurrent_renders: usize,
+    /// How many of the allowed origins were given (a typo is refused at start-up, never dropped).
     /// The canonical renderer artefact the service loads at start-up.
     pub renderer_wasm: Option<std::path::PathBuf>,
     /// Words refused in titles and names, on top of the built-in list.
@@ -89,7 +92,7 @@ impl Config {
             name: "GRAFT_BIND",
             reason: format!("{e}"),
         })?;
-        let cors_origins = lookup("GRAFT_CORS_ORIGINS")
+        let cors_origins: Vec<String> = lookup("GRAFT_CORS_ORIGINS")
             .map(|v| {
                 v.split(',')
                     .map(str::trim)
@@ -98,6 +101,25 @@ impl Config {
                     .collect()
             })
             .unwrap_or_default();
+        // An origin is scheme://host[:port] with no path or trailing slash; anything else would never
+        // match, so it is refused here and not silently dropped later.
+        for origin in &cors_origins {
+            let ok = (origin.starts_with("http://") || origin.starts_with("https://"))
+                && !origin.ends_with('/')
+                && origin.matches("://").count() == 1
+                && !origin
+                    .trim_start_matches("https://")
+                    .trim_start_matches("http://")
+                    .contains('/')
+                && axum::http::HeaderValue::from_str(origin).is_ok();
+            if !ok {
+                return Err(ConfigError::Invalid {
+                    name: "GRAFT_CORS_ORIGINS",
+                    reason: "each origin must look like https://example.com (no path, no trailing slash)"
+                        .to_owned(),
+                });
+            }
+        }
         let mut limits = Limits::default();
         number(
             &lookup,
@@ -191,6 +213,18 @@ impl Config {
                 reason: "must be at least 1".to_owned(),
             });
         }
+        let mut max_concurrent_renders: usize = 4;
+        number(
+            &lookup,
+            "GRAFT_MAX_CONCURRENT_RENDERS",
+            &mut max_concurrent_renders,
+        )?;
+        if max_concurrent_renders == 0 {
+            return Err(ConfigError::Invalid {
+                name: "GRAFT_MAX_CONCURRENT_RENDERS",
+                reason: "must be at least 1".to_owned(),
+            });
+        }
         let mut serialization_retries = 5;
         number(
             &lookup,
@@ -222,6 +256,7 @@ impl Config {
             max_forks_per_stage_per_hour,
             serialization_retries,
             lock_wait_ms,
+            max_concurrent_renders,
             renderer_wasm: lookup("GRAFT_RENDERER_WASM").map(std::path::PathBuf::from),
             extra_deny_words,
             admin_secret,
@@ -241,6 +276,12 @@ fn validate(l: &Limits, blob_url_ttl_secs: u64) -> Result<(), ConfigError> {
             reason: reason.to_owned(),
         })
     };
+    if l.max_output_frames < l.min_frames || l.max_cut_frames > l.max_source_frames {
+        return invalid(
+            "GRAFT_MAX_OUTPUT_FRAMES",
+            "the output maximum must be at least the minimum, and the cut maximum at most the source maximum",
+        );
+    }
     if l.max_chain_depth == 0 {
         return invalid("GRAFT_MAX_CHAIN_DEPTH", "must be at least 1");
     }
@@ -417,6 +458,44 @@ mod tests {
                 "{refresh}/{grace}: {err:?}"
             );
         }
+    }
+
+    #[test]
+    fn a_malformed_cors_origin_is_refused_and_an_output_limit_below_the_minimum_too() {
+        for origin in [
+            "example.com",
+            "https://example.com/",
+            "https://example.com/path",
+            "ftp://x",
+        ] {
+            let r = Config::from_lookup(env(&[
+                ("GRAFT_DATABASE_URL", "postgres://x"),
+                ("GRAFT_CORS_ORIGINS", origin),
+            ]));
+            assert!(
+                matches!(
+                    r,
+                    Err(ConfigError::Invalid {
+                        name: "GRAFT_CORS_ORIGINS",
+                        ..
+                    })
+                ),
+                "{origin}"
+            );
+        }
+        let ok = Config::from_lookup(env(&[
+            ("GRAFT_DATABASE_URL", "postgres://x"),
+            (
+                "GRAFT_CORS_ORIGINS",
+                "https://a.example, http://localhost:3000",
+            ),
+        ]));
+        assert!(ok.is_ok());
+        let bad = Config::from_lookup(env(&[
+            ("GRAFT_DATABASE_URL", "postgres://x"),
+            ("GRAFT_MAX_OUTPUT_FRAMES", "100"),
+        ]));
+        assert!(matches!(bad, Err(ConfigError::Invalid { .. })));
     }
 
     #[test]

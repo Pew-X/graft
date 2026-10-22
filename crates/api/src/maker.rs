@@ -10,7 +10,6 @@
 
 use crate::http::AppState;
 use crate::problem::Problem;
-use crate::publish::ApiJson;
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, Uri};
@@ -123,9 +122,13 @@ pub async fn set_fork_permission(
     Path(id): Path<String>,
     uri: Uri,
     headers: HeaderMap,
-    ApiJson(request): ApiJson<ForkPermissionRequest>,
+    body: axum::body::Bytes,
 ) -> Result<Json<MakerState>, Problem> {
     let id = authorize(&state, &id, &headers, &uri).await?;
+    // The body is read only after the key is accepted, so a refusal never depends on it.
+    let request: ForkPermissionRequest = serde_json::from_slice(&body).map_err(|_| {
+        Problem::bad_request("the body must be JSON with exactly the documented fields")
+    })?;
     let flags = state
         .store
         .set_fork_permission(&id, request.permitted, state.publish.lock_wait)

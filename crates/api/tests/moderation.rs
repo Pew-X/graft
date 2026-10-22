@@ -578,3 +578,85 @@ async fn fork_child(h: &Harness, parent: &str) -> String {
     .await
     .expect("the fork")
 }
+
+#[tokio::test]
+async fn a_replayed_publish_of_a_withdrawn_or_held_flip_gets_no_audio_url() {
+    let h = harness().await;
+    let ids = chain_of_four(&h).await;
+    // Publish a flip and keep its request, then lose access to its audio and replay the request.
+    let req = body(&ids[3], 5_000, 40);
+    let (status, _, first) = h.post("/v1/publications", &req).await;
+    assert_eq!(status, StatusCode::CREATED, "{first}");
+    assert!(first["publication"]["audio"]["url"].is_string());
+    let new_id = first["publication"]["id"].as_str().expect("id").to_owned();
+
+    hide(&h, &new_id, "withdrawn").await;
+    let (status, _, again) = h.post("/v1/publications", &req).await;
+    assert_eq!(status, StatusCode::OK, "{again}");
+    assert_eq!(again["publication"]["state"], "no_longer_here");
+    assert!(
+        again["publication"].get("audio").is_none(),
+        "no URL for hidden audio, even on a replay"
+    );
+
+    clear(&h, &new_id).await;
+    hide(&h, &ids[1], "rights").await;
+    let (_, _, held) = h.post("/v1/publications", &req).await;
+    assert_eq!(held["publication"]["state"], "held");
+    assert!(held["publication"].get("audio").is_none());
+    h.finish().await;
+}
+
+#[tokio::test]
+async fn admin_and_maker_refusals_do_not_depend_on_the_query_or_body_that_came_with_them() {
+    let h = harness().await;
+    let ids = chain_of_four(&h).await;
+    // A bad query, a bad body, and no secret: still the identical admin refusal.
+    let (s1, _, b1) = admin(&h, "GET", "/admin/reports?limit=abc", None, None).await;
+    let (s2, _, b2) = admin(
+        &h,
+        "POST",
+        &format!("/admin/publications/{}/hide", ids[1]),
+        None,
+        Some(&json!({ "nonsense": 1 })),
+    )
+    .await;
+    assert_eq!((s1, s2), (StatusCode::FORBIDDEN, StatusCode::FORBIDDEN));
+    assert_eq!(b1, b2);
+    assert_eq!(b1["type"], "urn:graft:problem:admin-refused");
+    // The maker route with a wrong key and a malformed body: the manage-key refusal, not a 400.
+    let (s3, _, b3) = h
+        .send(
+            "PUT",
+            &format!("/v1/publications/{}/fork-permission", ids[1]),
+            &[("x-graft-manage-key", &"ab".repeat(32))],
+            Some(&json!({ "bogus": true })),
+        )
+        .await;
+    assert_eq!(
+        (s3, b3["type"].as_str()),
+        (
+            StatusCode::FORBIDDEN,
+            Some("urn:graft:problem:manage-key-refused")
+        )
+    );
+    h.finish().await;
+}
+
+#[tokio::test]
+async fn publishing_still_works_when_only_one_render_may_run_at_a_time() {
+    let h = Harness::configured(|c| c.max_concurrent_renders = 1).await;
+    let ids = chain_of_four(&h).await;
+    let tasks: Vec<_> = (0..6)
+        .map(|i| {
+            let client = h.client();
+            let req = body(&ids[0], 4_000 + i, 60 + i);
+            tokio::spawn(async move { client.post_retrying("/v1/publications", &req, 6).await })
+        })
+        .collect();
+    for t in tasks {
+        let (status, res, _) = t.await.expect("task");
+        assert_eq!(status, StatusCode::CREATED, "{res}");
+    }
+    h.finish().await;
+}

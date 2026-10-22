@@ -282,3 +282,17 @@ pub async fn clear_hide(
     authorize_admin(&state, &headers)?;
     decide(&state, &id, None).await
 }
+
+/// Middleware for the admin routes: the secret is checked before any query or body is looked at, so
+/// every unauthorised request gets the identical refusal, whatever else is wrong with it.
+pub async fn require_admin(
+    State(state): State<AppState>,
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    match authorize_admin(&state, request.headers()) {
+        Ok(()) => next.run(request).await,
+        Err(problem) => problem.into_response(),
+    }
+}

@@ -59,19 +59,16 @@ pub async fn seed_source(
     limits: &Limits,
     source: SeedSource,
 ) -> Result<Outcome, SeedError> {
-    let bad = SeedError::BadAudio {
+    let bad = || SeedError::BadAudio {
         min: limits.min_frames,
         max: limits.max_source_frames,
     };
     if !source.audio.len().is_multiple_of(2) {
-        return Err(bad);
+        return Err(bad());
     }
-    let frames = u32::try_from(source.audio.len() / 2).map_err(|_| SeedError::BadAudio {
-        min: limits.min_frames,
-        max: limits.max_source_frames,
-    })?;
+    let frames = u32::try_from(source.audio.len() / 2).map_err(|_| bad())?;
     if frames < limits.min_frames || frames > limits.max_source_frames {
-        return Err(bad);
+        return Err(bad());
     }
     let hash = blobs.put_if_absent(source.audio).await?;
     let record = ContentRecord::source(hash, frames, source.renderer)?;

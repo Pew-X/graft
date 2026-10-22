@@ -50,6 +50,8 @@ pub struct AppState {
     pub blob_url_ttl: std::time::Duration,
     /// The canonical renderer, loaded once and shared by every request.
     pub renderer: Arc<dyn Render>,
+    /// Permits for concurrent renders.
+    pub renders: Arc<tokio::sync::Semaphore>,
     /// Settings for publishing.
     pub publish: PublishSettings,
     /// SHA-256 of the operator secret; `None` when admin access is not configured.
@@ -86,6 +88,7 @@ impl AppState {
             limits: config.limits.clone(),
             blob_url_ttl: std::time::Duration::from_secs(config.blob_url_ttl_secs),
             renderer,
+            renders: Arc::new(tokio::sync::Semaphore::new(config.max_concurrent_renders)),
             admin_secret_hash: config
                 .admin_secret
                 .as_deref()
@@ -134,15 +137,7 @@ pub fn router(state: AppState, config: &Config) -> Router {
                 moderation::MAX_BODY_BYTES,
             )),
         )
-        .route("/admin/reports", get(moderation::list_reports))
-        .route(
-            "/admin/publications/{id}/hide",
-            post(moderation::hide)
-                .layer(axum::extract::DefaultBodyLimit::max(
-                    moderation::MAX_BODY_BYTES,
-                ))
-                .merge(delete(moderation::clear_hide)),
-        )
+        .merge(admin_routes(state.clone()))
         .route(
             "/v1/publications",
             post(publish::publish_flip).layer(axum::extract::DefaultBodyLimit::max(
@@ -154,6 +149,24 @@ pub fn router(state: AppState, config: &Config) -> Router {
         .layer(middleware::from_fn_with_state(state.clone(), observe))
         .layer(cors(config))
         .with_state(state)
+}
+
+/// The operator routes. The secret is checked by a layer, before any query or body is parsed.
+fn admin_routes(state: AppState) -> Router<AppState> {
+    Router::new()
+        .route("/admin/reports", get(moderation::list_reports))
+        .route(
+            "/admin/publications/{id}/hide",
+            post(moderation::hide)
+                .layer(axum::extract::DefaultBodyLimit::max(
+                    moderation::MAX_BODY_BYTES,
+                ))
+                .merge(delete(moderation::clear_hide)),
+        )
+        .route_layer(middleware::from_fn_with_state(
+            state,
+            moderation::require_admin,
+        ))
 }
 
 fn cors(config: &Config) -> CorsLayer {
