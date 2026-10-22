@@ -26,8 +26,9 @@ export async function fetchChain(
 }
 
 /**
- * What a reader sees for each entry of a chain: the title, the title marked as no longer here for a
- * hidden stage (its credit stays), or a marker for a parent that could not be read.
+ * What a reader sees for each entry of a chain: the title; the title marked as no longer here for a
+ * hidden stage, or as held for a stage built on one hidden for rights (the credit stays in both);
+ * or a marker for a parent that could not be read.
  */
 export function entryLabels(chain: Chain): string[] {
   return chain.stages.map((entry) => {
@@ -36,6 +37,8 @@ export function entryLabels(chain: Chain): string[] {
         return entry.title;
       case "no_longer_here":
         return `${entry.title} (no longer here)`;
+      case "held":
+        return `${entry.title} (held)`;
       case "unavailable":
         return "unavailable";
     }

@@ -92,6 +92,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/reports": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** File a report about a publication. No account; no identity is collected. */
+    post: operations["file_report"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -162,6 +179,10 @@ export interface components {
       | (components["schemas"]["RemovedView"] & {
           /** @enum {string} */
           state: "no_longer_here";
+        })
+      | (components["schemas"]["RemovedView"] & {
+          /** @enum {string} */
+          state: "held";
         })
       | {
           /** @description The id the child names as its parent. */
@@ -286,6 +307,20 @@ export interface components {
       version: number;
       /** @description SHA-256 of the `.wasm`, lowercase hex. */
       wasm_sha256: string;
+    };
+    /** @description The plain confirmation of a report. */
+    ReportReceived: {
+      /** @description Always true: the report was stored. */
+      received: boolean;
+    };
+    /** @description A request that a publication be looked at. */
+    ReportRequest: {
+      /** @description One of `rights`, `private_conversation`, `harmful`, `spam`, `other`. */
+      category: string;
+      /** @description An optional short note for the operator, at most 500 characters. Never shown publicly. */
+      note?: string | null;
+      /** @description Public id of the publication. */
+      publication_id: string;
     };
     /** @description The speed as an exact fraction: `p/q` input frames per output frame, between 1/4 and 4. */
     SpeedRequest: {
@@ -592,6 +627,48 @@ export interface operations {
       };
       /** @description Busy; send the same request again */
       503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  file_report: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ReportRequest"];
+      };
+    };
+    responses: {
+      /** @description The report was stored */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReportReceived"];
+        };
+      };
+      /** @description No such publication */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description A field breaks a rule; `field` and `rule` say which */
+      422: {
         headers: {
           [name: string]: unknown;
         };

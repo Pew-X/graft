@@ -3,6 +3,7 @@
 use crate::config::Config;
 use crate::maker;
 use crate::metrics::Metrics;
+use crate::moderation;
 use crate::problem::Problem;
 use crate::publish;
 use crate::routes;
@@ -10,7 +11,7 @@ use axum::extract::{MatchedPath, Request, State};
 use axum::http::{HeaderName, HeaderValue, Method, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post, put};
+use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
 use graft_domain::limits::Limits;
 use graft_render_host::Render;
@@ -51,6 +52,8 @@ pub struct AppState {
     pub renderer: Arc<dyn Render>,
     /// Settings for publishing.
     pub publish: PublishSettings,
+    /// SHA-256 of the operator secret; `None` when admin access is not configured.
+    pub admin_secret_hash: Option<[u8; 32]>,
 }
 
 /// Settings the publish route reads.
@@ -83,6 +86,10 @@ impl AppState {
             limits: config.limits.clone(),
             blob_url_ttl: std::time::Duration::from_secs(config.blob_url_ttl_secs),
             renderer,
+            admin_secret_hash: config
+                .admin_secret
+                .as_deref()
+                .map(|s| *graft_domain::hash::Sha256Hash::of(s.as_bytes()).as_bytes()),
             publish: PublishSettings {
                 max_forks_per_stage_per_hour: config.max_forks_per_stage_per_hour,
                 serialization_retries: config.serialization_retries,
@@ -120,6 +127,21 @@ pub fn router(state: AppState, config: &Config) -> Router {
             "/v1/publications/{id}/withdraw",
             post(maker::withdraw)
                 .layer(axum::extract::DefaultBodyLimit::max(maker::MAX_BODY_BYTES)),
+        )
+        .route(
+            "/v1/reports",
+            post(moderation::file_report).layer(axum::extract::DefaultBodyLimit::max(
+                moderation::MAX_BODY_BYTES,
+            )),
+        )
+        .route("/admin/reports", get(moderation::list_reports))
+        .route(
+            "/admin/publications/{id}/hide",
+            post(moderation::hide)
+                .layer(axum::extract::DefaultBodyLimit::max(
+                    moderation::MAX_BODY_BYTES,
+                ))
+                .merge(delete(moderation::clear_hide)),
         )
         .route(
             "/v1/publications",

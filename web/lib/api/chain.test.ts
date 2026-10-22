@@ -49,6 +49,24 @@ test("a hidden stage keeps its credit and is marked as no longer here", () => {
   assert.deepEqual(entryLabels(chain), ["a door", "slower (no longer here)", "slower still"]);
 });
 
+test("a stage built on a rights hide is marked held and keeps its credit", () => {
+  const chain: Chain = {
+    stages: [
+      {
+        state: "held",
+        id: "dddddddddddd",
+        kind: "flip",
+        reason: "rights",
+        title: "slower still",
+        author: "jo",
+        created_at_ms: 0,
+        lines: [],
+      },
+    ],
+  };
+  assert.deepEqual(entryLabels(chain), ["slower still (held)"]);
+});
+
 test("a 404 from the service is a missing chain, not an error", async () => {
   const original = globalThis.fetch;
   globalThis.fetch = async () =>

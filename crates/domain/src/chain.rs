@@ -85,24 +85,40 @@ pub enum Availability {
     Available,
     /// The stage itself is hidden: its credit stays, its audio is not served.
     NoLongerHere(HideReason),
+    /// An ancestor is hidden for rights: this stage's credit stays and its audio is not served
+    /// while that hide stands. Nothing is stored for it; clearing the hide releases it.
+    Held,
 }
 
 /// The availability of every present entry of `chain`, in order; `None` for an unavailable
 /// parent (nothing was read, so there is nothing to decide).
 ///
-/// Today a stage is unavailable exactly when it is hidden itself. The rule for stages built on a
-/// stage hidden for rights is added with moderation; it is decided here, once, so that the read
-/// path and the reference model it is tested against cannot drift.
+/// The rule, in full:
+/// - a hidden stage is "no longer here" with its own reason;
+/// - otherwise a stage with any ancestor hidden for rights is held;
+/// - an ancestor hidden as withdrawn changes nothing for the stages built on it;
+/// - a parent that could not be read holds nobody, because nothing is known about it.
+///
+/// Nothing is stored: the answer is computed from the chain as read, so clearing a hide restores
+/// everything, and the cost is bounded by the depth cap.
 #[must_use]
 pub fn availability(chain: &Chain) -> Vec<Option<Availability>> {
+    let mut rights_above = false;
     chain
         .entries
         .iter()
         .map(|entry| match entry {
-            Entry::Present(stage) => Some(match stage.hidden {
-                Some(reason) => Availability::NoLongerHere(reason),
-                None => Availability::Available,
-            }),
+            Entry::Present(stage) => {
+                let this = match stage.hidden {
+                    Some(reason) => Availability::NoLongerHere(reason),
+                    None if rights_above => Availability::Held,
+                    None => Availability::Available,
+                };
+                if stage.hidden == Some(HideReason::Rights) {
+                    rights_above = true;
+                }
+                Some(this)
+            }
             Entry::Unavailable(_) => None,
         })
         .collect()
@@ -386,6 +402,75 @@ mod tests {
                 Some(Availability::Available),
             ]
         );
+    }
+
+    fn chain_with(flags: &[Option<HideReason>]) -> Chain {
+        let mut rows = vec![source(1)];
+        for n in 2..=flags.len() as u64 {
+            rows.push(flip(n, n - 1));
+        }
+        for (row, flag) in rows.iter_mut().zip(flags) {
+            row.hidden = *flag;
+        }
+        assemble(&id(flags.len() as u64), rows, 12).expect("leaf present")
+    }
+
+    #[test]
+    fn a_rights_hide_holds_every_descendant_and_only_descendants() {
+        use Availability::{Available, Held, NoLongerHere};
+        let chain = chain_with(&[None, Some(HideReason::Rights), None, None]);
+        assert_eq!(
+            availability(&chain),
+            vec![
+                Some(Available),
+                Some(NoLongerHere(HideReason::Rights)),
+                Some(Held),
+                Some(Held)
+            ]
+        );
+    }
+
+    #[test]
+    fn a_withdrawn_ancestor_does_not_hold_its_descendants() {
+        use Availability::{Available, NoLongerHere};
+        let chain = chain_with(&[None, Some(HideReason::Withdrawn), None, None]);
+        assert_eq!(
+            availability(&chain),
+            vec![
+                Some(Available),
+                Some(NoLongerHere(HideReason::Withdrawn)),
+                Some(Available),
+                Some(Available)
+            ]
+        );
+    }
+
+    #[test]
+    fn a_stage_hidden_itself_reads_as_gone_even_below_a_rights_hide() {
+        use Availability::{Held, NoLongerHere};
+        let chain = chain_with(&[
+            Some(HideReason::Rights),
+            None,
+            Some(HideReason::Withdrawn),
+            None,
+        ]);
+        assert_eq!(
+            availability(&chain),
+            vec![
+                Some(NoLongerHere(HideReason::Rights)),
+                Some(Held),
+                Some(NoLongerHere(HideReason::Withdrawn)),
+                Some(Held)
+            ],
+            "the rights hide at the top still holds everything below it"
+        );
+    }
+
+    #[test]
+    fn clearing_the_hide_restores_every_stage() {
+        use Availability::Available;
+        let chain = chain_with(&[None, None, None]);
+        assert!(availability(&chain).iter().all(|a| *a == Some(Available)));
     }
 
     #[test]

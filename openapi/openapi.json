@@ -183,6 +183,29 @@
             "description": "A hidden stage: \"no longer here\". Its credit stays; its audio is not served."
           },
           {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RemovedView",
+                "description": "A stage built on one that is hidden for rights: held. Its credit stays; its audio is not\nserved while that hide stands, and it plays again when the hide is cleared."
+              },
+              {
+                "properties": {
+                  "state": {
+                    "enum": [
+                      "held"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "state"
+                ],
+                "type": "object"
+              }
+            ],
+            "description": "A stage built on one that is hidden for rights: held. Its credit stays; its audio is not\nserved while that hide stands, and it plays again when the hide is cleared."
+          },
+          {
             "description": "A parent the chain names but could not be read. The chain is never silently shortened.",
             "properties": {
               "id": {
@@ -469,6 +492,45 @@
           "name",
           "version",
           "wasm_sha256"
+        ],
+        "type": "object"
+      },
+      "ReportReceived": {
+        "description": "The plain confirmation of a report.",
+        "properties": {
+          "received": {
+            "description": "Always true: the report was stored.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "received"
+        ],
+        "type": "object"
+      },
+      "ReportRequest": {
+        "additionalProperties": false,
+        "description": "A request that a publication be looked at.",
+        "properties": {
+          "category": {
+            "description": "One of `rights`, `private_conversation`, `harmful`, `spam`, `other`.",
+            "type": "string"
+          },
+          "note": {
+            "description": "An optional short note for the operator, at most 500 characters. Never shown publicly.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "publication_id": {
+            "description": "Public id of the publication.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "publication_id",
+          "category"
         ],
         "type": "object"
       },
@@ -921,6 +983,57 @@
         "summary": "Withdraw a publication. It stays in every chain as \"no longer here\" with its credit; its audio\nis no longer served; stages built on it stay playable. Only the operator can undo it.",
         "tags": [
           "maker"
+        ]
+      }
+    },
+    "/v1/reports": {
+      "post": {
+        "operationId": "file_report",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportReceived"
+                }
+              }
+            },
+            "description": "The report was stored"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No such publication"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "A field breaks a rule; `field` and `rule` say which"
+          }
+        },
+        "summary": "File a report about a publication. No account; no identity is collected.",
+        "tags": [
+          "moderation"
         ]
       }
     }

@@ -7,7 +7,7 @@ use crate::views::{
     AudioView, ChainView, CutView, DetailsView, EntryView, LineView, RendererView, SpeedView,
     StageView,
 };
-use crate::{maker, publish};
+use crate::{maker, moderation, publish};
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]
@@ -22,7 +22,8 @@ use utoipa::OpenApi;
         routes::get_publication,
         publish::publish_flip,
         maker::set_fork_permission,
-        maker::withdraw
+        maker::withdraw,
+        moderation::file_report
     ),
     components(schemas(
         Problem,

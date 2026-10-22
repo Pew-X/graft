@@ -803,6 +803,7 @@ dependencies = [
  "graft-render-host",
  "graft-storage",
  "http-body-util",
+ "proptest",
  "serde",
  "serde_json",
  "sqlx",

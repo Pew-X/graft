@@ -44,6 +44,9 @@ pub struct Config {
     pub renderer_wasm: Option<std::path::PathBuf>,
     /// Words refused in titles and names, on top of the built-in list.
     pub extra_deny_words: Vec<String>,
+    /// The operator secret for the admin routes. A secret: never logged. When unset, the admin
+    /// routes refuse every request.
+    pub admin_secret: Option<String>,
 }
 
 impl Config {
@@ -107,6 +110,19 @@ impl Config {
             "GRAFT_MAX_FORKS_PER_STAGE_PER_HOUR",
             &mut max_forks_per_stage_per_hour,
         )?;
+        let admin_secret = lookup("GRAFT_ADMIN_SECRET");
+        if admin_secret
+            .as_ref()
+            .is_some_and(|s| s.len() < crate::moderation::MIN_ADMIN_SECRET_LEN)
+        {
+            return Err(ConfigError::Invalid {
+                name: "GRAFT_ADMIN_SECRET",
+                reason: format!(
+                    "must be at least {} characters",
+                    crate::moderation::MIN_ADMIN_SECRET_LEN
+                ),
+            });
+        }
         let mut lock_wait_ms = 10_000;
         number(&lookup, "GRAFT_LOCK_WAIT_MS", &mut lock_wait_ms)?;
         if lock_wait_ms == 0 {
@@ -148,6 +164,7 @@ impl Config {
             lock_wait_ms,
             renderer_wasm: lookup("GRAFT_RENDERER_WASM").map(std::path::PathBuf::from),
             extra_deny_words,
+            admin_secret,
         })
     }
 }
@@ -226,6 +243,10 @@ mod tests {
             (20, 5)
         );
         assert!(c.renderer_wasm.is_none() && c.extra_deny_words.is_empty());
+        assert!(
+            c.admin_secret.is_none(),
+            "admin access is off unless a secret is configured"
+        );
     }
 
     #[test]
@@ -273,6 +294,28 @@ mod tests {
                 "{name}={value} should be refused, got {result:?}"
             );
         }
+    }
+
+    #[test]
+    fn a_short_admin_secret_is_refused_and_never_echoed() {
+        let err = Config::from_lookup(env(&[
+            ("GRAFT_DATABASE_URL", "postgres://x"),
+            ("GRAFT_ADMIN_SECRET", "short-secret"),
+        ]))
+        .expect_err("too short");
+        assert!(matches!(
+            err,
+            ConfigError::Invalid {
+                name: "GRAFT_ADMIN_SECRET",
+                ..
+            }
+        ));
+        assert!(!format!("{err}").contains("short-secret"));
+        let ok = Config::from_lookup(env(&[
+            ("GRAFT_DATABASE_URL", "postgres://x"),
+            ("GRAFT_ADMIN_SECRET", &"s".repeat(24)),
+        ]));
+        assert!(ok.is_ok());
     }
 
     #[test]

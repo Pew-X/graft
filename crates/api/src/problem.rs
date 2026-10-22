@@ -137,6 +137,29 @@ impl Problem {
         )
     }
 
+    /// 403: the operator secret was not accepted, or admin access is not configured. The same
+    /// answer for both, so the refusal does not reveal whether admin access exists.
+    #[must_use]
+    pub fn admin_refused() -> Self {
+        Self::base(
+            "urn:graft:problem:admin-refused",
+            "Not accepted",
+            403,
+            "this request was not accepted",
+        )
+    }
+
+    /// 409: the stage is held while a rights concern about one of its ancestors stands.
+    #[must_use]
+    pub fn parent_held() -> Self {
+        Self::base(
+            "urn:graft:problem:parent-held",
+            "This stage is held",
+            409,
+            "this stage is held while a rights concern about one of its ancestors is open, so it cannot be flipped",
+        )
+    }
+
     /// 409: the stage is hidden, so nothing can be built on it.
     #[must_use]
     pub fn parent_unavailable() -> Self {

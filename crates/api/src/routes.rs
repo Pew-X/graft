@@ -6,7 +6,7 @@ use crate::views::{self, AudioView, ChainView, EntryView};
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::response::{IntoResponse, Response};
-use graft_domain::chain::{Availability, Chain, Entry, StoredStage, availability};
+use graft_domain::chain::{Availability, Chain, Entry, HideReason, StoredStage, availability};
 use graft_domain::ids::PublicationId;
 use graft_storage::StoreError;
 
@@ -68,6 +68,10 @@ async fn entry_views(state: &AppState, chain: &Chain) -> Result<Vec<EntryView>, 
             ),
             (Entry::Present(stage), Some(Availability::NoLongerHere(reason))) => {
                 EntryView::NoLongerHere(Box::new(views::removed_view(stage, reason)))
+            }
+            (Entry::Present(stage), Some(Availability::Held)) => {
+                // Held because of a rights hide above it: the reason shown is that one.
+                EntryView::Held(Box::new(views::removed_view(stage, HideReason::Rights)))
             }
             (Entry::Present(stage), None) => EntryView::Unavailable {
                 id: stage.id.to_string(),

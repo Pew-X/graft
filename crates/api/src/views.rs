@@ -132,6 +132,9 @@ pub enum EntryView {
     Available(Box<StageView>),
     /// A hidden stage: "no longer here". Its credit stays; its audio is not served.
     NoLongerHere(Box<RemovedView>),
+    /// A stage built on one that is hidden for rights: held. Its credit stays; its audio is not
+    /// served while that hide stands, and it plays again when the hide is cleared.
+    Held(Box<RemovedView>),
     /// A parent the chain names but could not be read. The chain is never silently shortened.
     Unavailable {
         /// The id the child names as its parent.
@@ -200,7 +203,7 @@ pub fn stage_view(stage: &StoredStage, audio: AudioView) -> StageView {
     }
 }
 
-/// The view of a hidden stage: credits and identity, no audio and no exact facts.
+/// The view of a hidden or held stage: credits and identity, no audio and no exact facts.
 #[must_use]
 pub fn removed_view(stage: &StoredStage, reason: HideReason) -> RemovedView {
     let r = &stage.record;

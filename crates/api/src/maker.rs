@@ -48,7 +48,7 @@ impl From<StageFlags> for MakerState {
     fn from(f: StageFlags) -> Self {
         Self {
             fork_permitted: f.fork_permitted,
-            withdrawn: f.hidden,
+            withdrawn: f.hidden.is_some(),
         }
     }
 }

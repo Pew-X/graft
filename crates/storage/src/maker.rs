@@ -5,6 +5,7 @@
 
 use crate::lock::Locked;
 use crate::postgres::{Store, StoreError, db};
+use graft_domain::chain::HideReason;
 use graft_domain::ids::PublicationId;
 use sqlx::Row;
 use std::time::Duration;
@@ -14,8 +15,8 @@ use std::time::Duration;
 pub struct StageFlags {
     /// The maker allows new flips.
     pub fork_permitted: bool,
-    /// The stage is hidden.
-    pub hidden: bool,
+    /// Set when the stage is hidden, and why.
+    pub hidden: Option<HideReason>,
 }
 
 impl Store {
@@ -64,6 +65,18 @@ impl Store {
             .await
     }
 
+    /// Hide a stage for `reason`, or clear its hide (`None`). The operator's decision: it replaces
+    /// whatever hide was there, including a maker's withdrawal, and it is reversible. Idempotent.
+    pub async fn set_hidden(
+        &self,
+        id: &PublicationId,
+        reason: Option<HideReason>,
+        wait: Duration,
+    ) -> Result<StageFlags, StoreError> {
+        self.change_flags(id, wait, Change::Hide(id.clone(), reason))
+            .await
+    }
+
     async fn change_flags(
         &self,
         id: &PublicationId,
@@ -96,6 +109,14 @@ impl Store {
                         .await
                         .map_err(db)?;
                 }
+                Change::Hide(id, reason) => {
+                    sqlx::query("UPDATE publications SET hidden_reason = $2 WHERE id = $1")
+                        .bind(id.as_str())
+                        .bind(reason.map(HideReason::as_str))
+                        .execute(&mut *conn)
+                        .await
+                        .map_err(db)?;
+                }
                 Change::Withdraw(id) => {
                     sqlx::query(
                         "UPDATE publications SET hidden_reason = 'withdrawn' \
@@ -115,10 +136,15 @@ impl Store {
                     .map_err(db)?;
             Ok(StageFlags {
                 fork_permitted: row.try_get("fork_permitted").map_err(db)?,
-                hidden: row
+                hidden: match row
                     .try_get::<Option<String>, _>("hidden_reason")
                     .map_err(db)?
-                    .is_some(),
+                {
+                    None => None,
+                    Some(text) => Some(HideReason::parse(&text).ok_or_else(|| {
+                        StoreError::Corrupt(format!("unknown hide reason {text}"))
+                    })?),
+                },
             })
         }
         .await;
@@ -129,5 +155,6 @@ impl Store {
 
 enum Change {
     Permission(PublicationId, bool),
+    Hide(PublicationId, Option<HideReason>),
     Withdraw(PublicationId),
 }
