@@ -1,0 +1,38 @@
+{
+  "source": {
+    "key": "seed:jazz-rhodes:source",
+    "title": "dm9 chord",
+    "author": "graft",
+    "audio_file": "jazz-rhodes.pcm",
+    "audio_sha256": "4e22bb6233c6783823d2f94fb1593dab34ee5a32816524de0ad019d6e4c6d38c",
+    "licence": "own work, synthesized for graft",
+    "work_title": "dm9 electric piano chord",
+    "work_author": "graft"
+  },
+  "flips": [
+    {
+      "key": "seed:jazz-rhodes:flip-1",
+      "title": "up a fifth",
+      "author": "graft",
+      "cut": { "start": 0, "end": 43200 },
+      "speed": { "p": 3, "q": 2 },
+      "expected_output_sha256": "287c7dc1680507b2a6ab0508f763639a6389d2d1e3c4f8a83e2bff03a18c32b1"
+    },
+    {
+      "key": "seed:jazz-rhodes:flip-2",
+      "title": "down a fifth",
+      "author": "graft",
+      "cut": { "start": 960, "end": 24000 },
+      "speed": { "p": 2, "q": 3 },
+      "expected_output_sha256": "21974b2a55f7b49c6d0ce93a926ada387eb58524df62e5852104c197056a635b"
+    },
+    {
+      "key": "seed:jazz-rhodes:flip-3",
+      "title": "down an octave",
+      "author": "graft",
+      "cut": { "start": 4800, "end": 33600 },
+      "speed": { "p": 1, "q": 2 },
+      "expected_output_sha256": "8bd4f562df12ed6e38a1e8ff6ef4179787a4365ace0263dd29be766bc1ffe3db"
+    }
+  ]
+}

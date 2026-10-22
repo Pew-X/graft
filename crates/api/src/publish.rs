@@ -135,11 +135,33 @@ pub async fn publish_flip(
     State(state): State<AppState>,
     ApiJson(request): ApiJson<PublishFlipRequest>,
 ) -> Result<Response, Problem> {
+    let (status, body) = publish_flip_as(&state, request, Identity::Visitor).await?;
+    Ok((status, Json(body)).into_response())
+}
+
+/// Who a publication is for, which decides how it is identified.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Identity {
+    /// A visitor: a random public id and a manage key shown once.
+    Visitor,
+    /// The seed script: the public id is derived from the retry key, so it is the same in every
+    /// environment, and there is no manage key, so nobody can manage a seeded stage. This is the
+    /// only way a deterministic id is ever made, and it is reachable only from the seed path.
+    Seeded,
+}
+
+/// The whole publish pipeline: the same code serves the route and the seed script, so a seeded
+/// stage is rendered, capped and recorded exactly as a visitor's is.
+pub(crate) async fn publish_flip_as(
+    state: &AppState,
+    request: PublishFlipRequest,
+    identity_kind: Identity,
+) -> Result<(StatusCode, PublishedFlip), Problem> {
     let limits = &state.limits;
 
     // 1. Everything that needs no I/O.
-    let title = clean("title", &request.title, limits.max_title_chars, &state)?;
-    let author = clean("author", &request.author, limits.max_author_chars, &state)?;
+    let title = clean("title", &request.title, limits.max_title_chars, state)?;
+    let author = clean("author", &request.author, limits.max_author_chars, state)?;
     check_retry_key(&request.retry_key)?;
     let preview = parse_preview(request.preview_hash.as_deref())?;
     check_cut_and_speed(limits, request.cut, request.speed)?;
@@ -330,15 +352,22 @@ pub async fn publish_flip(
     )
     .map_err(|e| Problem::invalid("speed", "record", e.to_string()))?;
 
-    let manage_key = new_manage_key().map_err(|e| internal("making a manage key", &e))?;
-    let key_hash = *Sha256Hash::of(manage_key.as_bytes()).as_bytes();
+    let (manage_key, key_hash) = match identity_kind {
+        Identity::Visitor => {
+            let key = new_manage_key().map_err(|e| internal("making a manage key", &e))?;
+            let hash = *Sha256Hash::of(key.as_bytes()).as_bytes();
+            (Some(key), Some(hash))
+        }
+        Identity::Seeded => (None, None),
+    };
     let outcome = create_with_fresh_id(
-        &state,
+        state,
         record,
         &request.retry_key,
         &title.value,
         &author.value,
         key_hash,
+        identity_kind,
     )
     .await?;
 
@@ -356,7 +385,7 @@ pub async fn publish_flip(
             if let Err(e) = state.blobs.put_if_absent(output_for_repair).await {
                 tracing::error!(error = %e, "re-checking the audio after commit failed");
             }
-            (StatusCode::CREATED, stage, Some(manage_key))
+            (StatusCode::CREATED, stage, manage_key)
         }
         FlipOutcome::Existing(stage) => (StatusCode::OK, stage, None),
         FlipOutcome::KeyConflict => return Err(Problem::key_conflict()),
@@ -366,7 +395,7 @@ pub async fn publish_flip(
     // been withdrawn or held gets no audio URL. If the view cannot be built after the flip was
     // committed (a signing failure, say), the one-time manage key must still reach the maker:
     // answer with the key and an entry that says to read the publication again.
-    let publication = match crate::routes::publication_view(&state, &stage.id).await {
+    let publication = match crate::routes::publication_view(state, &stage.id).await {
         Ok(Some(view)) => view,
         Ok(None) | Err(_) if status == StatusCode::CREATED => {
             tracing::error!(
@@ -385,28 +414,33 @@ pub async fn publish_flip(
         preview_matches,
         adjusted_fields,
     };
-    Ok((status, Json(body)).into_response())
+    Ok((status, body))
 }
 
-/// Create the flip under a fresh random id, choosing another if the id happens to be taken.
+/// Create the flip under a fresh random id (or the seeded one), choosing another random id if one happens to be taken.
 async fn create_with_fresh_id(
     state: &AppState,
     record: ContentRecord,
     retry_key: &str,
     title: &str,
     author: &str,
-    manage_key_hash: [u8; 32],
+    manage_key_hash: Option<[u8; 32]>,
+    identity_kind: Identity,
 ) -> Result<FlipOutcome, Problem> {
     for _ in 0..4 {
+        let id = match identity_kind {
+            Identity::Visitor => random_id().map_err(|e| internal("making an id", &e))?,
+            Identity::Seeded => PublicationId::seeded(retry_key),
+        };
         let flip = NewFlip {
             publication: NewPublication {
-                id: random_id().map_err(|e| internal("making an id", &e))?,
+                id,
                 record: record.clone(),
                 retry_key: retry_key.to_owned(),
                 title: title.to_owned(),
                 author: author.to_owned(),
                 evidence: None,
-                manage_key_hash: Some(manage_key_hash),
+                manage_key_hash,
             },
             max_forks_per_stage_per_hour: state.publish.max_forks_per_stage_per_hour,
             serialization_retries: state.publish.serialization_retries,

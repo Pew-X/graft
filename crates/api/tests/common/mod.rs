@@ -48,6 +48,8 @@ pub struct Harness {
     pub metrics: Arc<graft_api::metrics::Metrics>,
     /// The time the guardrails read; moves only when a test advances it.
     pub clock: Arc<graft_api::guard::ManualClock>,
+    /// The state the router was built from, for tests that call the service's functions directly.
+    pub state: AppState,
 }
 
 pub fn renderer() -> RendererIdentity {
@@ -125,7 +127,7 @@ impl Harness {
         ));
         let state = AppState::with_clock(&config, store, blobs.clone(), renderer, clock.clone());
         let metrics = state.metrics.clone();
-        let app = router(state, &config);
+        let app = router(state.clone(), &config);
         Self {
             db,
             blobs,
@@ -133,6 +135,7 @@ impl Harness {
             limits,
             metrics,
             clock,
+            state,
         }
     }
 
