@@ -8,7 +8,14 @@ use std::path::PathBuf;
 use std::process::Command;
 use wasmparser::{CompositeInnerType, Parser, Payload, ValType};
 
+/// Built and read once per test binary. Tests run in parallel, and every cargo invocation briefly
+/// re-links the output file, so a test that read it while another built it saw "not found".
 fn artefact() -> Vec<u8> {
+    static BUILT: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
+    BUILT.get_or_init(build_artefact).clone()
+}
+
+fn build_artefact() -> Vec<u8> {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let status = Command::new("sh")
         .arg(root.join("scripts/build-wasm.sh"))
