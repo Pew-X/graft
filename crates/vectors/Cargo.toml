@@ -8,6 +8,7 @@ publish.workspace = true
 
 [dependencies]
 graft-render.workspace = true
+graft-render-host.workspace = true
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.11"

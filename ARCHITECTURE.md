@@ -100,7 +100,27 @@ The agreed exit to a TypeScript renderer applies if the artefact will not instan
 
 ## Render host
 
-_Not written yet. Tickets 03 and 03b write it._
+`graft-render-host` runs the pinned `.wasm` for the service. The publish path calls one trait, `Render::render(cut, ratio, method)`, and gets audio or a typed `RenderError`. The crate accepts audio as slices and returns audio as vectors; it has no network surface, and `scripts/check-crate-graph.mjs` fails if it gains a dependency outside a short allowlist (no HTTP, socket or async-runtime crate).
+
+### Loading
+
+`RenderHost::load` checks the artefact before anything runs. It refuses a module that imports anything or lacks any of the six exports, instantiates it once to read `graft_version()`, hashes the exact bytes it was given, and compares that hash with the line for that version in `fixtures/renderer/PINS`, which is compiled into the binary. An unpinned version or a different hash is a startup error. The resulting identity (`graft-render`, version, SHA-256) is what a content record embeds.
+
+### Per-render isolation and limits
+
+- The module is compiled once and shared (engine, module and pre-linked instance are `Send + Sync`); every render gets a fresh store and a fresh instance. Nothing a render does to memory or globals survives it, and a trapped instance is dropped, which matters because a trap leaves the module's internal frame pointer unrestored.
+- Memory: a resource limiter refuses growth past `Limits::max_memory_bytes` (default 64 MiB; the renderer's own worst case, 2^21 input frames at speed 1/4, needs about 21 MiB). A refusal is recorded, so the caller gets `MemoryLimit` even if the module coped with the failed allocation.
+- Interruption: fuel, not wall-clock epochs. Fuel is a deterministic count of executed instructions, so the same request is interrupted at the same point on any machine and the tests are not timing-dependent. The default budget is `Limits::max_fuel` = 1,000,000,000, about 2.4 times the most expensive render the renderer will accept (see the measurements). A module that runs out gets `Interrupted`. The host calls no host functions and the module has no imports, so nothing can block outside the fuel count.
+- SIMD, multi-memory and 64-bit memories are off in the engine configuration; threads are not compiled in.
+- Errors: a negative return code is `InvalidParameters` (-1) or `OutputTooSmall` (-2); a trap is `Trapped`; any other return value is `Internal`. The host never panics on module output.
+
+### What the tests show
+
+Hostile modules written by hand (an endless loop, an `unreachable`, a memory-growth loop, a negative code outside the contract, an import, a missing export) check each mapping, and that the next render on the same host still works. The real renderer is run through the host in `graft-vectors`: every vector in the table (including all error codes), render A then B then A with identical bytes, and 8 threads sharing one host. Two mutations were tried to confirm the tests can fail: ignoring the memory-limit record, and mapping out-of-fuel to a different error; both made a test fail.
+
+### Measurements
+
+_Numbers are added below after the first run on the CI runner._
 
 ## Determinism evidence
 

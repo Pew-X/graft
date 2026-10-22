@@ -112,3 +112,43 @@ fn table_belongs_to_the_renderer_version_being_built() {
         "regenerate the table for a new version"
     );
 }
+
+#[test]
+fn render_host_reproduces_every_vector_through_the_service_code_path() {
+    // `HostedRenderer::load` checks the artefact against the committed pins first, so this also shows
+    // the pin file and the built bytes agree.
+    let mut host =
+        graft_vectors::hosted::HostedRenderer::load(&artefact()).expect("artefact matches the pin");
+    let checks = run_table(&table(), &mut host);
+    assert_all_pass("render-host", &checks);
+}
+
+#[test]
+fn render_host_gives_identical_bytes_for_render_a_b_a_and_across_threads() {
+    use graft_render_host::{Limits, Method, Ratio, Render, RenderHost};
+    let host = RenderHost::load(&artefact(), Limits::default()).expect("loads");
+    let t = table();
+    let noise = |name: &str| t.vector(name).expect("vector").input.generate();
+    let (a_in, b_in) = (noise("up3/2-cr"), noise("dn2/3-cr"));
+    let a = host
+        .render(&a_in, Ratio { p: 3, q: 2 }, Method::Hermite)
+        .expect("a");
+    let b = host
+        .render(&b_in, Ratio { p: 2, q: 3 }, Method::Hermite)
+        .expect("b");
+    assert_eq!(
+        host.render(&a_in, Ratio { p: 3, q: 2 }, Method::Hermite)
+            .expect("a again"),
+        a
+    );
+    assert_ne!(a, b);
+    std::thread::scope(|s| {
+        let runs: Vec<_> = (0..8)
+            .map(|_| s.spawn(|| host.render(&a_in, Ratio { p: 3, q: 2 }, Method::Hermite)))
+            .collect();
+        for run in runs {
+            assert_eq!(run.join().expect("thread").as_ref(), Ok(&a));
+        }
+    });
+    assert_eq!(host.identity().version, graft_render::VERSION);
+}

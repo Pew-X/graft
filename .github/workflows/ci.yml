@@ -92,8 +92,13 @@ jobs:
           else
             node scripts/check-wasm-pin.mjs "$art"
           fi
-      - name: Vectors on native and wasmtime, module shape
-        run: cargo test -p graft-vectors
+      - name: Vectors on native, wasmtime and the render host; module shape; host tests
+        run: cargo test -p graft-vectors -p graft-render-host
+      - name: Measure the render host on the worst-case renders
+        run: |
+          cargo run --release -q -p graft-render-host --example measure -- \
+            target/wasm32-unknown-unknown/wasm/graft_render.wasm | tee measure.txt
+          { echo '### Render host measurements'; echo '```'; cat measure.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
   supply-chain:
     name: supply chain
