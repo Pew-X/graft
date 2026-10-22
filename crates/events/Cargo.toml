@@ -1,0 +1,13 @@
+[package]
+name = "graft-events"
+description = "Outbox writer, relay, consumer and rollups behind an event-sink trait."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+graft-domain.workspace = true
+
+[lints]
+workspace = true

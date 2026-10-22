@@ -1,0 +1,37 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97"
+publish = false
+
+[workspace.dependencies]
+graft-domain = { path = "crates/domain" }
+graft-render = { path = "crates/render" }
+graft-storage = { path = "crates/storage" }
+graft-render-host = { path = "crates/render-host" }
+graft-events = { path = "crates/events" }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+dbg_macro = "deny"
+todo = "deny"
+print_stdout = "warn"
+
+# The canonical renderer artefact. Only graft-render is built with this
+# profile (cargo build --profile wasm -p graft-render --target wasm32-unknown-unknown).
+[profile.wasm]
+inherits = "release"
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
