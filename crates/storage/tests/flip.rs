@@ -65,6 +65,7 @@ fn flip(parent: &NewPublication, key: &str, cut_end: u32, out: u8, cap: u32) -> 
         },
         max_forks_per_stage_per_hour: cap,
         serialization_retries: 8,
+        lock_wait: std::time::Duration::from_secs(10),
     }
 }
 

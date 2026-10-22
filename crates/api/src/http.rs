@@ -59,6 +59,8 @@ pub struct PublishSettings {
     pub max_forks_per_stage_per_hour: u32,
     /// Retries of a transaction that conflicted with concurrent work.
     pub serialization_retries: u32,
+    /// How long a publish waits for the lock on its parent before answering "busy".
+    pub lock_wait: std::time::Duration,
     /// Words refused in titles and names, beyond the built-in list.
     pub extra_deny_words: Vec<String>,
 }
@@ -83,6 +85,7 @@ impl AppState {
             publish: PublishSettings {
                 max_forks_per_stage_per_hour: config.max_forks_per_stage_per_hour,
                 serialization_retries: config.serialization_retries,
+                lock_wait: std::time::Duration::from_millis(config.lock_wait_ms),
                 extra_deny_words: config.extra_deny_words.clone(),
             },
         }

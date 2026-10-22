@@ -180,7 +180,8 @@ async fn two_makers_publishing_an_identical_flip_get_two_publications_and_one_au
     h.finish().await;
 }
 
-/// A refusal decided before any rendering: the status, the problem type, which field and rule, a
+/// A refusal decided before any rendering (cut and speed rules, an unknown, closed or hidden
+/// parent): the status, the problem type, which field and rule, a
 /// reason a person can read, and nothing written (no publication, no record, no audio).
 async fn refused(
     h: &Harness,
@@ -190,13 +191,6 @@ async fn refused(
     field_rule: Option<(&str, &str)>,
 ) {
     refusal(h, req, status, kind, field_rule, false).await;
-}
-
-/// A refusal decided inside the transaction (permission, hidden state, caps). The render and the
-/// audio write happen first, so one orphan audio blob may remain; ticket 11's cleanup job removes
-/// those. No publication and no record is written.
-async fn refused_in_transaction(h: &Harness, req: Value, status: StatusCode, kind: &str) {
-    refusal(h, req, status, kind, None, true).await;
 }
 
 async fn refusal(
@@ -338,11 +332,12 @@ async fn unknown_closed_or_hidden_parents_are_refused_with_their_own_problem() {
         .execute(h.db.store.pool())
         .await
         .expect("revoke");
-    refused_in_transaction(
+    refused(
         &h,
         body(&parent, 0, 1000, 1, 1, 3),
         StatusCode::FORBIDDEN,
         "urn:graft:problem:fork-not-permitted",
+        None,
     )
     .await;
 
@@ -350,11 +345,12 @@ async fn unknown_closed_or_hidden_parents_are_refused_with_their_own_problem() {
         .execute(h.db.store.pool())
         .await
         .expect("hide");
-    refused_in_transaction(
+    refused(
         &h,
         body(&parent, 0, 1000, 1, 1, 4),
         StatusCode::CONFLICT,
         "urn:graft:problem:parent-unavailable",
+        None,
     )
     .await;
     h.finish().await;

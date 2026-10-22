@@ -20,7 +20,8 @@ use graft_domain::hash::Sha256Hash;
 use graft_domain::ids::PublicationId;
 use graft_domain::limits::Limits;
 use graft_domain::record::{
-    ContentRecord, Cut, MAX_RATIO_TERM, METHOD_HERMITE, RendererIdentity, Transform,
+    ContentRecord, Cut, MAX_RATIO_TERM, METHOD_HERMITE, RecordError, RendererIdentity, Transform,
+    check_ratio,
 };
 use graft_domain::text;
 use graft_render_host::{Method, Ratio, RenderError};
@@ -158,6 +159,29 @@ pub async fn publish_flip(
     let Some(graft_domain::chain::Entry::Present(parent)) = chain.entries.last() else {
         return Err(parent_not_found());
     };
+
+    // A closed or hidden parent is refused before any render, so it costs nothing and leaves no
+    // audio behind. The transaction decides again, because the flags can change in between. A
+    // request whose retry key is already known skips this: an idempotent replay must return what
+    // was created even if the parent has since been closed.
+    let is_replay = state
+        .store
+        .retry_key_exists(&request.retry_key)
+        .await
+        .map_err(|e| internal("looking up the retry key", &e))?;
+    if !is_replay {
+        match state
+            .store
+            .fork_flags(&parent_id)
+            .await
+            .map_err(|e| internal("reading the parent's flags", &e))?
+        {
+            None => return Err(parent_not_found()),
+            Some(flags) if flags.hidden => return Err(Problem::parent_unavailable()),
+            Some(flags) if !flags.fork_permitted => return Err(Problem::fork_not_permitted()),
+            Some(_) => {}
+        }
+    }
 
     // 3. Render, outside any transaction.
     let parent_audio = state
@@ -329,10 +353,15 @@ async fn create_with_fresh_id(
             },
             max_forks_per_stage_per_hour: state.publish.max_forks_per_stage_per_hour,
             serialization_retries: state.publish.serialization_retries,
+            lock_wait: state.publish.lock_wait,
         };
         match state.store.create_flip(&flip).await {
             Err(StoreError::IdCollision) => {}
-            Err(StoreError::RetryExhausted) => return Err(Problem::retry_later()),
+            // Conflicts that persisted, or a lock that stayed busy: nothing was written, and the
+            // same request with the same retry key can simply be sent again.
+            Err(StoreError::RetryExhausted | StoreError::Busy) => {
+                return Err(Problem::retry_later());
+            }
             Err(other) => return Err(internal("creating the flip", &other)),
             Ok(outcome) => return Ok(outcome),
         }
@@ -431,22 +460,19 @@ fn check_cut_and_speed(
             ),
         ));
     }
-    let (p, q) = (u64::from(speed.p), u64::from(speed.q));
-    if p == 0 || q == 0 || speed.p > MAX_RATIO_TERM || speed.q > MAX_RATIO_TERM {
-        return Err(Problem::invalid(
+    // One rule for the ratio, shared with the record that will hold it.
+    check_ratio(speed.p, speed.q).map_err(|e| match e {
+        RecordError::RatioTermOutOfRange => Problem::invalid(
             "speed",
             "term_out_of_range",
             format!("p and q must each be between 1 and {MAX_RATIO_TERM}"),
-        ));
-    }
-    if 4 * p < q || p > 4 * q {
-        return Err(Problem::invalid(
+        ),
+        _ => Problem::invalid(
             "speed",
             "out_of_range",
             "the speed must be between 1/4 and 4",
-        ));
-    }
-    Ok(())
+        ),
+    })
 }
 
 /// 32 random bytes as 64 hex characters. Only the SHA-256 of this text is ever stored.

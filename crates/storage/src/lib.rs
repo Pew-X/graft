@@ -10,4 +10,4 @@ pub mod testing;
 pub use blob::{BlobError, BlobStore, FsBlobStore, MemoryBlobStore};
 pub use flip::{FlipOutcome, NewFlip, Refusal};
 pub use gate::{Gate, NoGate};
-pub use postgres::{NewPublication, Outcome, Store, StoreError};
+pub use postgres::{ForkFlags, NewPublication, Outcome, Store, StoreError};

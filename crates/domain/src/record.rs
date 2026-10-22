@@ -293,16 +293,22 @@ impl ContentRecord {
     }
 }
 
-fn validate_ratio(t: Transform) -> Result<(), RecordError> {
-    if t.p == 0 || t.q == 0 || t.p > MAX_RATIO_TERM || t.q > MAX_RATIO_TERM {
+/// The one rule for a speed fraction: both terms between 1 and 2^20, and `p/q` between 1/4 and 4,
+/// decided in integers so no rounding is involved. The service checks a request with this before
+/// rendering, and a record cannot be built without passing it.
+pub fn check_ratio(p: u32, q: u32) -> Result<(), RecordError> {
+    if p == 0 || q == 0 || p > MAX_RATIO_TERM || q > MAX_RATIO_TERM {
         return Err(RecordError::RatioTermOutOfRange);
     }
-    // 1/4 <= p/q <= 4, in integers so no rounding is involved.
-    let (p, q) = (u64::from(t.p), u64::from(t.q));
+    let (p, q) = (u64::from(p), u64::from(q));
     if 4 * p < q || p > 4 * q {
         return Err(RecordError::RatioOutOfRange);
     }
     Ok(())
+}
+
+fn validate_ratio(t: Transform) -> Result<(), RecordError> {
+    check_ratio(t.p, t.q)
 }
 
 #[cfg(test)]

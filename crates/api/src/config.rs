@@ -38,6 +38,8 @@ pub struct Config {
     pub max_forks_per_stage_per_hour: u32,
     /// How many times a publish that conflicted with concurrent work is retried inside the service.
     pub serialization_retries: u32,
+    /// How long a publish waits for the lock on its parent stage, in milliseconds.
+    pub lock_wait_ms: u64,
     /// The canonical renderer artefact the service loads at start-up.
     pub renderer_wasm: Option<std::path::PathBuf>,
     /// Words refused in titles and names, on top of the built-in list.
@@ -105,6 +107,14 @@ impl Config {
             "GRAFT_MAX_FORKS_PER_STAGE_PER_HOUR",
             &mut max_forks_per_stage_per_hour,
         )?;
+        let mut lock_wait_ms = 10_000;
+        number(&lookup, "GRAFT_LOCK_WAIT_MS", &mut lock_wait_ms)?;
+        if lock_wait_ms == 0 {
+            return Err(ConfigError::Invalid {
+                name: "GRAFT_LOCK_WAIT_MS",
+                reason: "must be at least 1".to_owned(),
+            });
+        }
         let mut serialization_retries = 5;
         number(
             &lookup,
@@ -135,6 +145,7 @@ impl Config {
             blob_url_ttl_secs,
             max_forks_per_stage_per_hour,
             serialization_retries,
+            lock_wait_ms,
             renderer_wasm: lookup("GRAFT_RENDERER_WASM").map(std::path::PathBuf::from),
             extra_deny_words,
         })

@@ -24,11 +24,9 @@ use crate::postgres::{
 };
 use graft_domain::chain::StoredStage;
 use graft_domain::ids::PublicationId;
-use sqlx::{Connection, PgConnection, Row};
+use sqlx::pool::PoolConnection;
+use sqlx::{Connection, PgConnection, PgPool, Postgres, Row};
 use std::time::Duration;
-
-/// How long a fork waits for the lock on its parent before giving up with a retryable error.
-const LOCK_WAIT: &str = "10s";
 
 /// A flip to create.
 #[derive(Debug, Clone)]
@@ -39,6 +37,8 @@ pub struct NewFlip {
     pub max_forks_per_stage_per_hour: u32,
     /// How many times a conflicted transaction is retried before the error is surfaced.
     pub serialization_retries: u32,
+    /// How long to wait for the lock on the parent before giving up with [`StoreError::Busy`].
+    pub lock_wait: Duration,
 }
 
 /// Why a flip was refused. Nothing was written.
@@ -102,31 +102,10 @@ impl Store {
         let Some(parent) = flip.publication.record.parent() else {
             return Err(StoreError::Corrupt("a flip must name a parent".into()));
         };
-        let mut conn = self.pool.acquire().await.map_err(db)?;
-        sqlx::query(sqlx::AssertSqlSafe(format!(
-            "SET lock_timeout = '{LOCK_WAIT}'"
-        )))
-        .execute(&mut *conn)
-        .await
-        .map_err(db)?;
-        // Taken outside any transaction, so the snapshot of the transaction below is taken after
-        // every earlier fork of this parent has committed.
-        sqlx::query("SELECT pg_advisory_lock(hashtextextended($1, 0))")
-            .bind(parent.as_str())
-            .execute(&mut *conn)
-            .await
-            .map_err(db)?;
+        let mut locked = Locked::acquire(&self.pool, parent, flip.lock_wait).await?;
         self.gate.reached(points::LOCKED).await;
-        let outcome = self.flip_in_transaction(&mut conn, flip).await;
-        let released = sqlx::query("SELECT pg_advisory_unlock(hashtextextended($1, 0))")
-            .bind(parent.as_str())
-            .execute(&mut *conn)
-            .await;
-        if released.is_err() {
-            // A connection that may still hold the lock must not go back to the pool; closing it
-            // releases every session lock it owns.
-            let _ = conn.detach().close().await;
-        }
+        let outcome = self.flip_in_transaction(locked.connection()?, flip).await;
+        locked.release(parent).await;
         outcome
     }
 
@@ -244,4 +223,70 @@ async fn refuse(
 ) -> Result<FlipOutcome, StoreError> {
     tx.rollback().await.map_err(db)?;
     Ok(FlipOutcome::Refused(why))
+}
+
+/// A pooled connection holding the session-level advisory lock for one parent.
+///
+/// Every way out releases the lock or closes the connection. A normal exit unlocks, resets the
+/// setting this type changed and returns the connection to the pool. Any other exit, including an
+/// error while waiting, a timeout, or a panic in the task that owns it, drops the value with the
+/// connection still inside; `Drop` then detaches the connection and closes it, which ends the
+/// session and with it every lock and setting the session had. A lock can therefore never outlive
+/// the work that took it, and a changed setting can never leak into the pool.
+struct Locked {
+    conn: Option<PoolConnection<Postgres>>,
+}
+
+impl Locked {
+    async fn acquire(
+        pool: &PgPool,
+        parent: &PublicationId,
+        wait: Duration,
+    ) -> Result<Self, StoreError> {
+        let conn = pool.acquire().await.map_err(db)?;
+        // From here the guard owns the connection, so an early return closes it.
+        let mut locked = Self { conn: Some(conn) };
+        let millis = wait.as_millis();
+        sqlx::query(sqlx::AssertSqlSafe(format!("SET lock_timeout = {millis}")))
+            .execute(locked.connection()?)
+            .await
+            .map_err(db)?;
+        // Taken outside any transaction, so the snapshot of the transaction that follows is taken
+        // after every earlier fork of this parent has committed.
+        sqlx::query("SELECT pg_advisory_lock(hashtextextended($1, 0))")
+            .bind(parent.as_str())
+            .execute(locked.connection()?)
+            .await
+            .map_err(db)?;
+        Ok(locked)
+    }
+
+    fn connection(&mut self) -> Result<&mut PgConnection, StoreError> {
+        self.conn
+            .as_deref_mut()
+            .ok_or_else(|| StoreError::Corrupt("the locked connection is gone".into()))
+    }
+
+    /// Unlock, reset the setting and give the connection back; close it if that fails.
+    async fn release(mut self, parent: &PublicationId) {
+        let Some(mut conn) = self.conn.take() else {
+            return;
+        };
+        let unlock = sqlx::query("SELECT pg_advisory_unlock(hashtextextended($1, 0))")
+            .bind(parent.as_str())
+            .execute(&mut *conn)
+            .await;
+        let reset = sqlx::query("RESET lock_timeout").execute(&mut *conn).await;
+        if unlock.is_err() || reset.is_err() {
+            drop(conn.detach());
+        }
+    }
+}
+
+impl Drop for Locked {
+    fn drop(&mut self) {
+        if let Some(conn) = self.conn.take() {
+            drop(conn.detach());
+        }
+    }
 }

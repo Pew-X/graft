@@ -26,6 +26,9 @@ pub enum StoreError {
     /// A freshly chosen public id was already taken. Choose another and try again.
     #[error("the public id is already in use")]
     IdCollision,
+    /// Waiting for the lock on a stage took longer than allowed. Nothing was written.
+    #[error("the stage is busy")]
+    Busy,
     /// Conflicts persisted through every attempt. Nothing was written; the caller may retry with
     /// the same retry key.
     #[error("the transaction kept conflicting with concurrent work")]
@@ -37,6 +40,8 @@ pub(crate) fn db(e: sqlx::Error) -> StoreError {
         match d.code().as_deref() {
             // 40001 serialization_failure, 40P01 deadlock_detected
             Some("40001" | "40P01") => return StoreError::Serialization,
+            // 55P03 lock_not_available: lock_timeout expired while waiting for a stage's lock.
+            Some("55P03") => return StoreError::Busy,
             // 23505 unique_violation on the primary key of publications: a random id collided.
             Some("23505") if d.constraint() == Some("publications_pkey") => {
                 return StoreError::IdCollision;
@@ -57,6 +62,15 @@ pub(crate) fn db(e: sqlx::Error) -> StoreError {
             .to_owned(),
     };
     StoreError::Db(class)
+}
+
+/// Whether a stage may be flipped right now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ForkFlags {
+    /// The maker allows new flips.
+    pub fork_permitted: bool,
+    /// The stage is hidden.
+    pub hidden: bool,
 }
 
 /// A publication to create.
@@ -195,6 +209,37 @@ impl Store {
             StoreError::Corrupt("a publication vanished while it was read".into())
         })?;
         Ok(Outcome::Existing(Box::new(stage)))
+    }
+
+    /// The flags that decide whether a stage may be flipped, or `None` if it does not exist. A cheap
+    /// read for refusing early; the decision is made again inside the flip transaction.
+    pub async fn fork_flags(&self, id: &PublicationId) -> Result<Option<ForkFlags>, StoreError> {
+        let row =
+            sqlx::query("SELECT fork_permitted, hidden_reason FROM publications WHERE id = $1")
+                .bind(id.as_str())
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(db)?;
+        row.map(|r| {
+            Ok(ForkFlags {
+                fork_permitted: r.try_get("fork_permitted").map_err(db)?,
+                hidden: r
+                    .try_get::<Option<String>, _>("hidden_reason")
+                    .map_err(db)?
+                    .is_some(),
+            })
+        })
+        .transpose()
+    }
+
+    /// Whether a publication with this retry key exists. Lets a caller skip checks that must not
+    /// block an idempotent replay.
+    pub async fn retry_key_exists(&self, key: &str) -> Result<bool, StoreError> {
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM publications WHERE retry_key = $1)")
+            .bind(key)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(db)
     }
 
     /// One publication with its record, or `None`.
