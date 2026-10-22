@@ -1,9 +1,22 @@
 //! Postgres and blob store access behind traits.
 
 pub mod blob;
+pub mod flip;
+pub mod gate;
+mod lock;
+pub mod maker;
+pub mod orphans;
 pub mod postgres;
+pub mod reports;
+pub mod s3;
 #[cfg(feature = "test-support")]
 pub mod testing;
 
-pub use blob::{BlobError, BlobStore, FsBlobStore, MemoryBlobStore};
-pub use postgres::{NewPublication, Outcome, Store, StoreError};
+pub use blob::{BlobError, BlobInfo, BlobStore, FsBlobStore, MemoryBlobStore};
+pub use flip::{FlipOutcome, NewFlip, Refusal};
+pub use gate::{Gate, NoGate};
+pub use maker::StageFlags;
+pub use orphans::{CleanupError, CleanupReport, remove_orphans};
+pub use postgres::{ForkFlags, NewPublication, Outcome, Store, StoreError};
+pub use reports::{ReportCategory, ReportRow};
+pub use s3::{S3BlobStore, S3Config};

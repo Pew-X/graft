@@ -25,6 +25,7 @@ struct Inner {
 #[derive(Default)]
 pub struct Metrics {
     inner: Mutex<Inner>,
+    preview_mismatches: std::sync::atomic::AtomicU64,
 }
 
 impl Metrics {
@@ -52,13 +53,25 @@ impl Metrics {
         }
     }
 
+    /// Count one publish whose client preview hash differed from the server's render.
+    pub fn preview_mismatch(&self) {
+        self.preview_mismatches
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+
     /// Render everything in the Prometheus text exposition format.
     #[must_use]
     pub fn render(&self) -> String {
         let Ok(inner) = self.inner.lock() else {
             return String::new();
         };
-        let mut out = String::from("# TYPE graft_http_requests_total counter\n");
+        let mut out = String::from("# TYPE graft_preview_mismatch_total counter\n");
+        out.push_str(&format!(
+            "graft_preview_mismatch_total {}\n",
+            self.preview_mismatches
+                .load(std::sync::atomic::Ordering::Relaxed)
+        ));
+        out.push_str("# TYPE graft_http_requests_total counter\n");
         for ((method, route, status), n) in &inner.requests {
             out.push_str(&format!(
                 "graft_http_requests_total{{method=\"{method}\",route=\"{route}\",status=\"{status}\"}} {n}\n"

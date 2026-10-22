@@ -21,6 +21,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/publications": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Publish a flip of an existing stage. */
+    post: operations["publish_flip"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/publications/{id}": {
     parameters: {
       query?: never;
@@ -32,6 +49,60 @@ export interface paths {
     get: operations["get_publication"];
     put?: never;
     post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/publications/{id}/fork-permission": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Close or reopen a stage to new flips. Existing flips and rolls are untouched. */
+    put: operations["set_fork_permission"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/publications/{id}/withdraw": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Withdraw a publication. It stays in every chain as "no longer here" with its credit; its audio
+     *     is no longer served; stages built on it stay playable. Only the operator can undo it.
+     */
+    post: operations["withdraw"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/reports": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** File a report about a publication. No account; no identity is collected. */
+    post: operations["file_report"];
     delete?: never;
     options?: never;
     head?: never;
@@ -58,6 +129,19 @@ export interface components {
       stages: components["schemas"]["EntryView"][];
       /** @description Set to "depth_cap" when the walk stopped before reaching a source. */
       truncated?: string | null;
+    };
+    /** @description A cut of the parent's audio, in frames of 48 kHz mono audio, half-open. */
+    CutRequest: {
+      /**
+       * Format: int32
+       * @description First frame not included.
+       */
+      end: number;
+      /**
+       * Format: int32
+       * @description First frame included.
+       */
+      start: number;
     };
     /** @description A frame range of 48 kHz audio, half-open. */
     CutView: {
@@ -92,12 +176,25 @@ export interface components {
           /** @enum {string} */
           state: "available";
         })
+      | (components["schemas"]["RemovedView"] & {
+          /** @enum {string} */
+          state: "no_longer_here";
+        })
+      | (components["schemas"]["RemovedView"] & {
+          /** @enum {string} */
+          state: "held";
+        })
       | {
           /** @description The id the child names as its parent. */
           id: string;
           /** @enum {string} */
           state: "unavailable";
         };
+    /** @description Close or reopen a stage to new flips. */
+    ForkPermissionRequest: {
+      /** @description True to allow new flips of this stage, false to close it. Existing flips are untouched. */
+      permitted: boolean;
+    };
     /** @description One line of a credit block. */
     LineView: {
       /** @description "declared" (a person said it, as typed), "computed" (the system produced it) or "unknown". */
@@ -107,10 +204,26 @@ export interface components {
       /** @description The value, as text. */
       value: string;
     };
+    /** @description The state of a stage after a maker action. */
+    MakerState: {
+      /** @description Whether new flips of this stage are allowed. */
+      fork_permitted: boolean;
+      /** @description Whether the stage is hidden (withdrawn). */
+      withdrawn: boolean;
+    };
     /** @description A problem-details document. */
     Problem: {
       /** @description What went wrong this time, for a person. */
       detail: string;
+      /** @description The request field the problem is about, when there is one. */
+      field?: string | null;
+      /**
+       * Format: int32
+       * @description Seconds to wait before trying again, when waiting helps.
+       */
+      retry_after_secs?: number | null;
+      /** @description A stable name for the rule that refused it, such as `too_long` or `inverted`. */
+      rule?: string | null;
       /**
        * Format: int32
        * @description The HTTP status.
@@ -120,6 +233,68 @@ export interface components {
       title: string;
       /** @description A URI naming the kind of problem; stable, so clients can switch on it. */
       type: string;
+    };
+    /** @description A flip to publish. No audio travels: the server renders it. */
+    PublishFlipRequest: {
+      /** @description The maker's name as typed. Plain text, never a handle. */
+      author: string;
+      /** @description The cut of the parent's audio. */
+      cut: components["schemas"]["CutRequest"];
+      /** @description Public id of the stage being flipped. */
+      parent_id: string;
+      /** @description SHA-256 (hex) of the audio the client's preview rendered. A cross-check only. */
+      preview_hash?: string | null;
+      /**
+       * @description Chosen by the client when the publish step opens: 16 to 128 characters from `A-Z a-z 0-9 . _ : -`.
+       *     Repeating a request with the same key and the same content returns the same publication.
+       */
+      retry_key: string;
+      /** @description The varispeed fraction. */
+      speed: components["schemas"]["SpeedRequest"];
+      /** @description Title as typed; links and handles are removed, and the response says so. */
+      title: string;
+    };
+    /** @description The result of publishing. */
+    PublishedFlip: {
+      /** @description Fields whose text was changed by removing a link or a handle. */
+      adjusted_fields: string[];
+      /**
+       * @description The key that manages this publication. Shown once, in the response that creates it, and
+       *     never again: only its hash is stored. Absent when the request was a replay.
+       */
+      manage_key?: string | null;
+      /**
+       * @description Whether the client's preview hash matched the server's render; absent when none was sent.
+       *     On a mismatch the server's audio is what was stored.
+       */
+      preview_matches?: boolean | null;
+      /** @description The new publication, as one entry of a chain. */
+      publication: components["schemas"]["EntryView"];
+    };
+    /**
+     * @description A stage that is hidden: its credit stays, its audio is not served, and the chain around it is
+     *     not shortened.
+     */
+    RemovedView: {
+      /** @description Maker's name as typed. */
+      author: string;
+      /**
+       * Format: int64
+       * @description Creation time, milliseconds since the Unix epoch.
+       */
+      created_at_ms: number;
+      /** @description Public id of the publication. */
+      id: string;
+      /** @description "source" or "flip". */
+      kind: string;
+      /** @description Credit lines, each with its honesty state. */
+      lines: components["schemas"]["LineView"][];
+      /** @description Id of the parent publication, absent for a source. */
+      parent_id?: string | null;
+      /** @description Why it is hidden: "withdrawn" or "rights". */
+      reason: string;
+      /** @description Title as typed. */
+      title: string;
     };
     /** @description Which renderer produced the audio. */
     RendererView: {
@@ -132,6 +307,33 @@ export interface components {
       version: number;
       /** @description SHA-256 of the `.wasm`, lowercase hex. */
       wasm_sha256: string;
+    };
+    /** @description The plain confirmation of a report. */
+    ReportReceived: {
+      /** @description Always true: the report was stored. */
+      received: boolean;
+    };
+    /** @description A request that a publication be looked at. */
+    ReportRequest: {
+      /** @description One of `rights`, `private_conversation`, `harmful`, `spam`, `other`. */
+      category: string;
+      /** @description An optional short note for the operator, at most 500 characters. Never shown publicly. */
+      note?: string | null;
+      /** @description Public id of the publication. */
+      publication_id: string;
+    };
+    /** @description The speed as an exact fraction: `p/q` input frames per output frame, between 1/4 and 4. */
+    SpeedRequest: {
+      /**
+       * Format: int32
+       * @description Numerator, 1 to 2^20.
+       */
+      p: number;
+      /**
+       * Format: int32
+       * @description Denominator, 1 to 2^20.
+       */
+      q: number;
     };
     /** @description The exact speed fraction and the method that applied it. */
     SpeedView: {
@@ -169,6 +371,8 @@ export interface components {
        * @description How many publications were flipped from this one, counted from publications data.
        */
       flipped_count: number;
+      /** @description Whether the maker allows new flips of this stage. */
+      fork_permitted: boolean;
       /** @description Public id of the publication. */
       id: string;
       /** @description "source" or "flip". */
@@ -221,6 +425,93 @@ export interface operations {
       };
     };
   };
+  publish_flip: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PublishFlipRequest"];
+      };
+    };
+    responses: {
+      /** @description The same request was already published; nothing changed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PublishedFlip"];
+        };
+      };
+      /** @description Published; the manage key is in this response only */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PublishedFlip"];
+        };
+      };
+      /** @description The maker closed this stage to flips */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description No such parent */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Key conflict, hidden parent or chain too deep */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description A field breaks a rule; `field` and `rule` say which */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description This stage was flipped too often this hour */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Busy; send the same request again */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
   get_publication: {
     parameters: {
       query?: never;
@@ -244,6 +535,140 @@ export interface operations {
       };
       /** @description No such publication */
       404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  set_fork_permission: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The manage key shown once when the publication was created */
+        "x-graft-manage-key": string;
+      };
+      path: {
+        /** @description Public id of the publication */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ForkPermissionRequest"];
+      };
+    };
+    responses: {
+      /** @description The stage after the change; repeating the request changes nothing */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MakerState"];
+        };
+      };
+      /** @description The manage key was not accepted (the same answer for every reason) */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Busy; send the same request again */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  withdraw: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The manage key shown once when the publication was created */
+        "x-graft-manage-key": string;
+      };
+      path: {
+        /** @description Public id of the publication */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The stage after the change; repeating the request changes nothing */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MakerState"];
+        };
+      };
+      /** @description The manage key was not accepted (the same answer for every reason) */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Busy; send the same request again */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  file_report: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ReportRequest"];
+      };
+    };
+    responses: {
+      /** @description The report was stored */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReportReceived"];
+        };
+      };
+      /** @description No such publication */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description A field breaks a rule; `field` and `rule` say which */
+      422: {
         headers: {
           [name: string]: unknown;
         };

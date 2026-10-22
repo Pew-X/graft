@@ -9,3 +9,4 @@ pub mod honesty;
 pub mod ids;
 pub mod limits;
 pub mod record;
+pub mod text;

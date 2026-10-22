@@ -13,6 +13,7 @@ use graft_domain::hash::Sha256Hash;
 use graft_domain::ids::PublicationId;
 use graft_domain::limits::Limits;
 use graft_domain::record::{ContentRecord, Cut, METHOD_HERMITE, RendererIdentity, Transform};
+use graft_render_host::{Limits as HostLimits, Render, RenderHost};
 use graft_storage::testing::TestDb;
 use graft_storage::{MemoryBlobStore, NewPublication, Outcome};
 use http_body_util::BodyExt;
@@ -20,11 +21,30 @@ use serde_json::Value;
 use std::sync::Arc;
 use tower::ServiceExt;
 
+/// The canonical renderer, built from source once per test binary (never a cached file: a stale
+/// artefact would make a test pass or fail for the wrong reason) and loaded through the pin check.
+pub fn host() -> Arc<RenderHost> {
+    static HOST: std::sync::OnceLock<Arc<RenderHost>> = std::sync::OnceLock::new();
+    HOST.get_or_init(|| {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let status = std::process::Command::new("sh")
+            .arg(root.join("scripts/build-wasm.sh"))
+            .status()
+            .expect("run scripts/build-wasm.sh");
+        assert!(status.success(), "scripts/build-wasm.sh failed");
+        let wasm = std::fs::read(root.join("target/wasm32-unknown-unknown/wasm/graft_render.wasm"))
+            .expect("read the artefact");
+        Arc::new(RenderHost::load(&wasm, HostLimits::default()).expect("load the artefact"))
+    })
+    .clone()
+}
+
 pub struct Harness {
     pub db: TestDb,
     pub blobs: Arc<MemoryBlobStore>,
     pub app: Router,
     pub limits: Limits,
+    pub metrics: Arc<graft_api::metrics::Metrics>,
 }
 
 pub fn renderer() -> RendererIdentity {
@@ -44,7 +64,12 @@ pub fn renderer() -> RendererIdentity {
 
 /// A one-second triangle wave as canonical audio: 48 kHz mono s16le.
 pub fn audio(seed: i16) -> Vec<u8> {
-    (0..48_000i32)
+    audio_frames(48_000, seed)
+}
+
+/// The same triangle wave, `frames` long.
+pub fn audio_frames(frames: i32, seed: i16) -> Vec<u8> {
+    (0..frames)
         .flat_map(|i| {
             let tri = ((i % 200) - 100) * 100;
             (tri as i16).wrapping_add(seed).to_le_bytes()
@@ -58,23 +83,46 @@ impl Harness {
     }
 
     pub async fn with_limits(limits: Limits) -> Self {
+        Self::configured(|c| c.limits = limits).await
+    }
+
+    /// A harness whose configuration is adjusted by `tweak` before the service is built.
+    pub async fn configured(tweak: impl FnOnce(&mut Config)) -> Self {
+        Self::configured_with_gate(tweak, |_| Arc::new(graft_storage::NoGate)).await
+    }
+
+    /// As `configured`, with a test gate on the store; `gate` receives the database pool so it can
+    /// make conflicting writes from separate connections.
+    pub async fn configured_with_gate(
+        tweak: impl FnOnce(&mut Config),
+        gate: impl FnOnce(sqlx::PgPool) -> Arc<dyn graft_storage::Gate>,
+    ) -> Self {
         let db = TestDb::create().await;
         let blobs = Arc::new(MemoryBlobStore::default());
         let mut config =
             Config::from_lookup(|n| (n == "GRAFT_DATABASE_URL").then(|| db.url.clone()))
                 .expect("config");
-        config.limits = limits.clone();
-        let state = AppState::new(&config, db.store.clone(), blobs.clone());
+        tweak(&mut config);
+        let limits = config.limits.clone();
+        let renderer: Arc<dyn Render> = host();
+        let store = db.store.clone().with_gate(gate(db.store.pool().clone()));
+        let state = AppState::new(&config, store, blobs.clone(), renderer);
+        let metrics = state.metrics.clone();
         let app = router(state, &config);
         Self {
             db,
             blobs,
             app,
             limits,
+            metrics,
         }
     }
 
     pub async fn seed(&self, key: &str, seed_audio: i16) -> Outcome {
+        self.seed_frames(key, 48_000, seed_audio).await
+    }
+
+    pub async fn seed_frames(&self, key: &str, frames: i32, seed_audio: i16) -> Outcome {
         seed_source(
             &self.db.store,
             self.blobs.as_ref(),
@@ -89,7 +137,7 @@ impl Harness {
                     work_author: Some("pat".into()),
                     url: None,
                 },
-                audio: audio(seed_audio),
+                audio: audio_frames(frames, seed_audio),
                 renderer: renderer(),
             },
         )
@@ -129,6 +177,7 @@ impl Harness {
             title: "slower".into(),
             author: "jo".into(),
             evidence: None,
+            manage_key_hash: None,
         };
         self.db
             .store
@@ -142,6 +191,77 @@ impl Harness {
         let request = Request::builder()
             .uri(uri)
             .body(Body::empty())
+            .expect("request");
+        let response = self.app.clone().oneshot(request).await.expect("response");
+        let (parts, body) = response.into_parts();
+        let bytes = body.collect().await.expect("body").to_bytes();
+        let json = serde_json::from_slice(&bytes)
+            .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&bytes).into()));
+        (parts.status, parts.headers, json)
+    }
+
+    /// An owned handle for spawning concurrent requests.
+    pub fn client(&self) -> Client {
+        Client {
+            app: self.app.clone(),
+        }
+    }
+
+    /// A request with arbitrary method, headers and body.
+    pub async fn send(
+        &self,
+        method: &str,
+        uri: &str,
+        headers: &[(&str, &str)],
+        body: Option<&Value>,
+    ) -> (StatusCode, axum::http::HeaderMap, Value) {
+        let mut builder = Request::builder().method(method).uri(uri);
+        for (name, value) in headers {
+            builder = builder.header(*name, *value);
+        }
+        let body = match body {
+            Some(json) => {
+                builder = builder.header(header::CONTENT_TYPE, "application/json");
+                Body::from(json.to_string())
+            }
+            None => Body::empty(),
+        };
+        let request = builder.body(body).expect("request");
+        let response = self.app.clone().oneshot(request).await.expect("response");
+        let (parts, body) = response.into_parts();
+        let bytes = body.collect().await.expect("body").to_bytes();
+        let json = serde_json::from_slice(&bytes)
+            .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&bytes).into()));
+        (parts.status, parts.headers, json)
+    }
+
+    pub async fn count(&self, table: &'static str) -> i64 {
+        sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT count(*) FROM {table}")))
+            .fetch_one(self.db.store.pool())
+            .await
+            .expect("count")
+    }
+
+    pub async fn post(
+        &self,
+        uri: &str,
+        body: &Value,
+    ) -> (StatusCode, axum::http::HeaderMap, Value) {
+        self.post_raw(uri, body.to_string(), "application/json")
+            .await
+    }
+
+    pub async fn post_raw(
+        &self,
+        uri: &str,
+        body: String,
+        content_type: &str,
+    ) -> (StatusCode, axum::http::HeaderMap, Value) {
+        let request = Request::builder()
+            .method("POST")
+            .uri(uri)
+            .header(header::CONTENT_TYPE, content_type)
+            .body(Body::from(body))
             .expect("request");
         let response = self.app.clone().oneshot(request).await.expect("response");
         let (parts, body) = response.into_parts();
@@ -175,4 +295,79 @@ pub fn is_problem(headers: &axum::http::HeaderMap) -> bool {
     headers
         .get(header::CONTENT_TYPE)
         .is_some_and(|v| v == "application/problem+json")
+}
+
+/// A cloneable, 'static handle to the router, so requests can run in spawned tasks.
+#[derive(Clone)]
+pub struct Client {
+    app: Router,
+}
+
+impl Client {
+    pub async fn send(
+        &self,
+        method: &str,
+        uri: &str,
+        headers: &[(&str, &str)],
+        body: Option<&Value>,
+    ) -> (StatusCode, axum::http::HeaderMap, Value) {
+        let mut builder = Request::builder().method(method).uri(uri);
+        for (name, value) in headers {
+            builder = builder.header(*name, *value);
+        }
+        let body = match body {
+            Some(json) => {
+                builder = builder.header(header::CONTENT_TYPE, "application/json");
+                Body::from(json.to_string())
+            }
+            None => Body::empty(),
+        };
+        let response = self
+            .app
+            .clone()
+            .oneshot(builder.body(body).expect("request"))
+            .await
+            .expect("response");
+        let (parts, body) = response.into_parts();
+        let bytes = body.collect().await.expect("body").to_bytes();
+        let json = serde_json::from_slice(&bytes)
+            .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&bytes).into()));
+        (parts.status, parts.headers, json)
+    }
+
+    pub async fn post(
+        &self,
+        uri: &str,
+        body: &Value,
+    ) -> (StatusCode, axum::http::HeaderMap, Value) {
+        let request = Request::builder()
+            .method("POST")
+            .uri(uri)
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(body.to_string()))
+            .expect("request");
+        let response = self.app.clone().oneshot(request).await.expect("response");
+        let (parts, body) = response.into_parts();
+        let bytes = body.collect().await.expect("body").to_bytes();
+        let json = serde_json::from_slice(&bytes)
+            .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&bytes).into()));
+        (parts.status, parts.headers, json)
+    }
+
+    /// Post, and on a 503 `retry-later` send the same request again, as a client is told to.
+    pub async fn post_retrying(
+        &self,
+        uri: &str,
+        body: &Value,
+        tries: u32,
+    ) -> (StatusCode, Value, u32) {
+        for attempt in 1..=tries {
+            let (status, _, json) = self.post(uri, body).await;
+            if status != StatusCode::SERVICE_UNAVAILABLE || attempt == tries {
+                return (status, json, attempt);
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        unreachable!("tries is at least 1")
+    }
 }

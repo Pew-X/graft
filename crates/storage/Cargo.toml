@@ -15,10 +15,13 @@ graft-domain.workspace = true
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "postgres", "migrate", "macros"] }
 tokio = { version = "1", features = ["time", "fs"] }
 thiserror = "2"
+object_store = { version = "0.14.2", default-features = false, features = ["aws"] }
+futures = { version = "0.3", default-features = false, features = ["std", "async-await"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
-getrandom = "0.3"
+proptest = "1"
+object_store = { version = "0.14", default-features = false, features = ["aws"] }
 
 [lints]
 workspace = true

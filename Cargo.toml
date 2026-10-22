@@ -28,6 +28,16 @@ dbg_macro = "deny"
 todo = "deny"
 print_stdout = "warn" # command-line tools opt out locally
 
+# Test and development builds link about twenty-five test binaries that each include wasmtime and
+# the S3 client. Full debug information for all of that exhausted a CI runner (the linker died with
+# a bus error), so dependencies carry none and our own crates keep line tables, which is what
+# backtraces need.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
 # The canonical renderer artefact. Only graft-render is built with this
 # profile (cargo build --profile wasm -p graft-render --target wasm32-unknown-unknown).
 [profile.wasm]

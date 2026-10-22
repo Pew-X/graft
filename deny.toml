@@ -23,6 +23,9 @@ allow = [
   "Unicode-3.0",
   "Zlib",
   "CC0-1.0",
+  # The Mozilla CA root bundle (webpki-root-certs), used for HTTPS to the object store. A permissive
+  # data licence; allowed deliberately, for that crate's data only.
+  "CDLA-Permissive-2.0",
 ]
 
 [bans]

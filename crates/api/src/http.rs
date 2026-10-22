@@ -1,16 +1,20 @@
 //! The HTTP surface: routing, request ids, security headers, CORS, health, readiness and metrics.
 
 use crate::config::Config;
+use crate::maker;
 use crate::metrics::Metrics;
+use crate::moderation;
 use crate::problem::Problem;
+use crate::publish;
 use crate::routes;
 use axum::extract::{MatchedPath, Request, State};
 use axum::http::{HeaderName, HeaderValue, Method, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
 use graft_domain::limits::Limits;
+use graft_render_host::Render;
 use graft_storage::{BlobStore, Store};
 use serde_json::json;
 use std::future::Future;
@@ -44,12 +48,38 @@ pub struct AppState {
     pub limits: Limits,
     /// How long issued blob URLs stay valid.
     pub blob_url_ttl: std::time::Duration,
+    /// The canonical renderer, loaded once and shared by every request.
+    pub renderer: Arc<dyn Render>,
+    /// Permits for concurrent renders.
+    pub renders: Arc<tokio::sync::Semaphore>,
+    /// Settings for publishing.
+    pub publish: PublishSettings,
+    /// SHA-256 of the operator secret; `None` when admin access is not configured.
+    pub admin_secret_hash: Option<[u8; 32]>,
+}
+
+/// Settings the publish route reads.
+#[derive(Clone)]
+pub struct PublishSettings {
+    /// Most flips of one stage within an hour.
+    pub max_forks_per_stage_per_hour: u32,
+    /// Retries of a transaction that conflicted with concurrent work.
+    pub serialization_retries: u32,
+    /// How long a publish waits for the lock on its parent before answering "busy".
+    pub lock_wait: std::time::Duration,
+    /// Words refused in titles and names, beyond the built-in list.
+    pub extra_deny_words: Vec<String>,
 }
 
 impl AppState {
     /// State wired to the real database check.
     #[must_use]
-    pub fn new(config: &Config, store: Store, blobs: Arc<dyn BlobStore>) -> Self {
+    pub fn new(
+        config: &Config,
+        store: Store,
+        blobs: Arc<dyn BlobStore>,
+        renderer: Arc<dyn Render>,
+    ) -> Self {
         Self {
             readiness: Arc::new(StoreReadiness(store.clone())),
             metrics: Arc::new(Metrics::default()),
@@ -57,6 +87,18 @@ impl AppState {
             blobs,
             limits: config.limits.clone(),
             blob_url_ttl: std::time::Duration::from_secs(config.blob_url_ttl_secs),
+            renderer,
+            renders: Arc::new(tokio::sync::Semaphore::new(config.max_concurrent_renders)),
+            admin_secret_hash: config
+                .admin_secret
+                .as_deref()
+                .map(|s| *graft_domain::hash::Sha256Hash::of(s.as_bytes()).as_bytes()),
+            publish: PublishSettings {
+                max_forks_per_stage_per_hour: config.max_forks_per_stage_per_hour,
+                serialization_retries: config.serialization_retries,
+                lock_wait: std::time::Duration::from_millis(config.lock_wait_ms),
+                extra_deny_words: config.extra_deny_words.clone(),
+            },
         }
     }
 }
@@ -79,11 +121,52 @@ pub fn router(state: AppState, config: &Config) -> Router {
         .route("/openapi.json", get(routes::openapi))
         .route("/v1/chains/{id}", get(routes::get_chain))
         .route("/v1/publications/{id}", get(routes::get_publication))
+        .route(
+            "/v1/publications/{id}/fork-permission",
+            put(maker::set_fork_permission)
+                .layer(axum::extract::DefaultBodyLimit::max(maker::MAX_BODY_BYTES)),
+        )
+        .route(
+            "/v1/publications/{id}/withdraw",
+            post(maker::withdraw)
+                .layer(axum::extract::DefaultBodyLimit::max(maker::MAX_BODY_BYTES)),
+        )
+        .route(
+            "/v1/reports",
+            post(moderation::file_report).layer(axum::extract::DefaultBodyLimit::max(
+                moderation::MAX_BODY_BYTES,
+            )),
+        )
+        .merge(admin_routes(state.clone()))
+        .route(
+            "/v1/publications",
+            post(publish::publish_flip).layer(axum::extract::DefaultBodyLimit::max(
+                publish::MAX_BODY_BYTES,
+            )),
+        )
         .fallback(|| async { Problem::not_found("there is nothing at this address") })
         .method_not_allowed_fallback(|| async { Problem::method_not_allowed() })
         .layer(middleware::from_fn_with_state(state.clone(), observe))
         .layer(cors(config))
         .with_state(state)
+}
+
+/// The operator routes. The secret is checked by a layer, before any query or body is parsed.
+fn admin_routes(state: AppState) -> Router<AppState> {
+    Router::new()
+        .route("/admin/reports", get(moderation::list_reports))
+        .route(
+            "/admin/publications/{id}/hide",
+            post(moderation::hide)
+                .layer(axum::extract::DefaultBodyLimit::max(
+                    moderation::MAX_BODY_BYTES,
+                ))
+                .merge(delete(moderation::clear_hide)),
+        )
+        .route_layer(middleware::from_fn_with_state(
+            state,
+            moderation::require_admin,
+        ))
 }
 
 fn cors(config: &Config) -> CorsLayer {
@@ -214,6 +297,38 @@ mod tests {
             .expect("valid config")
     }
 
+    /// A renderer that is never called: these tests are about the HTTP shell, not publishing.
+    struct NoRenderer;
+
+    static FAKE_ID: graft_render_host::RendererIdentity = graft_render_host::RendererIdentity {
+        name: "none",
+        version: 0,
+        wasm_sha256: String::new(),
+    };
+
+    impl Render for NoRenderer {
+        fn render(
+            &self,
+            _cut: &[i16],
+            _ratio: graft_render_host::Ratio,
+            _method: graft_render_host::Method,
+        ) -> Result<Vec<i16>, graft_render_host::RenderError> {
+            Err(graft_render_host::RenderError::Internal("not used".into()))
+        }
+
+        fn output_frames(
+            &self,
+            _in_len: u32,
+            _ratio: graft_render_host::Ratio,
+        ) -> Result<u32, graft_render_host::RenderError> {
+            Err(graft_render_host::RenderError::Internal("not used".into()))
+        }
+
+        fn identity(&self) -> &graft_render_host::RendererIdentity {
+            &FAKE_ID
+        }
+    }
+
     fn app(readiness: Arc<dyn Readiness>) -> (Router, Arc<Metrics>) {
         let cfg = config();
         let store = Store::connect_lazy("postgres://u:p@127.0.0.1:1/none", 1).expect("lazy store");
@@ -221,6 +336,7 @@ mod tests {
             &cfg,
             store,
             Arc::new(graft_storage::MemoryBlobStore::default()),
+            Arc::new(NoRenderer),
         );
         state.readiness = readiness;
         let metrics = state.metrics.clone();

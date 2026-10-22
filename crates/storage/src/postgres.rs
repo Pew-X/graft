@@ -19,13 +19,44 @@ pub enum StoreError {
     /// A stored row does not describe a valid record; the data is damaged.
     #[error("stored data is inconsistent: {0}")]
     Corrupt(String),
+    /// The database aborted the transaction because concurrent work conflicted (serialization
+    /// failure or deadlock). The work did not happen; trying again is safe.
+    #[error("the transaction conflicted with concurrent work")]
+    Serialization,
+    /// A freshly chosen public id was already taken. Choose another and try again.
+    #[error("the public id is already in use")]
+    IdCollision,
+    /// The publication does not exist.
+    #[error("no such publication")]
+    NotFound,
+    /// Waiting for the lock on a stage, or for a database connection, took longer than allowed.
+    /// Nothing was written.
+    #[error("the stage is busy")]
+    Busy,
+    /// Conflicts persisted through every attempt. Nothing was written; the caller may retry with
+    /// the same retry key.
+    #[error("the transaction kept conflicting with concurrent work")]
+    RetryExhausted,
 }
 
-fn db(e: sqlx::Error) -> StoreError {
+pub(crate) fn db(e: sqlx::Error) -> StoreError {
+    if let sqlx::Error::Database(d) = &e {
+        match d.code().as_deref() {
+            // 40001 serialization_failure, 40P01 deadlock_detected
+            Some("40001" | "40P01") => return StoreError::Serialization,
+            // 55P03 lock_not_available: lock_timeout expired while waiting for a stage's lock.
+            Some("55P03") => return StoreError::Busy,
+            // 23505 unique_violation on the primary key of publications: a random id collided.
+            Some("23505") if d.constraint() == Some("publications_pkey") => {
+                return StoreError::IdCollision;
+            }
+            _ => {}
+        }
+    }
     // The driver's message can name the host; keep only the error class.
     let class = match &e {
         sqlx::Error::Database(d) => format!("{} ({})", d.message(), d.code().unwrap_or_default()),
-        sqlx::Error::PoolTimedOut => "pool timed out".to_owned(),
+        sqlx::Error::PoolTimedOut => return StoreError::Busy,
         sqlx::Error::Io(_) => "i/o error".to_owned(),
         other => other
             .to_string()
@@ -35,6 +66,15 @@ fn db(e: sqlx::Error) -> StoreError {
             .to_owned(),
     };
     StoreError::Db(class)
+}
+
+/// Whether a stage may be flipped right now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ForkFlags {
+    /// The maker allows new flips.
+    pub fork_permitted: bool,
+    /// The stage is hidden.
+    pub hidden: bool,
 }
 
 /// A publication to create.
@@ -52,6 +92,8 @@ pub struct NewPublication {
     pub author: String,
     /// Declared evidence for a source.
     pub evidence: Option<SourceEvidence>,
+    /// SHA-256 of the maker's manage key; the key itself is never stored. `None` for seeded sources.
+    pub manage_key_hash: Option<[u8; 32]>,
 }
 
 /// What a create call did.
@@ -68,12 +110,13 @@ pub enum Outcome {
 /// The Postgres store.
 #[derive(Clone)]
 pub struct Store {
-    pool: PgPool,
+    pub(crate) pool: PgPool,
+    pub(crate) gate: std::sync::Arc<dyn crate::gate::Gate>,
 }
 
 const STAGE_COLUMNS: &str = "p.id AS pub_id, c.id AS content_id, p.title, p.author, \
     (extract(epoch from p.created_at) * 1000)::bigint AS created_ms, \
-    p.licence, p.work_title, p.work_author, p.work_url, \
+    p.licence, p.work_title, p.work_author, p.work_url, p.fork_permitted, p.hidden_reason, \
     c.kind, c.parent_publication_id, c.source_blob, c.cut_start, c.cut_end, c.p, c.q, c.method, \
     c.renderer_name, c.renderer_version, c.renderer_sha256, c.output_blob, \
     (SELECT count(*) FROM content_records k JOIN publications kp ON kp.content_id = k.id \
@@ -87,7 +130,7 @@ impl Store {
             .connect(url)
             .await
             .map_err(db)?;
-        Ok(Self { pool })
+        Ok(Self::from_pool(pool))
     }
 
     /// A store that connects on first use, so building it never touches the network.
@@ -97,13 +140,23 @@ impl Store {
             .acquire_timeout(std::time::Duration::from_secs(3))
             .connect_lazy(url)
             .map_err(db)?;
-        Ok(Self { pool })
+        Ok(Self::from_pool(pool))
     }
 
     /// Wrap an existing pool.
     #[must_use]
     pub fn from_pool(pool: PgPool) -> Self {
-        Self { pool }
+        Self {
+            pool,
+            gate: std::sync::Arc::new(crate::gate::NoGate),
+        }
+    }
+
+    /// Replace the gate that test code uses to hold transactions at named points.
+    #[must_use]
+    pub fn with_gate(mut self, gate: std::sync::Arc<dyn crate::gate::Gate>) -> Self {
+        self.gate = gate;
+        self
     }
 
     /// Apply every migration not yet applied.
@@ -133,6 +186,9 @@ impl Store {
     ///
     /// The same key with the same content record returns the existing publication; the same key
     /// with a different record is a conflict and writes nothing.
+    ///
+    /// For sources and for fixtures. It does not take the stage lock and does not check a parent's
+    /// permission, hidden state or fork cap, so a flip must be created with `create_flip`, which does.
     pub async fn create_publication(&self, new: &NewPublication) -> Result<Outcome, StoreError> {
         let mut tx = self.pool.begin().await.map_err(db)?;
         insert_record(&mut tx, &new.record).await?;
@@ -162,18 +218,40 @@ impl Store {
         Ok(Outcome::Existing(Box::new(stage)))
     }
 
+    /// The flags that decide whether a stage may be flipped, or `None` if it does not exist. A cheap
+    /// read for refusing early; the decision is made again inside the flip transaction.
+    pub async fn fork_flags(&self, id: &PublicationId) -> Result<Option<ForkFlags>, StoreError> {
+        let row =
+            sqlx::query("SELECT fork_permitted, hidden_reason FROM publications WHERE id = $1")
+                .bind(id.as_str())
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(db)?;
+        row.map(|r| {
+            Ok(ForkFlags {
+                fork_permitted: r.try_get("fork_permitted").map_err(db)?,
+                hidden: r
+                    .try_get::<Option<String>, _>("hidden_reason")
+                    .map_err(db)?
+                    .is_some(),
+            })
+        })
+        .transpose()
+    }
+
+    /// Whether a publication with this retry key exists. Lets a caller skip checks that must not
+    /// block an idempotent replay.
+    pub async fn retry_key_exists(&self, key: &str) -> Result<bool, StoreError> {
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM publications WHERE retry_key = $1)")
+            .bind(key)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(db)
+    }
+
     /// One publication with its record, or `None`.
     pub async fn publication(&self, id: &PublicationId) -> Result<Option<StoredStage>, StoreError> {
-        let sql = format!(
-            "SELECT {STAGE_COLUMNS} FROM publications p JOIN content_records c ON c.id = p.content_id \
-             WHERE p.id = $1"
-        );
-        let row = sqlx::query(sqlx::AssertSqlSafe(sql))
-            .bind(id.as_str())
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(db)?;
-        row.map(|r| stage_from_row(&r)).transpose()
+        fetch_stage(&self.pool, id).await
     }
 
     /// The chain ending at `leaf`, read as one statement and so one consistent snapshot.
@@ -211,7 +289,33 @@ impl Store {
     }
 }
 
-async fn insert_record(
+/// One publication read through any executor, so a caller that holds a connection (and a lock)
+/// reads on that connection instead of waiting for a second one from the pool.
+pub(crate) async fn fetch_stage<'e, E>(
+    executor: E,
+    id: &PublicationId,
+) -> Result<Option<StoredStage>, StoreError>
+where
+    E: sqlx::Executor<'e, Database = Postgres>,
+{
+    let sql = format!(
+        "SELECT {STAGE_COLUMNS} FROM publications p JOIN content_records c ON c.id = p.content_id \
+         WHERE p.id = $1"
+    );
+    let row = sqlx::query(sqlx::AssertSqlSafe(sql))
+        .bind(id.as_str())
+        .fetch_optional(executor)
+        .await
+        .map_err(db)?;
+    row.map(|r| stage_from_row(&r)).transpose()
+}
+
+/// A 32-bit unsigned value as the database's 32-bit signed integer, refusing what would wrap.
+fn int(value: u32) -> Result<i32, StoreError> {
+    i32::try_from(value).map_err(|_| StoreError::Corrupt("a value is too large to store".into()))
+}
+
+pub(crate) async fn insert_record(
     tx: &mut Transaction<'_, Postgres>,
     r: &ContentRecord,
 ) -> Result<(), StoreError> {
@@ -224,20 +328,20 @@ async fn insert_record(
          ON CONFLICT (id) DO NOTHING",
     )
     .bind(r.id().as_bytes().as_slice())
-    .bind(graft_domain::record::FORMAT_VERSION as i32)
+    .bind(int(u32::try_from(graft_domain::record::FORMAT_VERSION).unwrap_or(u32::MAX))?)
     .bind(match r.kind() {
         Kind::Source => "source",
         Kind::Flip => "flip",
     })
     .bind(r.parent().map(PublicationId::as_str))
     .bind(r.source_blob().as_bytes().as_slice())
-    .bind(cut.start as i32)
-    .bind(cut.end as i32)
-    .bind(t.map(|t| t.p as i32))
-    .bind(t.map(|t| t.q as i32))
-    .bind(t.map(|t| t.method as i32))
+    .bind(int(cut.start)?)
+    .bind(int(cut.end)?)
+    .bind(t.map(|t| int(t.p)).transpose()?)
+    .bind(t.map(|t| int(t.q)).transpose()?)
+    .bind(t.map(|t| int(t.method)).transpose()?)
     .bind(&r.renderer().name)
-    .bind(r.renderer().version as i32)
+    .bind(int(r.renderer().version)?)
     .bind(r.renderer().wasm_sha256.as_bytes().as_slice())
     .bind(r.output_blob().as_bytes().as_slice())
     .bind(r.canonical_bytes())
@@ -247,14 +351,14 @@ async fn insert_record(
     Ok(())
 }
 
-async fn insert_publication(
+pub(crate) async fn insert_publication(
     tx: &mut Transaction<'_, Postgres>,
     n: &NewPublication,
 ) -> Result<bool, StoreError> {
     let ev = n.evidence.as_ref();
     let row = sqlx::query(
         "INSERT INTO publications (id, content_id, retry_key, title, author, licence, work_title, \
-           work_author, work_url) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) \
+           work_author, work_url, manage_key_hash) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) \
          ON CONFLICT (retry_key) DO NOTHING RETURNING id",
     )
     .bind(n.id.as_str())
@@ -266,6 +370,7 @@ async fn insert_publication(
     .bind(ev.and_then(|e| e.work_title.as_deref()))
     .bind(ev.and_then(|e| e.work_author.as_deref()))
     .bind(ev.and_then(|e| e.url.as_deref()))
+    .bind(n.manage_key_hash.as_ref().map(<[u8; 32]>::as_slice))
     .fetch_optional(&mut **tx)
     .await
     .map_err(db)?;
@@ -344,6 +449,17 @@ fn stage_from_row(row: &PgRow) -> Result<StoredStage, StoreError> {
         author: row.try_get("author").map_err(db)?,
         created_at_ms: row.try_get("created_ms").map_err(db)?,
         evidence,
+        fork_permitted: row.try_get("fork_permitted").map_err(db)?,
+        hidden: match row
+            .try_get::<Option<String>, _>("hidden_reason")
+            .map_err(db)?
+        {
+            None => None,
+            Some(text) => Some(
+                graft_domain::chain::HideReason::parse(&text)
+                    .ok_or_else(|| StoreError::Corrupt(format!("unknown hide reason {text}")))?,
+            ),
+        },
         flipped_count: u32::try_from(row.try_get::<i64, _>("flipped").map_err(db)?)
             .map_err(|_| StoreError::Corrupt("negative count".into()))?,
     })

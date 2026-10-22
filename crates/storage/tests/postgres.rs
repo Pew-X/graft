@@ -39,6 +39,7 @@ fn source(key: &str, audio: u8) -> NewPublication {
         title: "door".into(),
         author: "pat".into(),
         evidence: Some(evidence()),
+        manage_key_hash: None,
     }
 }
 
@@ -66,6 +67,7 @@ fn flip(key: &str, parent: &NewPublication, out: u8) -> NewPublication {
         title: "slower".into(),
         author: "jo".into(),
         evidence: None,
+        manage_key_hash: None,
     }
 }
 
@@ -297,5 +299,38 @@ async fn the_database_refuses_a_source_with_a_parent_even_if_the_application_did
     .execute(db.store.pool())
     .await;
     assert!(bad.is_err(), "the CHECK constraint must refuse it");
+    db.drop_db().await;
+}
+
+#[tokio::test]
+async fn a_value_too_large_for_the_database_is_refused_and_never_wrapped_into_a_different_one() {
+    let db = TestDb::create().await;
+    // 3,000,000,000 frames fits a u32 but not a signed 32-bit column.
+    let huge = NewPublication {
+        id: PublicationId::seeded("seed:huge"),
+        record: ContentRecord::source(h(1), 3_000_000_000, renderer()).expect("a valid record"),
+        retry_key: "seed:huge".into(),
+        title: "huge".into(),
+        author: "pat".into(),
+        evidence: None,
+        manage_key_hash: None,
+    };
+    let err = db
+        .store
+        .create_publication(&huge)
+        .await
+        .expect_err("must be refused");
+    assert!(
+        matches!(err, graft_storage::StoreError::Corrupt(_)),
+        "got {err:?}"
+    );
+    let rows: i64 = sqlx::query_scalar("SELECT count(*) FROM content_records")
+        .fetch_one(db.store.pool())
+        .await
+        .expect("count");
+    assert_eq!(
+        rows, 0,
+        "nothing was written, in particular nothing that wrapped"
+    );
     db.drop_db().await;
 }
