@@ -8,8 +8,20 @@ export type Outcome =
   | { kind: "trap"; message: string }
   | { kind: "harness"; message: string };
 
-export type PointerCase =
-  "null-input" | "odd-input" | "odd-output" | "overlap" | "wraps-address-space" | "wild-output";
+const POINTER_CASES = [
+  "null-input",
+  "odd-input",
+  "odd-output",
+  "overlap",
+  "wraps-address-space",
+  "wild-output",
+] as const;
+
+export type PointerCase = (typeof POINTER_CASES)[number];
+
+export function isPointerCase(name: string): name is PointerCase {
+  return (POINTER_CASES as readonly string[]).includes(name);
+}
 
 export interface Host {
   name: string;
@@ -37,6 +49,20 @@ interface Exports {
   ): number;
 }
 
+const REQUIRED_FUNCTIONS = ["graft_alloc", "graft_free", "graft_out_len", "graft_render"] as const;
+
+/** The artefact's exports, checked once so later calls cannot hit a missing or mistyped export. */
+function checkedExports(instance: WebAssembly.Instance): Exports {
+  const x = instance.exports;
+  for (const name of REQUIRED_FUNCTIONS) {
+    if (typeof x[name] !== "function")
+      throw new TypeError(`artefact lacks the function export ${name}`);
+  }
+  if (!(x["memory"] instanceof WebAssembly.Memory))
+    throw new TypeError("artefact lacks the memory export");
+  return x as unknown as Exports;
+}
+
 export class WasmHost implements Host {
   readonly rawPointers = true;
   readonly name: string;
@@ -44,7 +70,7 @@ export class WasmHost implements Host {
 
   constructor(name: string, instance: WebAssembly.Instance) {
     this.name = name;
-    this.x = instance.exports as unknown as Exports;
+    this.x = checkedExports(instance);
   }
 
   static async load(name: string, bytes: Uint8Array): Promise<WasmHost> {
@@ -90,14 +116,15 @@ export class WasmHost implements Host {
       const inPtr = x.graft_alloc(inLen * 2);
       const outPtr = x.graft_alloc(cap * 2);
       const wild = x.memory.buffer.byteLength + 65536;
-      const [i, o] = {
+      const pointers: Record<PointerCase, [number, number]> = {
         "null-input": [0, outPtr],
         "odd-input": [inPtr + 1, outPtr],
         "odd-output": [inPtr, outPtr + 1],
         overlap: [inPtr, inPtr + 2],
         "wraps-address-space": [0xfffffff0, outPtr],
         "wild-output": [inPtr, wild],
-      }[c] as [number, number];
+      };
+      const [i, o] = pointers[c];
       const code = x.graft_render(i, inLen, p, q, method, o, cap);
       return { kind: "status", code, out: new Int16Array(0) };
     } catch (e) {
@@ -115,7 +142,8 @@ function classify(e: unknown): Outcome {
   const message = e instanceof Error ? e.message : String(e);
   if (e instanceof WebAssembly.RuntimeError && /bounds/i.test(message))
     return { kind: "trap", message };
-  return { kind: "harness", message: `${(e as Error)?.name ?? "error"}: ${message}` };
+  const kind = e instanceof Error ? e.name : "error";
+  return { kind: "harness", message: `${kind}: ${message}` };
 }
 
 export class PortHost implements Host {

@@ -107,14 +107,17 @@ jobs:
     timeout-minutes: 25
     # The image carries the browsers' system libraries, which otherwise take ~9 minutes to install.
     container:
-      image: mcr.microsoft.com/playwright:v1.64.1-noble
+      image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:7852dc5a7d72f5fe458a597d690f6c42fbc8e9e26ddfa95f8e6ef552558d9bbf
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Tools the container lacks (C linker, curl)
         run: apt-get update -qq && apt-get install -y -qq --no-install-recommends build-essential curl ca-certificates git
-      - name: Install the pinned toolchain
+      - name: Install the pinned toolchain (rustup 1.28.2, checksum pinned)
         run: |
-          curl -sSfL https://sh.rustup.rs | sh -s -- -y --default-toolchain none --profile minimal
+          curl -sSfL -o /tmp/rustup-init https://static.rust-lang.org/rustup/archive/1.28.2/x86_64-unknown-linux-gnu/rustup-init
+          echo "20a06e644b0d9bd2fbdbfd52d42540bdde820ea7df86e92e533c073da0cdd43c  /tmp/rustup-init" | sha256sum -c -
+          chmod +x /tmp/rustup-init
+          /tmp/rustup-init -y --default-toolchain none --profile minimal
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           "$HOME/.cargo/bin/rustup" toolchain install
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
@@ -126,19 +129,18 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
           cache-dependency-path: tools/vectors/pnpm-lock.yaml
-      - name: Checks and tests
+      - name: Rust hosts, pin, replay command
+        env:
+          HOME: /root
+        run: sh scripts/cross-host.sh
+      - name: Node, TypeScript port, Chromium, Firefox, WebKit
+        working-directory: tools/vectors
         env:
           HOME: /root
         run: |
-          sh scripts/build-wasm.sh
-          cargo build -q -p graft-vectors --bin vectors-replay
-          art=target/wasm32-unknown-unknown/wasm/graft_render.wasm
-          for host in wasmtime render-host; do target/debug/vectors-replay --host "$host" "$art" | tail -1; done
-          target/debug/vectors-replay --host native | tail -1
-          cargo test -p graft-vectors
-          cd tools/vectors
           pnpm install --frozen-lockfile
           pnpm typecheck
+          pnpm lint
           pnpm format:check
           pnpm audit --audit-level high
           pnpm test
@@ -168,17 +170,14 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install chromium firefox webkit
-      - name: Checks and tests
+      - name: Rust hosts, pin, replay command
         working-directory: .
+        run: sh scripts/cross-host.sh
+      - name: Node, TypeScript port, Chromium, Firefox, WebKit
         run: |
-          sh scripts/build-wasm.sh
-          cargo build -q -p graft-vectors --bin vectors-replay
-          art=target/wasm32-unknown-unknown/wasm/graft_render.wasm
-          for host in wasmtime render-host; do target/debug/vectors-replay --host "$host" "$art" | tail -1; done
-          target/debug/vectors-replay --host native | tail -1
-          cargo test -p graft-vectors
-          cd tools/vectors
           pnpm typecheck
+          pnpm lint
+          pnpm audit --audit-level high
           pnpm test
 
   supply-chain:

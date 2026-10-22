@@ -12,29 +12,26 @@ export interface PageResult {
   outputs: Record<string, string>;
 }
 
-async function runAll(
-  table: Table,
-  wasm: number[],
-  parityVectors: string[],
-  only?: { host: "wasm" | "port"; group: string },
-): Promise<PageResult> {
+async function runAll(table: Table, wasm: number[], parityVectors: string[]): Promise<PageResult> {
   const bytes = Uint8Array.from(wasm);
   const wasmHost = await WasmHost.load("wasm-in-browser", bytes);
-  const checks = only
-    ? await runTable(table, only.host === "wasm" ? wasmHost : new PortHost(), only.group)
-    : [...(await runTable(table, wasmHost)), ...(await runTable(table, new PortHost()))];
+  const checks = [...(await runTable(table, wasmHost)), ...(await runTable(table, new PortHost()))];
   const outputs: Record<string, string> = {};
   for (const name of parityVectors) {
     const v = table.vectors.find((x) => x.name === name);
-    if (!v) continue;
+    if (!v) throw new Error(`parity vector ${name} is not in the table`);
     const o = wasmHost.render(generate(v.input), v.p, v.q, v.method, v.out_cap);
-    if (o.kind === "status" && o.code > 0) {
-      outputs[name] = [...new Uint8Array(o.out.buffer, o.out.byteOffset, o.out.byteLength)]
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("");
-    }
+    if (o.kind !== "status" || o.code <= 0) throw new Error(`parity vector ${name} did not render`);
+    outputs[name] = [...new Uint8Array(o.out.buffer, o.out.byteOffset, o.out.byteLength)]
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
   }
   return { userAgent: navigator.userAgent, checks, outputs };
 }
 
-(globalThis as unknown as { graftVectors: { runAll: typeof runAll } }).graftVectors = { runAll };
+/** The surface the page exposes to the Playwright test; both sides use this type. */
+export interface GraftVectors {
+  runAll(table: Table, wasm: number[], parityVectors: string[]): Promise<PageResult>;
+}
+
+(globalThis as unknown as { graftVectors: GraftVectors }).graftVectors = { runAll };

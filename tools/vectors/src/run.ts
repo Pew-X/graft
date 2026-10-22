@@ -1,7 +1,7 @@
 // Replays the vector table against a host and reports every check. Runs unchanged in Node and in the
 // browsers; the page and the Node test both call it.
 
-import type { Host, Outcome, PointerCase } from "./host.ts";
+import { isPointerCase, type Host, type Outcome } from "./host.ts";
 import { downmix, f32BitsToS16, generate, type Table, type Vector } from "./table.ts";
 
 export interface Check {
@@ -30,9 +30,7 @@ function expectedOf(v: Vector): string {
     : `status ${v.expect.status}`;
 }
 
-/** `only` limits the run to one group: "vectors", "out_len", "canon" or a scenario's name (for diagnosis). */
-export async function runTable(table: Table, host: Host, only?: string): Promise<Check[]> {
-  const want = (group: string): boolean => only === undefined || only === group;
+export async function runTable(table: Table, host: Host): Promise<Check[]> {
   const checks: Check[] = [];
   const add = (name: string, expected: string, actual: string) =>
     checks.push({ host: host.name, name, passed: expected === actual, expected, actual });
@@ -43,7 +41,7 @@ export async function runTable(table: Table, host: Host, only?: string): Promise
   };
   const call = (v: Vector, input: Int16Array) => host.render(input, v.p, v.q, v.method, v.out_cap);
 
-  for (const v of want("vectors") ? table.vectors : []) {
+  for (const v of table.vectors) {
     const outcome = call(v, generate(v.input));
     add(`vector ${v.name}`, expectedOf(v), await describe(outcome));
     if (v.expect.samples && outcome.kind === "status") {
@@ -54,20 +52,20 @@ export async function runTable(table: Table, host: Host, only?: string): Promise
       );
     }
   }
-  for (const c of want("out_len") ? table.out_len : []) {
+  for (const c of table.out_len) {
     add(
       `out_len(${c.in_len}, ${c.p}, ${c.q})`,
       String(c.expect),
       String(host.outLen(c.in_len, c.p, c.q)),
     );
   }
-  for (const c of want("canon") ? table.canonicalisation.f32_to_s16.cases : []) {
+  for (const c of table.canonicalisation.f32_to_s16.cases) {
     add(`f32_to_s16 ${c.name}`, String(c.expect), String(f32BitsToS16(c.bits)));
   }
-  for (const c of want("canon") ? table.canonicalisation.downmix.cases : []) {
+  for (const c of table.canonicalisation.downmix.cases) {
     add(`downmix(${c.left}, ${c.right})`, String(c.expect), String(downmix(c.left, c.right)));
   }
-  for (const s of table.scenarios.filter((sc) => want(sc.name))) {
+  for (const s of table.scenarios) {
     const name = `scenario ${s.name}`;
     if (s.kind === "repeat") {
       const v = vector(s.vector);
@@ -109,7 +107,11 @@ export async function runTable(table: Table, host: Host, only?: string): Promise
     } else {
       const wrong: string[] = [];
       for (const c of s.cases) {
-        const o = host.pointerCase(c.case as PointerCase, s.in_len, s.p, s.q, s.method);
+        if (!isPointerCase(c.case)) {
+          wrong.push(`${c.case}: not a pointer case this harness knows`);
+          continue;
+        }
+        const o = host.pointerCase(c.case, s.in_len, s.p, s.q, s.method);
         const got =
           o.kind === "trap"
             ? "trap"

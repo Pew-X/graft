@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { PortHost, WasmHost } from "../src/host.ts";
+import { PortHost, WasmHost, type Host } from "../src/host.ts";
 import { failures, runTable } from "../src/run.ts";
 import type { Table } from "../src/table.ts";
 
@@ -29,8 +29,14 @@ test("the TypeScript port reproduces every vector, and is exempt only from the p
 });
 
 test("a host that claims raw pointers but cannot run the cases does not pass vacuously", async () => {
-  const lying = { ...new PortHost(), name: "lying", rawPointers: true };
-  const checks = await runTable(table, Object.assign(Object.create(PortHost.prototype), lying));
+  const port = new PortHost();
+  const lying: Host = {
+    name: "lying",
+    rawPointers: true,
+    outLen: (...a) => port.outLen(...a),
+    render: (...a) => port.render(...a),
+  };
+  const checks = await runTable(table, lying);
   assert.ok(failures(checks).some((f) => f.includes("scenario bad-pointers")));
 });
 

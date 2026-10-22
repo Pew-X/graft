@@ -1,6 +1,6 @@
 //! The vectors replay command: runs a vector table against an artefact and says what differs.
 
-use crate::host::Host;
+use crate::host::{Host, Outcome};
 use crate::hosted::HostedRenderer;
 use crate::native::NativeHost;
 use crate::run::{Check, run_canonicalisation, run_table};
@@ -43,73 +43,67 @@ pub mod exit {
     pub const LOAD: i32 = 3;
 }
 
-#[derive(Debug, PartialEq, Eq)]
-enum HostKind {
-    Wasmtime,
-    RenderHost,
+/// Which host to replay on; the artefact-running hosts carry the artefact's path, so a missing path
+/// cannot be represented.
+enum HostChoice {
+    Wasmtime(PathBuf),
+    RenderHost(PathBuf),
     Native,
 }
 
 struct Options {
     table: PathBuf,
-    host: HostKind,
+    host: HostChoice,
     only: Option<String>,
     emit: Option<String>,
-    artefact: Option<PathBuf>,
 }
 
 fn parse(args: &[String]) -> Result<Options, String> {
-    let mut options = Options {
-        table: PathBuf::from("fixtures/vectors/vectors.json"),
-        host: HostKind::Wasmtime,
-        only: None,
-        emit: None,
-        artefact: None,
-    };
+    let mut table = PathBuf::from("fixtures/vectors/vectors.json");
+    let (mut host, mut only, mut emit, mut artefact) = ("wasmtime".to_string(), None, None, None);
     let mut it = args.iter();
     while let Some(arg) = it.next() {
         let mut value = |name: &str| it.next().cloned().ok_or(format!("{name} needs a value"));
         match arg.as_str() {
-            "--table" => options.table = PathBuf::from(value("--table")?),
-            "--only" => options.only = Some(value("--only")?),
-            "--emit" => options.emit = Some(value("--emit")?),
-            "--host" => {
-                options.host = match value("--host")?.as_str() {
-                    "wasmtime" => HostKind::Wasmtime,
-                    "render-host" => HostKind::RenderHost,
-                    "native" => HostKind::Native,
-                    other => return Err(format!("unknown host `{other}`")),
-                };
-            }
+            "--table" => table = PathBuf::from(value("--table")?),
+            "--only" => only = Some(value("--only")?),
+            "--emit" => emit = Some(value("--emit")?),
+            "--host" => host = value("--host")?,
             flag if flag.starts_with('-') => return Err(format!("unknown option `{flag}`")),
-            path if options.artefact.is_none() => options.artefact = Some(PathBuf::from(path)),
+            path if artefact.is_none() => artefact = Some(PathBuf::from(path)),
             extra => return Err(format!("unexpected argument `{extra}`")),
         }
     }
-    if options.host != HostKind::Native && options.artefact.is_none() {
-        return Err("an artefact path is required for this host".into());
-    }
-    Ok(options)
+    let need =
+        |artefact: Option<PathBuf>| artefact.ok_or("an artefact path is required for this host");
+    let host = match host.as_str() {
+        "wasmtime" => HostChoice::Wasmtime(need(artefact)?),
+        "render-host" => HostChoice::RenderHost(need(artefact)?),
+        "native" => HostChoice::Native,
+        other => return Err(format!("unknown host `{other}`")),
+    };
+    Ok(Options {
+        table,
+        host,
+        only,
+        emit,
+    })
 }
 
-fn make_host(options: &Options) -> Result<Box<dyn Host>, String> {
-    if options.host == HostKind::Native {
+fn make_host(choice: &HostChoice) -> Result<Box<dyn Host>, String> {
+    let (HostChoice::Wasmtime(path) | HostChoice::RenderHost(path)) = choice else {
         return Ok(Box::new(NativeHost));
-    }
-    let path = options
-        .artefact
-        .as_ref()
-        .ok_or("an artefact path is required")?;
+    };
     let wasm = std::fs::read(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
     let load_error = |e: &dyn std::fmt::Display| format!("cannot load {}: {e}", path.display());
-    match options.host {
-        HostKind::Wasmtime => WasmtimeHost::new(&wasm)
+    if matches!(choice, HostChoice::Wasmtime(_)) {
+        WasmtimeHost::new(&wasm)
             .map(|h| Box::new(h) as Box<dyn Host>)
-            .map_err(|e| load_error(&e)),
-        HostKind::RenderHost => HostedRenderer::load(&wasm)
+            .map_err(|e| load_error(&e))
+    } else {
+        HostedRenderer::load(&wasm)
             .map(|h| Box::new(h) as Box<dyn Host>)
-            .map_err(|e| load_error(&e)),
-        HostKind::Native => Err("the native host takes no artefact".into()),
+            .map_err(|e| load_error(&e))
     }
 }
 
@@ -118,7 +112,7 @@ fn emit(table: &Table, host: &mut dyn Host, name: &str, out: &mut dyn Write) -> 
         .vector(name)
         .ok_or(format!("no vector named `{name}`"))?;
     match host.render(&v.input.generate(), v.p, v.q, v.method, v.out_cap) {
-        crate::host::Outcome::Status { code, out: frames } if code > 0 => {
+        Outcome::Status { code, out: frames } if code > 0 => {
             let bytes: Vec<u8> = frames.iter().flat_map(|f| f.to_le_bytes()).collect();
             out.write_all(&bytes).map_err(|e| e.to_string())
         }
@@ -146,7 +140,7 @@ pub fn run(args: &[String], out: &mut dyn Write, err: &mut dyn Write) -> i32 {
             return exit::LOAD;
         }
     };
-    let mut host = match make_host(&options) {
+    let mut host = match make_host(&options.host) {
         Ok(h) => h,
         Err(message) => {
             let _ = writeln!(err, "error: {message}");

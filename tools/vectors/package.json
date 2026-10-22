@@ -12,13 +12,17 @@
     "format:check": "prettier --check .",
     "test:node": "node --test tests/node.test.ts",
     "test:browser": "playwright test",
-    "test": "pnpm test:node && pnpm test:browser"
+    "test": "pnpm test:node && pnpm test:browser",
+    "lint": "eslint ."
   },
   "devDependencies": {
+    "@eslint/js": "9.39.5",
     "@playwright/test": "1.64.1",
     "@types/node": "24.19.2",
     "esbuild": "0.28.2",
+    "eslint": "9.39.5",
     "prettier": "3.9.10",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.72.0"
   }
 }

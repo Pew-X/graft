@@ -5,6 +5,9 @@
 use std::path::PathBuf;
 use std::process::{Command, Output};
 
+/// SHA-256 of the output of the `up3/2-cr` vector.
+const UP32_HASH: &str = "d00e6d93ef56987fc9a41bcbb5ed7a8b0529bc8fef8b15bee10ab98d6ea93e38";
+
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
@@ -50,7 +53,7 @@ fn a_correct_artefact_passes_every_check_and_exits_zero() {
 fn a_changed_expected_hash_fails_names_the_vector_and_shows_both_hashes() {
     let table =
         std::fs::read_to_string(root().join("fixtures/vectors/vectors.json")).expect("table");
-    let real = "d00e6d93ef56987fc9a41bcbb5ed7a8b0529bc8fef8b15bee10ab98d6ea93e38"; // up3/2-cr
+    let real = UP32_HASH;
     assert!(table.contains(real));
     let fake = "0".repeat(64);
     let dir = std::env::temp_dir().join(format!("graft-replay-{}", std::process::id()));
