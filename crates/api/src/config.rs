@@ -91,6 +91,7 @@ impl Config {
         )?;
         let mut blob_url_ttl_secs = 300;
         number(&lookup, "GRAFT_BLOB_URL_TTL_SECS", &mut blob_url_ttl_secs)?;
+        validate(&limits, blob_url_ttl_secs)?;
         Ok(Self {
             bind,
             database_url,
@@ -99,6 +100,38 @@ impl Config {
             blob_url_ttl_secs,
         })
     }
+}
+
+/// Refuse limits that cannot work, so the service fails at start-up and not on the first request.
+fn validate(l: &Limits, blob_url_ttl_secs: u64) -> Result<(), ConfigError> {
+    let invalid = |name, reason: &str| {
+        Err(ConfigError::Invalid {
+            name,
+            reason: reason.to_owned(),
+        })
+    };
+    if l.max_chain_depth == 0 {
+        return invalid("GRAFT_MAX_CHAIN_DEPTH", "must be at least 1");
+    }
+    if l.min_frames == 0 {
+        return invalid("GRAFT_MIN_FRAMES", "must be at least 1");
+    }
+    if l.min_frames > l.max_cut_frames || l.min_frames > l.max_source_frames {
+        return invalid(
+            "GRAFT_MIN_FRAMES",
+            "must not exceed the cut and source maximums",
+        );
+    }
+    if l.max_cut_frames > l.max_source_frames {
+        return invalid("GRAFT_MAX_CUT_FRAMES", "must not exceed the source maximum");
+    }
+    if l.max_title_chars == 0 || l.max_author_chars == 0 {
+        return invalid("GRAFT_MAX_TITLE_CHARS", "text limits must be at least 1");
+    }
+    if blob_url_ttl_secs == 0 {
+        return invalid("GRAFT_BLOB_URL_TTL_SECS", "must be at least 1");
+    }
+    Ok(())
 }
 
 fn number<T: std::str::FromStr>(
@@ -163,6 +196,27 @@ mod tests {
             vec!["https://a.example", "https://b.example"]
         );
         assert_eq!(c.bind.port(), 9000);
+    }
+
+    #[test]
+    fn limits_that_cannot_work_stop_the_service_at_start_up() {
+        for (name, value) in [
+            ("GRAFT_MAX_CHAIN_DEPTH", "0"),
+            ("GRAFT_MIN_FRAMES", "0"),
+            ("GRAFT_MIN_FRAMES", "999999999"),
+            ("GRAFT_MAX_CUT_FRAMES", "999999999"),
+            ("GRAFT_MAX_TITLE_CHARS", "0"),
+            ("GRAFT_BLOB_URL_TTL_SECS", "0"),
+        ] {
+            let result = Config::from_lookup(env(&[
+                ("GRAFT_DATABASE_URL", "postgres://x"),
+                (name, value),
+            ]));
+            assert!(
+                matches!(result, Err(ConfigError::Invalid { .. })),
+                "{name}={value} should be refused, got {result:?}"
+            );
+        }
     }
 
     #[test]

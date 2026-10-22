@@ -30,6 +30,11 @@ pub struct Metrics {
 impl Metrics {
     /// Record one finished request.
     pub fn observe(&self, method: &str, route: &str, status: u16, seconds: f64) {
+        // The method comes from the client: anything outside the standard set shares one label.
+        let method = match method {
+            "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS" => method,
+            _ => "OTHER",
+        };
         let Ok(mut inner) = self.inner.lock() else {
             return;
         };
@@ -101,6 +106,17 @@ mod tests {
         assert!(text.contains(
             "graft_http_requests_total{method=\"GET\",route=\"/health\",status=\"503\"} 1"
         ));
+    }
+
+    #[test]
+    fn client_chosen_methods_share_one_label_so_cardinality_stays_bounded() {
+        let m = Metrics::default();
+        for i in 0..50 {
+            m.observe(&format!("FOO{i}"), "/x", 405, 0.001);
+        }
+        let text = m.render();
+        assert!(text.contains("method=\"OTHER\",route=\"/x\",status=\"405\"} 50"));
+        assert!(!text.contains("FOO"));
     }
 
     #[test]

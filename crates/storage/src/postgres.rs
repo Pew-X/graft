@@ -328,12 +328,15 @@ fn stage_from_row(row: &PgRow) -> Result<StoredStage, StoreError> {
         ));
     }
     let licence: Option<String> = row.try_get("licence").map_err(db)?;
-    let evidence = licence.map(|licence| SourceEvidence {
-        licence,
-        work_title: row.try_get("work_title").unwrap_or(None),
-        work_author: row.try_get("work_author").unwrap_or(None),
-        url: row.try_get("work_url").unwrap_or(None),
-    });
+    let evidence = match licence {
+        Some(licence) => Some(SourceEvidence {
+            licence,
+            work_title: row.try_get("work_title").map_err(db)?,
+            work_author: row.try_get("work_author").map_err(db)?,
+            url: row.try_get("work_url").map_err(db)?,
+        }),
+        None => None,
+    };
     Ok(StoredStage {
         id,
         record,

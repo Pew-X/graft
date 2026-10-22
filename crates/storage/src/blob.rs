@@ -128,15 +128,20 @@ impl BlobStore for FsBlobStore {
         Box::pin(async move {
             let hash = Sha256Hash::of(&bytes);
             let target = self.path(&hash);
-            if target.exists() {
+            let io = |e: std::io::Error| BlobError::Store(e.kind().to_string());
+            if tokio::fs::try_exists(&target).await.map_err(io)? {
                 return Ok(hash);
             }
-            // Write beside the target and rename, so a reader never sees a half-written blob and
-            // two writers of the same bytes cannot corrupt each other.
-            let temp = self
-                .dir
-                .join(format!(".{}.{}", hash.to_hex(), std::process::id()));
-            let io = |e: std::io::Error| BlobError::Store(e.kind().to_string());
+            // Write to a name no other writer shares, then rename: a reader never sees a
+            // half-written blob, and concurrent writers of the same bytes (in this process or
+            // another) each own their temporary file. Renaming over an identical file is harmless.
+            static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            let unique = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let temp = self.dir.join(format!(
+                ".{}.{}.{unique}",
+                hash.to_hex(),
+                std::process::id()
+            ));
             tokio::fs::write(&temp, &bytes).await.map_err(io)?;
             tokio::fs::rename(&temp, &target).await.map_err(io)?;
             Ok(hash)
@@ -159,6 +164,7 @@ impl BlobStore for FsBlobStore {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used)] // test helpers fail loudly
 mod fs_tests {
     use super::*;
 
@@ -177,6 +183,30 @@ mod fs_tests {
             std::fs::read_dir(&dir).expect("dir").count(),
             1,
             "no temp files left behind"
+        );
+        std::fs::remove_dir_all(&dir).expect("cleanup");
+    }
+
+    #[tokio::test]
+    async fn many_concurrent_writers_of_the_same_bytes_all_succeed_and_leave_one_blob() {
+        let dir = std::env::temp_dir().join(format!("graft-fs-race-{}", std::process::id()));
+        let store = std::sync::Arc::new(FsBlobStore::open(&dir).expect("open"));
+        let writers: Vec<_> = (0..32)
+            .map(|_| {
+                let store = store.clone();
+                tokio::spawn(async move { store.put_if_absent(vec![7; 4096]).await })
+            })
+            .collect();
+        for w in writers {
+            assert_eq!(
+                w.await.expect("task").expect("every writer succeeds"),
+                Sha256Hash::of(&[7; 4096])
+            );
+        }
+        assert_eq!(
+            std::fs::read_dir(&dir).expect("dir").count(),
+            1,
+            "one blob, no temp files"
         );
         std::fs::remove_dir_all(&dir).expect("cleanup");
     }
