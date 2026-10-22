@@ -1,0 +1,35 @@
+# Throwaway check app for ticket 03b (removed by ticket 34).
+#
+# Builder steps (the agent never signs in or deploys):
+#   1. Install flyctl and run `fly auth login` yourself.
+#   2. Create the app:        fly apps create <APP_NAME>     (then put the name on the next line)
+#   3. Deploy this image:     fly deploy
+#   4. Read the result:       curl https://<APP_NAME>.fly.dev/results   and   /health
+#   5. Record the app name, region and the numbers; then stop it:   fly scale count 0
+#      (or `fly apps destroy <APP_NAME>` once the numbers are recorded).
+app = "REPLACE-WITH-YOUR-APP-NAME"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/health"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "20s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
