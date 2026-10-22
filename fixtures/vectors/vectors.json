@@ -1,0 +1,1142 @@
+{
+ "schema": 1,
+ "renderer": {
+  "name": "graft-render",
+  "version": 1
+ },
+ "format": {
+  "sample_rate": 48000,
+  "channels": 1,
+  "encoding": "s16le",
+  "hash": "sha256 of the raw bytes"
+ },
+ "generators": {
+  "lcg": "s = (s * 1664525 + 1013904223) mod 2^32 per frame starting from seed; sample = s >> 16 as signed 16-bit",
+  "square": "frame i is 32767 when (i >> half_period_log2) is odd, otherwise -32768",
+  "constant": "every frame equals value",
+  "literal": "the listed samples"
+ },
+ "vectors": [
+  {
+   "name": "id-lin",
+   "doc": "speed 1, linear",
+   "input": {
+    "kind": "lcg",
+    "len": 1000,
+    "seed": 12345
+   },
+   "p": 1,
+   "q": 1,
+   "method": 0,
+   "out_cap": 1000,
+   "expect": {
+    "status": 1000,
+    "sha256": "7209eda4c9e3368aa83e6c41b5b98493aa1474479e8082ef56f3019d5c22e873"
+   },
+   "spike": true
+  },
+  {
+   "name": "id-cr",
+   "doc": "speed 1, Hermite: equals linear at t = 0",
+   "input": {
+    "kind": "lcg",
+    "len": 1000,
+    "seed": 12345
+   },
+   "p": 1,
+   "q": 1,
+   "method": 1,
+   "out_cap": 1000,
+   "expect": {
+    "status": 1000,
+    "sha256": "7209eda4c9e3368aa83e6c41b5b98493aa1474479e8082ef56f3019d5c22e873"
+   },
+   "spike": true
+  },
+  {
+   "name": "up3/2-cr",
+   "doc": "speed 3/2",
+   "input": {
+    "kind": "lcg",
+    "len": 48000,
+    "seed": 12345
+   },
+   "p": 3,
+   "q": 2,
+   "method": 1,
+   "out_cap": 32000,
+   "expect": {
+    "status": 32000,
+    "sha256": "d00e6d93ef56987fc9a41bcbb5ed7a8b0529bc8fef8b15bee10ab98d6ea93e38"
+   },
+   "spike": true
+  },
+  {
+   "name": "dn2/3-cr",
+   "doc": "speed 2/3",
+   "input": {
+    "kind": "lcg",
+    "len": 48000,
+    "seed": 12345
+   },
+   "p": 2,
+   "q": 3,
+   "method": 1,
+   "out_cap": 71999,
+   "expect": {
+    "status": 71999,
+    "sha256": "bebe81bbd2fa65f2428f2cb9ccc4d13ada470a6fe73590d8bcaa9a65b83a8d76"
+   },
+   "spike": true
+  },
+  {
+   "name": "q4-cr",
+   "doc": "speed 4 exactly",
+   "input": {
+    "kind": "lcg",
+    "len": 30011,
+    "seed": 12345
+   },
+   "p": 4,
+   "q": 1,
+   "method": 1,
+   "out_cap": 7503,
+   "expect": {
+    "status": 7503,
+    "sha256": "4b8ea428a3933228a30426b79bcd21eb1effde20d88c0fe7fbc5c24a7112715a"
+   },
+   "spike": true
+  },
+  {
+   "name": "q1/4-cr",
+   "doc": "speed 1/4 exactly",
+   "input": {
+    "kind": "lcg",
+    "len": 30011,
+    "seed": 12345
+   },
+   "p": 1,
+   "q": 4,
+   "method": 1,
+   "out_cap": 120041,
+   "expect": {
+    "status": 120041,
+    "sha256": "93da4dfbfb5e80db8e2f61359a50fe22fe31995c7d6ba528b9d31d93d5713b6c"
+   },
+   "spike": true
+  },
+  {
+   "name": "odd-cr",
+   "doc": "awkward prime fraction",
+   "input": {
+    "kind": "lcg",
+    "len": 48000,
+    "seed": 12345
+   },
+   "p": 7919,
+   "q": 5003,
+   "method": 1,
+   "out_cap": 30325,
+   "expect": {
+    "status": 30325,
+    "sha256": "580b37ea9c7693043b2ee87327fb3b1c2ddbffd3224ac6847594f9bae7cc1b05"
+   },
+   "spike": true
+  },
+  {
+   "name": "odd-lin",
+   "doc": "awkward prime fraction, linear",
+   "input": {
+    "kind": "lcg",
+    "len": 48000,
+    "seed": 12345
+   },
+   "p": 7919,
+   "q": 5003,
+   "method": 0,
+   "out_cap": 30325,
+   "expect": {
+    "status": 30325,
+    "sha256": "08fb106080a86dc373a0f18ce269792e9762392d0ff793c48b4a602d7e57965c"
+   },
+   "spike": true
+  },
+  {
+   "name": "L1-cr",
+   "doc": "one input frame at speed 3/2 gives one output frame",
+   "input": {
+    "kind": "lcg",
+    "len": 1,
+    "seed": 12345
+   },
+   "p": 3,
+   "q": 2,
+   "method": 1,
+   "out_cap": 1,
+   "expect": {
+    "status": 1,
+    "sha256": "ca1081b5f19c648fd45553d1d3b0356ae71b97938f28f31d5b6574bdbd305f6d"
+   },
+   "spike": true
+  },
+  {
+   "name": "L2-cr",
+   "doc": "two input frames at speed 2/3",
+   "input": {
+    "kind": "lcg",
+    "len": 2,
+    "seed": 12345
+   },
+   "p": 1,
+   "q": 3,
+   "method": 1,
+   "out_cap": 4,
+   "expect": {
+    "status": 4,
+    "sha256": "55e443c57680b34c7766e5f508fcb8c6af65a9e46fa9b0d4002accd4f4a4558c"
+   },
+   "spike": true
+  },
+  {
+   "name": "L3-lin",
+   "doc": "three input frames at speed 1/3, linear",
+   "input": {
+    "kind": "lcg",
+    "len": 3,
+    "seed": 12345
+   },
+   "p": 1,
+   "q": 3,
+   "method": 0,
+   "out_cap": 7,
+   "expect": {
+    "status": 7,
+    "sha256": "c586bf9f70aafde8e578cb049102b24137ce70006ca24c0e15cb040426d27e2a"
+   },
+   "spike": true
+  },
+  {
+   "name": "sq-cr",
+   "doc": "full-scale square wave: Hermite overshoot saturates",
+   "input": {
+    "kind": "square",
+    "len": 9000,
+    "half_period_log2": 5
+   },
+   "p": 5,
+   "q": 7,
+   "method": 1,
+   "out_cap": 12599,
+   "expect": {
+    "status": 12599,
+    "sha256": "722faa64788655569e206de82a85f8da308b4f69d612e9d482e55edec808a740"
+   },
+   "spike": true
+  },
+  {
+   "name": "max-cr",
+   "doc": "480,000 frames at p/q just under 1 with p and q near 2^20",
+   "input": {
+    "kind": "lcg",
+    "len": 480000,
+    "seed": 12345
+   },
+   "p": 1048575,
+   "q": 1048576,
+   "method": 1,
+   "out_cap": 480000,
+   "expect": {
+    "status": 480000,
+    "sha256": "f1e507e287e7f6f0876ec8b5452049284ff779fa1328383d7ff71795b9b97538"
+   },
+   "spike": true
+  },
+  {
+   "name": "big-cr",
+   "doc": "renderer input ceiling 2^21 frames at speed 4",
+   "input": {
+    "kind": "lcg",
+    "len": 2097152,
+    "seed": 12345
+   },
+   "p": 4,
+   "q": 1,
+   "method": 1,
+   "out_cap": 524288,
+   "expect": {
+    "status": 524288,
+    "sha256": "e9ea9b550f73c79390b3c525d8b9eaaf145f1f109e483e25f1ba159102e9b726"
+   },
+   "spike": true
+  },
+  {
+   "name": "hand-one-frame",
+   "doc": "one-frame output: no fade ramp, value passes through",
+   "input": {
+    "kind": "literal",
+    "samples": [
+     12345
+    ]
+   },
+   "p": 1,
+   "q": 1,
+   "method": 1,
+   "out_cap": 1,
+   "expect": {
+    "status": 1,
+    "sha256": "69f59c273b6e669ac32a6dd5e1b2cb63333d8b004f9696447aee2d422ce63763",
+    "samples": [
+     12345
+    ]
+   }
+  },
+  {
+   "name": "hand-one-frame-neg",
+   "doc": "one-frame output at the negative extreme, linear",
+   "input": {
+    "kind": "literal",
+    "samples": [
+     -32768
+    ]
+   },
+   "p": 1,
+   "q": 1,
+   "method": 0,
+   "out_cap": 1,
+   "expect": {
+    "status": 1,
+    "sha256": "085edad400785fca7e7e90b1fac4beb776fc2beee5aa24352d5f39b5d57efcad",
+    "samples": [
+     -32768
+    ]
+   }
+  },
+  {
+   "name": "hand-two-frames",
+   "doc": "two-frame output: both frames are fade end points, so both are zero",
+   "input": {
+    "kind": "literal",
+    "samples": [
+     1000,
+     -1000
+    ]
+   },
+   "p": 1,
+   "q": 1,
+   "method": 1,
+   "out_cap": 2,
+   "expect": {
+    "status": 2,
+    "sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
+    "samples": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "name": "hand-three-frames",
+   "doc": "three-frame output: fade length 1, only the middle frame survives",
+   "input": {
+    "kind": "literal",
+    "samples": [
+     100,
+     200,
+     300
+    ]
+   },
+   "p": 1,
+   "q": 1,
+   "method": 1,
+   "out_cap": 3,
+   "expect": {
+    "status": 3,
+    "sha256": "243cbf5e76a64c7f0fdf6139e59b4d3a071ce5d5a1247b33ea42b8a982397927",
+    "samples": [
+     0,
+     200,
+     0
+    ]
+   }
+  },
+  {
+   "name": "pq-max-identity",
+   "doc": "p = q = 2^20",
+   "input": {
+    "kind": "lcg",
+    "len": 1000,
+    "seed": 12345
+   },
+   "p": 1048576,
+   "q": 1048576,
+   "method": 1,
+   "out_cap": 1000,
+   "expect": {
+    "status": 1000,
+    "sha256": "7209eda4c9e3368aa83e6c41b5b98493aa1474479e8082ef56f3019d5c22e873"
+   }
+  },
+  {
+   "name": "pq-max-speed4",
+   "doc": "p = 2^20, q = 2^18: speed 4 at the largest p",
+   "input": {
+    "kind": "lcg",
+    "len": 48000,
+    "seed": 12345
+   },
+   "p": 1048576,
+   "q": 262144,
+   "method": 1,
+   "out_cap": 12000,
+   "expect": {
+    "status": 12000,
+    "sha256": "e74487f1d687774bc2945c7b0e59dd23acf862ed058b418db93f4263643a45a9"
+   }
+  },
+  {
+   "name": "pq-max-speed-quarter",
+   "doc": "p = 2^18, q = 2^20: speed 1/4 at the largest q",
+   "input": {
+    "kind": "lcg",
+    "len": 48000,
+    "seed": 12345
+   },
+   "p": 262144,
+   "q": 1048576,
+   "method": 1,
+   "out_cap": 191997,
+   "expect": {
+    "status": 191997,
+    "sha256": "0280ff758eb30c17d88fa4a52900202b6cababd64f432f4a8567fea6d1898504"
+   }
+  },
+  {
+   "name": "speed4-unreduced",
+   "doc": "4000/1000 equals 4/1 and gives the same bytes",
+   "input": {
+    "kind": "lcg",
+    "len": 30011,
+    "seed": 12345
+   },
+   "p": 4000,
+   "q": 1000,
+   "method": 1,
+   "out_cap": 7503,
+   "expect": {
+    "status": 7503,
+    "sha256": "4b8ea428a3933228a30426b79bcd21eb1effde20d88c0fe7fbc5c24a7112715a"
+   }
+  },
+  {
+   "name": "cut-cap-identity",
+   "doc": "cut of exactly 480,000 frames at speed 1",
+   "input": {
+    "kind": "lcg",
+    "len": 480000,
+    "seed": 12345
+   },
+   "p": 1,
+   "q": 1,
+   "method": 1,
+   "out_cap": 480000,
+   "expect": {
+    "status": 480000,
+    "sha256": "6523dae30b9a423750c5bb1c0639de395fcd798435520d26fc8215ad055ceb0b"
+   }
+  },
+  {
+   "name": "out-cap-exact",
+   "doc": "480,000 frame cut giving exactly 960,000 output frames",
+   "input": {
+    "kind": "lcg",
+    "len": 480000,
+    "seed": 12345
+   },
+   "p": 479999,
+   "q": 959999,
+   "method": 1,
+   "out_cap": 960000,
+   "expect": {
+    "status": 960000,
+    "sha256": "fd3a7379df69b444a0704c332687498267b40b8982ea4dac21b50c7ca200cd0f"
+   }
+  },
+  {
+   "name": "cut-cap-quarter",
+   "doc": "480,000 frame cut at 1/4 speed: 1,919,997 frames, past the product output cap",
+   "input": {
+    "kind": "lcg",
+    "len": 480000,
+    "seed": 12345
+   },
+   "p": 1,
+   "q": 4,
+   "method": 1,
+   "out_cap": 1919997,
+   "expect": {
+    "status": 1919997,
+    "sha256": "0aef1cc7af156c94fa119862e42666677e7ab221c4888c29266dd3b0cf8dfb9e"
+   }
+  },
+  {
+   "name": "dc-max",
+   "doc": "constant full-scale input stays inside the 16-bit range",
+   "input": {
+    "kind": "constant",
+    "len": 48000,
+    "value": 32767
+   },
+   "p": 3,
+   "q": 2,
+   "method": 1,
+   "out_cap": 32000,
+   "expect": {
+    "status": 32000,
+    "sha256": "27fab43dd3a6cccf2fe8b89f592989ab9668871d7c133d1fc406c5764c388687"
+   }
+  },
+  {
+   "name": "dc-min",
+   "doc": "constant negative full-scale input",
+   "input": {
+    "kind": "constant",
+    "len": 48000,
+    "value": -32768
+   },
+   "p": 2,
+   "q": 3,
+   "method": 1,
+   "out_cap": 71999,
+   "expect": {
+    "status": 71999,
+    "sha256": "66c95f5fca14eefc35a9e7aeabcd76c10a905d4db2e00461a38beee5f1ed49a8"
+   }
+  },
+  {
+   "name": "err-zero-length",
+   "doc": "no input frames",
+   "input": {
+    "kind": "literal",
+    "samples": []
+   },
+   "p": 1,
+   "q": 1,
+   "method": 1,
+   "out_cap": 100,
+   "expect": {
+    "status": -1
+   }
+  },
+  {
+   "name": "err-p-zero",
+   "doc": "p = 0",
+   "input": {
+    "kind": "lcg",
+    "len": 10,
+    "seed": 12345
+   },
+   "p": 0,
+   "q": 1,
+   "method": 1,
+   "out_cap": 100,
+   "expect": {
+    "status": -1
+   }
+  },
+  {
+   "name": "err-q-zero",
+   "doc": "q = 0",
+   "input": {
+    "kind": "lcg",
+    "len": 10,
+    "seed": 12345
+   },
+   "p": 1,
+   "q": 0,
+   "method": 1,
+   "out_cap": 100,
+   "expect": {
+    "status": -1
+   }
+  },
+  {
+   "name": "err-speed-above-4",
+   "doc": "speed 5",
+   "input": {
+    "kind": "lcg",
+    "len": 10,
+    "seed": 12345
+   },
+   "p": 5,
+   "q": 1,
+   "method": 1,
+   "out_cap": 100,
+   "expect": {
+    "status": -1
+   }
+  },
+  {
+   "name": "err-speed-above-4-barely",
+   "doc": "speed 4001/1000",
+   "input": {
+    "kind": "lcg",
+    "len": 10,
+    "seed": 12345
+   },
+   "p": 4001,
+   "q": 1000,
+   "method": 1,
+   "out_cap": 100,
+   "expect": {
+    "status": -1
+   }
+  },
+  {
+   "name": "err-speed-below-quarter",
+   "doc": "speed 1/5",
+   "input": {
+    "kind": "lcg",
+    "len": 10,
+    "seed": 12345
+   },
+   "p": 1,
+   "q": 5,
+   "method": 1,
+   "out_cap": 100,
+   "expect": {
+    "status": -1
+   }
+  },
+  {
+   "name": "err-speed-below-quarter-barely",
+   "doc": "speed 999/4000",
+   "input": {
+    "kind": "lcg",
+    "len": 10,
+    "seed": 12345
+   },
+   "p": 999,
+   "q": 4000,
+   "method": 1,
+   "out_cap": 100,
+   "expect": {
+    "status": -1
+   }
+  },
+  {
+   "name": "err-p-over-2^20",
+   "doc": "p = 2^20 + 1",
+   "input": {
+    "kind": "lcg",
+    "len": 10,
+    "seed": 12345
+   },
+   "p": 1048577,
+   "q": 1048576,
+   "method": 1,
+   "out_cap": 100,
+   "expect": {
+    "status": -1
+   }
+  },
+  {
+   "name": "err-q-over-2^20",
+   "doc": "q = 2^20 + 1",
+   "input": {
+    "kind": "lcg",
+    "len": 10,
+    "seed": 12345
+   },
+   "p": 1048577,
+   "q": 1048577,
+   "method": 1,
+   "out_cap": 100,
+   "expect": {
+    "status": -1
+   }
+  },
+  {
+   "name": "err-input-over-ceiling",
+   "doc": "2^21 + 1 input frames",
+   "input": {
+    "kind": "constant",
+    "len": 2097153,
+    "value": 0
+   },
+   "p": 1,
+   "q": 1,
+   "method": 1,
+   "out_cap": 4194304,
+   "expect": {
+    "status": -1
+   }
+  },
+  {
+   "name": "err-bad-method",
+   "doc": "method 2",
+   "input": {
+    "kind": "lcg",
+    "len": 100,
+    "seed": 12345
+   },
+   "p": 1,
+   "q": 1,
+   "method": 2,
+   "out_cap": 100,
+   "expect": {
+    "status": -1
+   }
+  },
+  {
+   "name": "err-bad-method-max",
+   "doc": "method 2^32 - 1",
+   "input": {
+    "kind": "lcg",
+    "len": 100,
+    "seed": 12345
+   },
+   "p": 1,
+   "q": 1,
+   "method": 4294967295,
+   "out_cap": 100,
+   "expect": {
+    "status": -1
+   }
+  },
+  {
+   "name": "err-output-too-small",
+   "doc": "output buffer one frame short",
+   "input": {
+    "kind": "lcg",
+    "len": 100,
+    "seed": 12345
+   },
+   "p": 1,
+   "q": 1,
+   "method": 1,
+   "out_cap": 99,
+   "expect": {
+    "status": -2
+   }
+  },
+  {
+   "name": "err-output-zero-cap",
+   "doc": "output buffer of zero frames",
+   "input": {
+    "kind": "lcg",
+    "len": 100,
+    "seed": 12345
+   },
+   "p": 1,
+   "q": 1,
+   "method": 1,
+   "out_cap": 0,
+   "expect": {
+    "status": -2
+   }
+  },
+  {
+   "name": "err-order-params-before-method",
+   "doc": "bad parameters and bad method: parameters win",
+   "input": {
+    "kind": "lcg",
+    "len": 100,
+    "seed": 12345
+   },
+   "p": 0,
+   "q": 1,
+   "method": 7,
+   "out_cap": 0,
+   "expect": {
+    "status": -1
+   }
+  },
+  {
+   "name": "err-order-method-before-capacity",
+   "doc": "bad method and a short buffer: method wins",
+   "input": {
+    "kind": "lcg",
+    "len": 100,
+    "seed": 12345
+   },
+   "p": 1,
+   "q": 1,
+   "method": 7,
+   "out_cap": 0,
+   "expect": {
+    "status": -1
+   }
+  },
+  {
+   "name": "ok-output-exact-capacity",
+   "doc": "output buffer exactly the output length",
+   "input": {
+    "kind": "lcg",
+    "len": 100,
+    "seed": 12345
+   },
+   "p": 1,
+   "q": 1,
+   "method": 1,
+   "out_cap": 100,
+   "expect": {
+    "status": 100,
+    "sha256": "ccd925ba3523660598d4175bff5b18bcbc4e9e4dcd607ab34b23deadcb904e91"
+   }
+  }
+ ],
+ "out_len": [
+  {
+   "in_len": 1,
+   "p": 1,
+   "q": 1,
+   "expect": 1
+  },
+  {
+   "in_len": 1000,
+   "p": 1,
+   "q": 1,
+   "expect": 1000
+  },
+  {
+   "in_len": 1000,
+   "p": 3,
+   "q": 2,
+   "expect": 667
+  },
+  {
+   "in_len": 1000,
+   "p": 2,
+   "q": 3,
+   "expect": 1499
+  },
+  {
+   "in_len": 48000,
+   "p": 4,
+   "q": 1,
+   "expect": 12000
+  },
+  {
+   "in_len": 48000,
+   "p": 1,
+   "q": 4,
+   "expect": 191997
+  },
+  {
+   "in_len": 2,
+   "p": 1,
+   "q": 3,
+   "expect": 4
+  },
+  {
+   "in_len": 3,
+   "p": 1,
+   "q": 3,
+   "expect": 7
+  },
+  {
+   "in_len": 1,
+   "p": 4,
+   "q": 1,
+   "expect": 1
+  },
+  {
+   "in_len": 480000,
+   "p": 479999,
+   "q": 959999,
+   "expect": 960000
+  },
+  {
+   "in_len": 480000,
+   "p": 1,
+   "q": 4,
+   "expect": 1919997
+  },
+  {
+   "in_len": 2097152,
+   "p": 4,
+   "q": 1,
+   "expect": 524288
+  },
+  {
+   "in_len": 2097152,
+   "p": 1,
+   "q": 4,
+   "expect": 8388605
+  },
+  {
+   "in_len": 0,
+   "p": 1,
+   "q": 1,
+   "expect": -1
+  },
+  {
+   "in_len": 2097153,
+   "p": 1,
+   "q": 1,
+   "expect": -1
+  },
+  {
+   "in_len": 10,
+   "p": 5,
+   "q": 1,
+   "expect": -1
+  },
+  {
+   "in_len": 10,
+   "p": 1,
+   "q": 5,
+   "expect": -1
+  },
+  {
+   "in_len": 10,
+   "p": 1048577,
+   "q": 1048576,
+   "expect": -1
+  }
+ ],
+ "canonicalisation": {
+  "f32_to_s16": {
+   "rule": "scale by 32768, add one half, floor, clamp to [-32768, 32767]; NaN becomes 0",
+   "cases": [
+    {
+     "name": "zero",
+     "bits": 0,
+     "expect": 0
+    },
+    {
+     "name": "negative-zero",
+     "bits": 2147483648,
+     "expect": 0
+    },
+    {
+     "name": "full-scale-positive-clamps",
+     "bits": 1065353216,
+     "expect": 32767
+    },
+    {
+     "name": "full-scale-negative",
+     "bits": 3212836864,
+     "expect": -32768
+    },
+    {
+     "name": "half",
+     "bits": 1056964608,
+     "expect": 16384
+    },
+    {
+     "name": "minus-half",
+     "bits": 3204448256,
+     "expect": -16384
+    },
+    {
+     "name": "one-lsb",
+     "bits": 939524096,
+     "expect": 1
+    },
+    {
+     "name": "minus-one-lsb",
+     "bits": 3087007744,
+     "expect": -1
+    },
+    {
+     "name": "half-lsb-rounds-up",
+     "bits": 931135488,
+     "expect": 1
+    },
+    {
+     "name": "minus-half-lsb-rounds-toward-positive",
+     "bits": 3078619136,
+     "expect": 0
+    },
+    {
+     "name": "just-below-half-lsb",
+     "bits": 931135487,
+     "expect": 0
+    },
+    {
+     "name": "just-below-minus-half-lsb",
+     "bits": 3078619135,
+     "expect": 0
+    },
+    {
+     "name": "just-past-minus-half-lsb",
+     "bits": 3078619137,
+     "expect": -1
+    },
+    {
+     "name": "above-full-scale",
+     "bits": 1073741824,
+     "expect": 32767
+    },
+    {
+     "name": "below-minus-full-scale",
+     "bits": 3221225472,
+     "expect": -32768
+    },
+    {
+     "name": "huge",
+     "bits": 2139095039,
+     "expect": 32767
+    },
+    {
+     "name": "huge-negative",
+     "bits": 4286578687,
+     "expect": -32768
+    },
+    {
+     "name": "positive-infinity",
+     "bits": 2139095040,
+     "expect": 32767
+    },
+    {
+     "name": "negative-infinity",
+     "bits": 4286578688,
+     "expect": -32768
+    },
+    {
+     "name": "quiet-nan",
+     "bits": 2143289344,
+     "expect": 0
+    },
+    {
+     "name": "negative-nan",
+     "bits": 4290772993,
+     "expect": 0
+    },
+    {
+     "name": "denormal",
+     "bits": 1,
+     "expect": 0
+    },
+    {
+     "name": "negative-denormal",
+     "bits": 2147483649,
+     "expect": 0
+    },
+    {
+     "name": "just-under-one",
+     "bits": 1065353215,
+     "expect": 32767
+    },
+    {
+     "name": "just-over-minus-one",
+     "bits": 3212836863,
+     "expect": -32768
+    }
+   ]
+  },
+  "downmix": {
+   "rule": "(left + right + 1) >> 1 on the s16 values, arithmetic shift",
+   "cases": [
+    {
+     "left": 0,
+     "right": 0,
+     "expect": 0
+    },
+    {
+     "left": 1,
+     "right": 0,
+     "expect": 1
+    },
+    {
+     "left": 0,
+     "right": 1,
+     "expect": 1
+    },
+    {
+     "left": -1,
+     "right": 0,
+     "expect": 0
+    },
+    {
+     "left": 0,
+     "right": -1,
+     "expect": 0
+    },
+    {
+     "left": -1,
+     "right": -1,
+     "expect": -1
+    },
+    {
+     "left": 1,
+     "right": 1,
+     "expect": 1
+    },
+    {
+     "left": 1,
+     "right": 2,
+     "expect": 2
+    },
+    {
+     "left": -1,
+     "right": -2,
+     "expect": -1
+    },
+    {
+     "left": -2,
+     "right": -1,
+     "expect": -1
+    },
+    {
+     "left": 32767,
+     "right": 32767,
+     "expect": 32767
+    },
+    {
+     "left": -32768,
+     "right": -32768,
+     "expect": -32768
+    },
+    {
+     "left": 32767,
+     "right": -32768,
+     "expect": 0
+    },
+    {
+     "left": -32768,
+     "right": 32767,
+     "expect": 0
+    },
+    {
+     "left": 32767,
+     "right": 32766,
+     "expect": 32767
+    },
+    {
+     "left": -32768,
+     "right": -32767,
+     "expect": -32767
+    }
+   ]
+  }
+ },
+ "scenarios": [
+  {
+   "name": "repeat-200",
+   "doc": "200 renders of one vector in one instance give identical bytes",
+   "kind": "repeat",
+   "vector": "up3/2-cr",
+   "times": 200
+  },
+  {
+   "name": "growth-then-repeat",
+   "doc": "eight 2^21-frame renders in one instance, then a small vector still matches",
+   "kind": "growth",
+   "big": "big-cr",
+   "times": 8,
+   "then": "up3/2-cr"
+  },
+  {
+   "name": "trap-output-out-of-bounds",
+   "doc": "an output pointer past the end of memory traps; the host must report failure, not a wrong result. WebAssembly hosts only: the same call natively would be undefined",
+   "kind": "trap",
+   "wasm_only": true,
+   "in_len": 1000,
+   "p": 1,
+   "q": 1,
+   "method": 1
+  }
+ ]
+}
