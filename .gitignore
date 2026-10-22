@@ -8,3 +8,11 @@ GLOSSARY*.md
 *.md.local
 .DS_Store
 .scratch/
+
+# Build output and dependencies
+target/
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts

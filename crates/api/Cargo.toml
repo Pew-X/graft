@@ -1,0 +1,16 @@
+[package]
+name = "graft-api"
+description = "HTTP layer, OpenAPI generation, rate limits, admin routes and configuration."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+graft-domain.workspace = true
+graft-storage.workspace = true
+graft-render-host.workspace = true
+graft-events.workspace = true
+
+[lints]
+workspace = true
