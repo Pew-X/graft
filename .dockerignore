@@ -10,3 +10,6 @@ node_modules
 *.md
 !README.md
 !ARCHITECTURE.md
+.env*
+*.pem
+*.key

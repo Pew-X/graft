@@ -14,6 +14,7 @@ One deployable Rust service plus a Next.js UI, built as a Cargo workspace. The a
 | `graft-render-host` | domain | runs the canonical `.wasm` under wasmtime |
 | `graft-events` | domain | outbox, relay, consumer, rollups behind an event-sink trait |
 | `graft-vectors` | render, render-host | the renderer vector table: loader, generators, and the native, wasmtime and render-host harnesses (test support; nothing ships it) |
+| `graft-fly-check` | render-host, vectors | throwaway check service for the first deployment (see "Check on the target host"); removed by the deploy pipeline ticket |
 | `graft-api` | domain, storage, render-host, events | HTTP layer, OpenAPI, rate limits, admin routes, configuration |
 
 Nothing depends on `graft-api`. `graft-render` is deliberately kept apart: the renderer is one artefact that must build alone, with no dependencies, to a reproducible `.wasm`.
@@ -134,6 +135,12 @@ Cold start on the runner: load, compile and pin check 35.7 ms; first render 0.11
 
 Process peak resident memory over the whole run: about 29 MB. What this sizes: a render is milliseconds and a few MiB; the 1,000,000,000 fuel budget is about 2.4 times the most expensive render the renderer will accept, and the 64 MiB limit is about three times the renderer's own worst case. These are single-threaded timings on a shared runner, not throughput or scale claims, and the numbers on the target host are added by ticket 03b.
 
+### Check on the target host (ticket 03b)
+
+`Dockerfile`, `fly.toml` and the `graft-fly-check` crate are a throwaway check for the first deployment, removed by the deploy pipeline ticket. At start-up the service loads the artefact through the render host (so the pin is checked), replays the whole vector table, runs the five worst-case renders, and records the result once. It serves only `GET /health` (200 when every check passed, 503 otherwise) and `GET /results` (the recorded document: renderer identity, region and app name from the platform, CPU count and the host's total memory, cold-start time, the checks and any failures, the measurements, peak resident memory). It looks only at the first line of a request (reading at most 8 KiB, within 3 seconds, and discarding the rest), answers anything but `GET` with 405, refuses connections beyond 32 at once with 503, serves a start-up failure as valid JSON that names no file paths, and never passes anything from the network to the renderer. Its failure modes (a line past the cap, a client dripping bytes, a connection closed mid-line, non-UTF-8 input, a start-up failure) have unit tests; the container CI job exercises GET, POST and an unknown path.
+
+The `check image (container)` CI job builds the image and runs it at the target size (512 MB, one CPU), reads `/results` and fails on any vector failure, so the container itself is checked on Linux x86_64 before it is deployed. In one CI run, 110 of 110 checks passed in the container; load, compile and pin check took 29.8 ms; the costliest render (1.92M output frames) took a median of 17.4 ms; and the process peaked at about 30 MB resident. The container's CPU and memory limits do not show in `/proc/meminfo` (it reported the runner's 8 GB), so that field is the host's, not the limit. That is not the same machine as a Fly VM: the numbers on Fly, and whether 512 MB is enough there, are recorded after the builder deploys it (the checklist is at the top of `fly.toml`).
+
 ## Determinism evidence
 
 What is checked, where, and what is not. Everything here compares the output hash of every vector in `fixtures/vectors/vectors.json` (and, for five vectors, the output bytes) with the table; a difference on any host fails the build and names the vector and the host.
@@ -164,9 +171,3 @@ Not checked:
 ## Data model, concurrency, events, operations, security
 
 _Not written yet. Tickets 05 onwards; consolidated by ticket 37 write it._
-
-### Check on the target host (ticket 03b)
-
-`Dockerfile`, `fly.toml` and the `graft-fly-check` crate are a throwaway check for the first deployment, removed by the deploy pipeline ticket. At start-up the service loads the artefact through the render host (so the pin is checked), replays the whole vector table, runs the five worst-case renders, and records the result once. It serves only `GET /health` (200 when every check passed, 503 otherwise) and `GET /results` (the recorded document: renderer identity, region and app name from the platform, CPU count and memory, cold-start time, the checks and any failures, the measurements, peak resident memory). It reads a request only as far as its first line, answers anything but `GET` with 405, and never passes anything from the network to the renderer.
-
-The `check image (container)` CI job builds the image and runs it at the target size (512 MB, one CPU), reads `/results` and fails on any vector failure, so the container itself is checked on Linux x86_64 before it is deployed. In one CI run, 110 of 110 checks passed in the container; load, compile and pin check took 29.8 ms; the costliest render (1.92M output frames) took a median of 17.4 ms; and the process peaked at about 30 MB resident. The container's CPU and memory limits do not show in `/proc/meminfo` (it reported the runner's 8 GB), so that field is the host's, not the limit. That is not the same machine as a Fly VM: the numbers on Fly, and whether 512 MB is enough there, are recorded after the builder deploys it (the checklist is at the top of `fly.toml`).
