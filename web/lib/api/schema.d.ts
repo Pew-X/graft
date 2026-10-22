@@ -169,6 +169,8 @@ export interface components {
        * @description How many publications were flipped from this one, counted from publications data.
        */
       flipped_count: number;
+      /** @description Title as typed. */
+      heading: string;
       /** @description Public id of the publication. */
       id: string;
       /** @description "source" or "flip". */
@@ -177,8 +179,6 @@ export interface components {
       lines: components["schemas"]["LineView"][];
       /** @description Id of the parent publication, absent for a source. */
       parent_id?: string | null;
-      /** @description Title as typed. */
-      title: string;
     };
   };
   responses: never;

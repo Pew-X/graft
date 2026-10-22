@@ -83,6 +83,7 @@ pub struct StageView {
     /// "source" or "flip".
     pub kind: String,
     /// Title as typed.
+    #[serde(rename = "heading")]
     pub title: String,
     /// Maker's name as typed. Plain text, never a handle.
     pub author: String,

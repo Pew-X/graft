@@ -291,6 +291,10 @@
             "minimum": 0,
             "type": "integer"
           },
+          "heading": {
+            "description": "Title as typed.",
+            "type": "string"
+          },
           "id": {
             "description": "Public id of the publication.",
             "type": "string"
@@ -312,16 +316,12 @@
               "string",
               "null"
             ]
-          },
-          "title": {
-            "description": "Title as typed.",
-            "type": "string"
           }
         },
         "required": [
           "id",
           "kind",
-          "title",
+          "heading",
           "author",
           "created_at_ms",
           "flipped_count",
