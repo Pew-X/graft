@@ -129,6 +129,7 @@ impl Harness {
             title: "slower".into(),
             author: "jo".into(),
             evidence: None,
+            manage_key_hash: None,
         };
         self.db
             .store

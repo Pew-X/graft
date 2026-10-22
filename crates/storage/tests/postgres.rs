@@ -39,6 +39,7 @@ fn source(key: &str, audio: u8) -> NewPublication {
         title: "door".into(),
         author: "pat".into(),
         evidence: Some(evidence()),
+        manage_key_hash: None,
     }
 }
 
@@ -66,6 +67,7 @@ fn flip(key: &str, parent: &NewPublication, out: u8) -> NewPublication {
         title: "slower".into(),
         author: "jo".into(),
         evidence: None,
+        manage_key_hash: None,
     }
 }
 

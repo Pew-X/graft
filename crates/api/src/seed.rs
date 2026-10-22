@@ -82,6 +82,7 @@ pub async fn seed_source(
         title: source.title,
         author: source.author,
         evidence: Some(source.evidence),
+        manage_key_hash: None,
     };
     match store.create_publication(&new).await? {
         Outcome::KeyConflict => Err(SeedError::KeyConflict(source.key)),
