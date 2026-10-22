@@ -180,18 +180,18 @@ jobs:
           pnpm audit --audit-level high
           pnpm test
 
-  fly-check-image:
+  host-check-image:
     name: check image (container)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build the check image
-        run: docker build -t graft-fly-check .
+        run: docker build -t graft-host-check .
       - name: Run it at the target size (512 MB, one CPU) and read its own results
         shell: bash
         run: |
-          docker run -d --name check --memory 512m --cpus 1 -p 8080:8080 graft-fly-check
+          docker run -d --name check --memory 512m --cpus 1 -p 8080:8080 graft-host-check
           for i in $(seq 1 60); do
             curl -fsS localhost:8080/health >/dev/null 2>&1 && break
             sleep 1

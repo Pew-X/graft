@@ -12,7 +12,7 @@ export const ALLOWED = {
   "graft-render-host": ["graft-domain"],
   "graft-events": ["graft-domain"],
   "graft-vectors": ["graft-render", "graft-render-host"],
-  "graft-fly-check": ["graft-render-host", "graft-vectors"],
+  "graft-host-check": ["graft-render-host", "graft-vectors"],
   "graft-api": ["graft-domain", "graft-storage", "graft-render-host", "graft-events"],
 };
 
@@ -23,7 +23,7 @@ export const ALLOWED = {
  */
 export const EXTERNAL_ONLY = {
   "graft-render-host": ["sha2", "thiserror", "wasmtime", "wat"],
-  "graft-fly-check": ["serde_json"],
+  "graft-host-check": ["serde_json"],
 };
 
 /** @returns {string[]} one message per violation */

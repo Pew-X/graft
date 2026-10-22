@@ -1,4 +1,4 @@
-//! Worst-case render measurements, shared by the `render-measure` command and the Fly check service.
+//! Worst-case render measurements, shared by the `render-measure` command and the host check service.
 
 use graft_render_host::{Method, Ratio, Render, RenderHost};
 use std::time::{Duration, Instant};
