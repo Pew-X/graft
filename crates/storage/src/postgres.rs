@@ -19,9 +19,31 @@ pub enum StoreError {
     /// A stored row does not describe a valid record; the data is damaged.
     #[error("stored data is inconsistent: {0}")]
     Corrupt(String),
+    /// The database aborted the transaction because concurrent work conflicted (serialization
+    /// failure or deadlock). The work did not happen; trying again is safe.
+    #[error("the transaction conflicted with concurrent work")]
+    Serialization,
+    /// A freshly chosen public id was already taken. Choose another and try again.
+    #[error("the public id is already in use")]
+    IdCollision,
+    /// Conflicts persisted through every attempt. Nothing was written; the caller may retry with
+    /// the same retry key.
+    #[error("the transaction kept conflicting with concurrent work")]
+    RetryExhausted,
 }
 
-fn db(e: sqlx::Error) -> StoreError {
+pub(crate) fn db(e: sqlx::Error) -> StoreError {
+    if let sqlx::Error::Database(d) = &e {
+        match d.code().as_deref() {
+            // 40001 serialization_failure, 40P01 deadlock_detected
+            Some("40001" | "40P01") => return StoreError::Serialization,
+            // 23505 unique_violation on the primary key of publications: a random id collided.
+            Some("23505") if d.constraint() == Some("publications_pkey") => {
+                return StoreError::IdCollision;
+            }
+            _ => {}
+        }
+    }
     // The driver's message can name the host; keep only the error class.
     let class = match &e {
         sqlx::Error::Database(d) => format!("{} ({})", d.message(), d.code().unwrap_or_default()),
@@ -52,6 +74,8 @@ pub struct NewPublication {
     pub author: String,
     /// Declared evidence for a source.
     pub evidence: Option<SourceEvidence>,
+    /// SHA-256 of the maker's manage key; the key itself is never stored. `None` for seeded sources.
+    pub manage_key_hash: Option<[u8; 32]>,
 }
 
 /// What a create call did.
@@ -68,7 +92,8 @@ pub enum Outcome {
 /// The Postgres store.
 #[derive(Clone)]
 pub struct Store {
-    pool: PgPool,
+    pub(crate) pool: PgPool,
+    pub(crate) gate: std::sync::Arc<dyn crate::gate::Gate>,
 }
 
 const STAGE_COLUMNS: &str = "p.id AS pub_id, c.id AS content_id, p.title, p.author, \
@@ -87,7 +112,7 @@ impl Store {
             .connect(url)
             .await
             .map_err(db)?;
-        Ok(Self { pool })
+        Ok(Self::from_pool(pool))
     }
 
     /// A store that connects on first use, so building it never touches the network.
@@ -97,13 +122,23 @@ impl Store {
             .acquire_timeout(std::time::Duration::from_secs(3))
             .connect_lazy(url)
             .map_err(db)?;
-        Ok(Self { pool })
+        Ok(Self::from_pool(pool))
     }
 
     /// Wrap an existing pool.
     #[must_use]
     pub fn from_pool(pool: PgPool) -> Self {
-        Self { pool }
+        Self {
+            pool,
+            gate: std::sync::Arc::new(crate::gate::NoGate),
+        }
+    }
+
+    /// Replace the gate that test code uses to hold transactions at named points.
+    #[must_use]
+    pub fn with_gate(mut self, gate: std::sync::Arc<dyn crate::gate::Gate>) -> Self {
+        self.gate = gate;
+        self
     }
 
     /// Apply every migration not yet applied.
@@ -211,7 +246,7 @@ impl Store {
     }
 }
 
-async fn insert_record(
+pub(crate) async fn insert_record(
     tx: &mut Transaction<'_, Postgres>,
     r: &ContentRecord,
 ) -> Result<(), StoreError> {
@@ -247,14 +282,14 @@ async fn insert_record(
     Ok(())
 }
 
-async fn insert_publication(
+pub(crate) async fn insert_publication(
     tx: &mut Transaction<'_, Postgres>,
     n: &NewPublication,
 ) -> Result<bool, StoreError> {
     let ev = n.evidence.as_ref();
     let row = sqlx::query(
         "INSERT INTO publications (id, content_id, retry_key, title, author, licence, work_title, \
-           work_author, work_url) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) \
+           work_author, work_url, manage_key_hash) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) \
          ON CONFLICT (retry_key) DO NOTHING RETURNING id",
     )
     .bind(n.id.as_str())
@@ -266,6 +301,7 @@ async fn insert_publication(
     .bind(ev.and_then(|e| e.work_title.as_deref()))
     .bind(ev.and_then(|e| e.work_author.as_deref()))
     .bind(ev.and_then(|e| e.url.as_deref()))
+    .bind(n.manage_key_hash.as_ref().map(<[u8; 32]>::as_slice))
     .fetch_optional(&mut **tx)
     .await
     .map_err(db)?;
