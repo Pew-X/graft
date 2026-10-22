@@ -38,7 +38,7 @@ export function lintMessage(message) {
 }
 
 function commitsInRange(range) {
-  const raw = execFileSync("git", ["log", "--format=%H%x00%B%x01", range], { encoding: "utf8" });
+  const raw = execFileSync("git", ["log", "--no-merges", "--format=%H%x00%B%x01", range], { encoding: "utf8" });
   return raw
     .split("\x01")
     .map((chunk) => chunk.replace(/^\n/, ""))

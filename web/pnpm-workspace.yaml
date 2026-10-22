@@ -1,2 +1,9 @@
 allowBuilds:
   unrs-resolver: false
+
+# braces <=3.0.3 (stack exhaustion on deeply nested glob patterns). No patched
+# release exists on npm. Reached only through eslint-config-next in dev tooling,
+# never from user input or the shipped bundle. Remove when a fix is published.
+auditConfig:
+  ignoreGhsas:
+    - GHSA-vfj7-8cjw-p6xm
