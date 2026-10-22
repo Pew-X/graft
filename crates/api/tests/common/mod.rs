@@ -88,6 +88,15 @@ impl Harness {
 
     /// A harness whose configuration is adjusted by `tweak` before the service is built.
     pub async fn configured(tweak: impl FnOnce(&mut Config)) -> Self {
+        Self::configured_with_gate(tweak, |_| Arc::new(graft_storage::NoGate)).await
+    }
+
+    /// As `configured`, with a test gate on the store; `gate` receives the database pool so it can
+    /// make conflicting writes from separate connections.
+    pub async fn configured_with_gate(
+        tweak: impl FnOnce(&mut Config),
+        gate: impl FnOnce(sqlx::PgPool) -> Arc<dyn graft_storage::Gate>,
+    ) -> Self {
         let db = TestDb::create().await;
         let blobs = Arc::new(MemoryBlobStore::default());
         let mut config =
@@ -96,7 +105,8 @@ impl Harness {
         tweak(&mut config);
         let limits = config.limits.clone();
         let renderer: Arc<dyn Render> = host();
-        let state = AppState::new(&config, db.store.clone(), blobs.clone(), renderer);
+        let store = db.store.clone().with_gate(gate(db.store.pool().clone()));
+        let state = AppState::new(&config, store, blobs.clone(), renderer);
         let metrics = state.metrics.clone();
         let app = router(state, &config);
         Self {
@@ -190,6 +200,13 @@ impl Harness {
         (parts.status, parts.headers, json)
     }
 
+    /// An owned handle for spawning concurrent requests.
+    pub fn client(&self) -> Client {
+        Client {
+            app: self.app.clone(),
+        }
+    }
+
     pub async fn count(&self, table: &'static str) -> i64 {
         sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT count(*) FROM {table}")))
             .fetch_one(self.db.store.pool())
@@ -250,4 +267,48 @@ pub fn is_problem(headers: &axum::http::HeaderMap) -> bool {
     headers
         .get(header::CONTENT_TYPE)
         .is_some_and(|v| v == "application/problem+json")
+}
+
+/// A cloneable, 'static handle to the router, so requests can run in spawned tasks.
+#[derive(Clone)]
+pub struct Client {
+    app: Router,
+}
+
+impl Client {
+    pub async fn post(
+        &self,
+        uri: &str,
+        body: &Value,
+    ) -> (StatusCode, axum::http::HeaderMap, Value) {
+        let request = Request::builder()
+            .method("POST")
+            .uri(uri)
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(body.to_string()))
+            .expect("request");
+        let response = self.app.clone().oneshot(request).await.expect("response");
+        let (parts, body) = response.into_parts();
+        let bytes = body.collect().await.expect("body").to_bytes();
+        let json = serde_json::from_slice(&bytes)
+            .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&bytes).into()));
+        (parts.status, parts.headers, json)
+    }
+
+    /// Post, and on a 503 `retry-later` send the same request again, as a client is told to.
+    pub async fn post_retrying(
+        &self,
+        uri: &str,
+        body: &Value,
+        tries: u32,
+    ) -> (StatusCode, Value, u32) {
+        for attempt in 1..=tries {
+            let (status, _, json) = self.post(uri, body).await;
+            if status != StatusCode::SERVICE_UNAVAILABLE || attempt == tries {
+                return (status, json, attempt);
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        unreachable!("tries is at least 1")
+    }
 }
