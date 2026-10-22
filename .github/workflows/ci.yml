@@ -19,6 +19,42 @@ env:
   CARGO_INCREMENTAL: "0"
 
 jobs:
+  # Decides which of the slow jobs a pull request can affect, so the others are skipped (a skipped
+  # job counts as passing for a required check). Pushes to dev, staging and main, and manual runs,
+  # always run everything: the evidence for what ships is never skipped.
+  changes:
+    name: what changed
+    runs-on: ubuntu-24.04
+    outputs:
+      renderer: ${{ steps.f.outputs.renderer }}
+      image: ${{ steps.f.outputs.image }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - id: f
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.base_ref }}
+        run: |
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "renderer=true" >> "$GITHUB_OUTPUT"; echo "image=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          changed=$(git diff --name-only "origin/$BASE...HEAD")
+          printf '%s\n' "$changed"
+          # Anything that can change a renderer hash, the vector evidence, or the playback test.
+          if printf '%s\n' "$changed" | grep -E -q '^(crates/(render|render-host|vectors)/|fixtures/|tools/vectors/|scripts/|Cargo\.(toml|lock)|rust-toolchain\.toml|web/(lib/playback|e2e|package\.json|pnpm-lock\.yaml|playwright\.config\.ts)|\.github/workflows/ci\.yml)'; then
+            echo "renderer=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "renderer=false" >> "$GITHUB_OUTPUT"
+          fi
+          # The throwaway check image and what it is built from.
+          if printf '%s\n' "$changed" | grep -E -q '^(Dockerfile|\.dockerignore|crates/(host-check|render|render-host|vectors)/|fixtures/|Cargo\.(toml|lock)|rust-toolchain\.toml|\.github/workflows/ci\.yml)'; then
+            echo "image=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "image=false" >> "$GITHUB_OUTPUT"
+          fi
+
   repo:
     name: repo hygiene and scripts
     runs-on: ubuntu-24.04
@@ -104,6 +140,8 @@ jobs:
 
   renderer:
     name: renderer
+    needs: changes
+    if: needs.changes.outputs.renderer == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -144,6 +182,8 @@ jobs:
 
   cross-host-linux:
     name: cross-host vectors (ubuntu-24.04)
+    needs: changes
+    if: needs.changes.outputs.renderer == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     # The image carries the browsers' system libraries, which otherwise take ~9 minutes to install.
@@ -197,8 +237,10 @@ jobs:
 
   cross-host-macos:
     name: cross-host vectors (macos-15)
-    # macOS minutes cost ten times Linux minutes, so this runs after merges and on demand.
-    if: github.event_name != 'pull_request'
+    # macOS minutes cost ten times Linux minutes, so this runs only when started by hand (Actions,
+    # "Run workflow"): before a release, or when a change could behave differently on arm64. The
+    # builder's own machine is macOS arm64 and runs the same tests locally.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: macos-15
     timeout-minutes: 25
     defaults:
@@ -232,6 +274,8 @@ jobs:
 
   host-check-image:
     name: check image (container)
+    needs: changes
+    if: needs.changes.outputs.image == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:

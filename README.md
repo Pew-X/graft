@@ -64,7 +64,7 @@ cargo run -q -p graft-vectors --bin vectors-replay -- --help
 
 `dev` is the working branch. Branch from `dev`, open a pull request into `dev` (squashed, plain conventional commit, CI green). `staging` and `main` only receive promotion pull requests from the branch before them. Enable the local hooks once with `git config core.hooksPath .githooks`: they check formatting and commit messages only, and finish in about a second.
 
-Checks that run on every pull request: rustfmt, clippy with warnings as errors, tests, the crate dependency direction (`scripts/check-crate-graph.mjs`), cargo-deny, cargo-audit, a secret scan, TypeScript strict, ESLint, Prettier, a production build, `pnpm audit`, and repository hygiene (`scripts/check-repo.mjs`).
+`sh scripts/precheck.sh` runs the fast checks locally in about half a minute (`--full` adds the whole test suite): run it before pushing, because a CI run costs ten minutes. The slow jobs are skipped on a pull request that cannot affect them (see ARCHITECTURE.md, "Determinism evidence"). Checks that run on pull requests: rustfmt, clippy with warnings as errors, tests, the crate dependency direction (`scripts/check-crate-graph.mjs`), cargo-deny, cargo-audit, a secret scan, TypeScript strict, ESLint, Prettier, a production build, `pnpm audit`, and repository hygiene (`scripts/check-repo.mjs`).
 
 ## Licence
 
