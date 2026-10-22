@@ -101,16 +101,54 @@ jobs:
             target/wasm32-unknown-unknown/wasm/graft_render.wasm | tee measure.txt
           { echo '### Render host measurements'; echo '```'; cat measure.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
-  cross-host:
-    name: cross-host vectors (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+  cross-host-linux:
+    name: cross-host vectors (ubuntu-24.04)
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
-    strategy:
-      fail-fast: false
-      matrix:
-        # macOS minutes cost ten times Linux minutes, so macOS arm64 runs after merges to the
-        # long-lived branches and on demand, not on every pull request.
-        os: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-24.04"]' || '["ubuntu-24.04","macos-14"]') }}
+    # The image carries the browsers' system libraries, which otherwise take ~9 minutes to install.
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Tools the container lacks (C linker, curl)
+        run: apt-get update -qq && apt-get install -y -qq --no-install-recommends build-essential curl ca-certificates git
+      - name: Install the pinned toolchain
+        run: |
+          curl -sSfL https://sh.rustup.rs | sh -s -- -y --default-toolchain none --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          "$HOME/.cargo/bin/rustup" toolchain install
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: tools/vectors/package.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: tools/vectors/pnpm-lock.yaml
+      - name: Checks and tests
+        env:
+          HOME: /root
+        run: |
+          sh scripts/build-wasm.sh
+          cargo build -q -p graft-vectors --bin vectors-replay
+          art=target/wasm32-unknown-unknown/wasm/graft_render.wasm
+          for host in wasmtime render-host; do target/debug/vectors-replay --host "$host" "$art" | tail -1; done
+          target/debug/vectors-replay --host native | tail -1
+          cargo test -p graft-vectors
+          cd tools/vectors
+          pnpm install --frozen-lockfile
+          pnpm typecheck
+          pnpm format:check
+          pnpm audit --audit-level high
+          pnpm test
+
+  cross-host-macos:
+    name: cross-host vectors (macos-14)
+    # macOS minutes cost ten times Linux minutes, so this runs after merges and on demand.
+    if: github.event_name != 'pull_request'
+    runs-on: macos-14
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: tools/vectors
@@ -129,28 +167,19 @@ jobs:
         run: rustup toolchain install
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: pnpm install --frozen-lockfile
-      - run: pnpm typecheck
-      - run: pnpm format:check
-      - run: pnpm audit --audit-level high
-      - name: Browsers (Chromium, Firefox, WebKit)
-        run: pnpm exec playwright install --with-deps chromium firefox webkit
-      - name: Build the artefact and the replay command
+      - run: pnpm exec playwright install chromium firefox webkit
+      - name: Checks and tests
         working-directory: .
         run: |
           sh scripts/build-wasm.sh
           cargo build -q -p graft-vectors --bin vectors-replay
-      - name: Replay command, wasmtime and render host
-        working-directory: .
-        run: |
           art=target/wasm32-unknown-unknown/wasm/graft_render.wasm
-          target/debug/vectors-replay --host wasmtime "$art" | tail -1
-          target/debug/vectors-replay --host render-host "$art" | tail -1
+          for host in wasmtime render-host; do target/debug/vectors-replay --host "$host" "$art" | tail -1; done
           target/debug/vectors-replay --host native | tail -1
-      - name: Rust harnesses (native, wasmtime, render host)
-        working-directory: .
-        run: cargo test -p graft-vectors
-      - name: Node (V8), TypeScript port, Chromium, Firefox, WebKit
-        run: pnpm test
+          cargo test -p graft-vectors
+          cd tools/vectors
+          pnpm typecheck
+          pnpm test
 
   supply-chain:
     name: supply chain
