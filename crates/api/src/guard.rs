@@ -181,6 +181,16 @@ impl RateLimiter {
         self.touch(class, ip, now, true)
     }
 
+    /// Take back the most recent use by `ip`: for a use that is counted when it starts and
+    /// forgiven when it turns out well.
+    pub fn release(&self, class: Class, ip: IpAddr) {
+        if let Ok(mut seen) = self.seen.lock()
+            && let Some(q) = seen.get_mut(&(class, normalise(ip)))
+        {
+            q.pop_back();
+        }
+    }
+
     /// Whether `ip` is over its limit, without counting this use.
     pub fn check(&self, class: Class, ip: IpAddr, now: f64) -> Result<(), u32> {
         self.touch(class, ip, now, false)
@@ -218,7 +228,12 @@ impl RateLimiter {
         if !seen.contains_key(&key) && seen.len() >= MAX_TRACKED {
             self.prune(&mut seen, now);
             if seen.len() >= MAX_TRACKED {
-                return Ok(());
+                // Guessing the operator secret must never go unlimited because the table is full.
+                return if class == Class::AdminFailure {
+                    Err(60)
+                } else {
+                    Ok(())
+                };
             }
         }
         let q = seen.entry(key).or_default();
@@ -309,6 +324,35 @@ impl SessionVelocity {
             rate: g.ingest_session_events,
             seen: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// Count events for several sessions, or refuse with the seconds to wait. All or nothing:
+    /// nothing is counted unless every session has room.
+    pub fn try_add_all(&self, per_session: &[(&str, usize)], now: f64) -> Result<(), u32> {
+        let window = self.rate.window_secs as f64;
+        let limit = self.rate.count as usize;
+        let Ok(mut seen) = self.seen.lock() else {
+            return Ok(());
+        };
+        for (session, n) in per_session {
+            if let Some(q) = seen.get_mut(*session) {
+                expire(q, now, window);
+                if q.len() + n > limit {
+                    let oldest = q.front().copied().unwrap_or(now);
+                    let wait = (oldest + window - now)
+                        .ceil()
+                        .clamp(1.0, f64::from(u32::MAX));
+                    return Err(wait as u32);
+                }
+            } else if *n > limit {
+                return Err(window.ceil() as u32);
+            }
+        }
+        drop(seen);
+        for (session, n) in per_session {
+            self.try_add(session, *n, now)?;
+        }
+        Ok(())
     }
 
     /// Count `n` events for `session`, or refuse with the seconds to wait. All or nothing.

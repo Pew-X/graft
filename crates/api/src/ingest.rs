@@ -159,11 +159,10 @@ pub async fn ingest_events(
         });
     }
     let now = state.guards.clock.now_secs();
-    for (session, n) in &per_session {
-        if let Err(wait) = state.guards.sessions.try_add(session, *n, now) {
-            state.metrics.refusal("rate_limited_session");
-            return Err(Problem::rate_limited(wait));
-        }
+    let counts: Vec<(&str, usize)> = per_session.iter().map(|(s, n)| (*s, *n)).collect();
+    if let Err(wait) = state.guards.sessions.try_add_all(&counts, now) {
+        state.metrics.refusal("rate_limited_session");
+        return Err(Problem::rate_limited(wait));
     }
     // Events about nothing that exists are dropped; the receipt does not say which.
     let ids: Vec<String> = events

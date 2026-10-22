@@ -157,7 +157,8 @@ pub async fn metrics_text(state: &AppState) -> String {
         "graft_events_duplicates_total {}\n",
         state.consumer_stats.duplicates()
     ));
-    if let Ok(backlog) = state.store.event_backlog(now).await {
+    let within = std::time::Duration::from_secs(2);
+    if let Ok(Ok(backlog)) = tokio::time::timeout(within, state.store.event_backlog(now)).await {
         out.push_str("# TYPE graft_relay_backlog gauge\n");
         out.push_str(&format!("graft_relay_backlog {}\n", backlog.unsent));
         out.push_str("# TYPE graft_relay_oldest_unsent_age_seconds gauge\n");
@@ -166,7 +167,7 @@ pub async fn metrics_text(state: &AppState) -> String {
             backlog.oldest_unsent_age_ms / 1000
         ));
     }
-    if let Ok(lag) = state.store.consumer_lag(now).await {
+    if let Ok(Ok(lag)) = tokio::time::timeout(within, state.store.consumer_lag(now)).await {
         out.push_str("# TYPE graft_consumer_lag_seconds gauge\n");
         out.push_str(&format!(
             "graft_consumer_lag_seconds {}\n",

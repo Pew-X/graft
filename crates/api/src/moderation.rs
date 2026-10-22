@@ -299,16 +299,18 @@ pub async fn require_admin(
         .guards
         .client_ip(request.extensions(), request.headers());
     let now = state.guards.clock.now_secs();
-    if let Err(wait) = state.guards.limiter.check(Class::AdminFailure, ip, now) {
+    // The attempt is counted before it is judged, so simultaneous guesses cannot all pass a check
+    // that has not yet seen the others; a good one is forgiven afterwards.
+    if let Err(wait) = state.guards.limiter.try_admit(Class::AdminFailure, ip, now) {
         state.metrics.refusal("rate_limited_admin");
         return Problem::rate_limited(wait).into_response();
     }
     match authorize_admin(&state, request.headers()) {
-        Ok(()) => next.run(request).await,
-        Err(problem) => {
-            state.guards.limiter.record(Class::AdminFailure, ip, now);
-            problem.into_response()
+        Ok(()) => {
+            state.guards.limiter.release(Class::AdminFailure, ip);
+            next.run(request).await
         }
+        Err(problem) => problem.into_response(),
     }
 }
 

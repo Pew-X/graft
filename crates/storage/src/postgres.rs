@@ -260,6 +260,22 @@ impl Store {
         Ok(Outcome::Existing(Box::new(stage)))
     }
 
+    /// Whether `key` already belongs to a publication of exactly this content record: a true
+    /// replay, as opposed to a key reused for something else.
+    pub async fn retry_key_matches(
+        &self,
+        key: &str,
+        record: &graft_domain::record::ContentRecord,
+    ) -> Result<bool, StoreError> {
+        let found: Option<Vec<u8>> =
+            sqlx::query_scalar("SELECT content_id FROM publications WHERE retry_key = $1")
+                .bind(key)
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(db)?;
+        Ok(found.is_some_and(|id| id == record.id().as_bytes().as_slice()))
+    }
+
     /// The flags that decide whether a stage may be flipped, or `None` if it does not exist. A cheap
     /// read for refusing early; the decision is made again inside the flip transaction.
     pub async fn fork_flags(&self, id: &PublicationId) -> Result<Option<ForkFlags>, StoreError> {

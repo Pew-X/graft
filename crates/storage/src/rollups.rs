@@ -185,7 +185,7 @@ impl Store {
         // Consumers wait here until the swap commits. Events keep being appended to the ledger,
         // which this does not lock: those arrive after the snapshot below, are not in the dedupe
         // set, and are counted once by the consumer when it gets its turn.
-        sqlx::query("LOCK TABLE rollups, processed_events IN ACCESS EXCLUSIVE MODE")
+        sqlx::query("LOCK TABLE processed_events, rollups IN ACCESS EXCLUSIVE MODE")
             .execute(&mut *tx)
             .await
             .map_err(db)?;
@@ -250,15 +250,23 @@ impl Store {
             .execute(&mut *tx)
             .await
             .map_err(db)?;
-        // The dedupe set becomes exactly the events the new counts were made from.
-        sqlx::query("DELETE FROM processed_events")
-            .execute(&mut *tx)
-            .await
-            .map_err(db)?;
+        // The dedupe set gains exactly the events the new counts were made from. Events older than
+        // the floor were not recounted, so their ids stay as they were: an old event that was never
+        // counted (still unsent) must still be countable when it is finally delivered.
+        sqlx::query(
+            "DELETE FROM processed_events WHERE event_id IN \
+             (SELECT event_id FROM ledger_snapshot WHERE extract(epoch from hour) >= $1)",
+        )
+        .bind(rebuildable_from_hour)
+        .execute(&mut *tx)
+        .await
+        .map_err(db)?;
         sqlx::query(
             "INSERT INTO processed_events (event_id, occurred_at) \
-             SELECT event_id, occurred_at FROM ledger_snapshot",
+             SELECT event_id, occurred_at FROM ledger_snapshot \
+             WHERE extract(epoch from hour) >= $1 ON CONFLICT (event_id) DO NOTHING",
         )
+        .bind(rebuildable_from_hour)
         .execute(&mut *tx)
         .await
         .map_err(db)?;

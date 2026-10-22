@@ -234,19 +234,6 @@ pub(crate) async fn publish_flip_as(
         }
     }
 
-    // 2b. Admission, still before any slow work: room to store the audio, and a token from the
-    // global budget. A replay adds nothing to storage, so it takes neither.
-    if !is_replay {
-        if state.guards.storage.is_full().await {
-            state.metrics.refusal("storage_full");
-            return Err(Problem::storage_full());
-        }
-        if let Err(problem) = state.guards.take_global_token(&state.store).await {
-            state.metrics.refusal("publish_cap");
-            return Err(problem);
-        }
-    }
-
     // 3. Render, outside any transaction.
     let parent_audio = state
         .blobs
@@ -304,6 +291,20 @@ pub(crate) async fn publish_flip_as(
             ),
         ));
     }
+    // Admission, after every check that needs no render (so a request that was never going to publish
+    // cannot spend the shared budget) and before the slow work: room to store the audio, and a token from the
+    // global budget. A replay adds nothing to storage, so it takes neither.
+    if !is_replay {
+        if state.guards.storage.is_full().await {
+            state.metrics.refusal("storage_full");
+            return Err(Problem::storage_full());
+        }
+        if let Err(problem) = state.guards.take_global_token(&state.store).await {
+            state.metrics.refusal("publish_cap");
+            return Err(problem);
+        }
+    }
+
     // At most a few renders at once: each holds the parent audio, the samples and the output in
     // memory and a thread, so an unbounded burst could starve everything else. Waiting too long for
     // a turn is a polite "busy, send it again".
@@ -349,6 +350,15 @@ pub(crate) async fn publish_flip_as(
     let output_bytes: Vec<u8> = rendered.iter().flat_map(|s| s.to_le_bytes()).collect();
     let output_hash = Sha256Hash::of(&output_bytes);
     let preview_matches = preview.map(|p| p == output_hash);
+    // The seed path cross-checks against the independent reference and must refuse before anything
+    // is stored: a mismatch is a bug to see, not a chain to keep.
+    if identity_kind == Identity::Seeded && preview_matches == Some(false) {
+        return Err(Problem::invalid(
+            "preview_hash",
+            "differs",
+            "the render differs from the independent reference",
+        ));
+    }
     if preview_matches == Some(false) {
         state.metrics.preview_mismatch();
         tracing::warn!(

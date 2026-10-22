@@ -205,10 +205,9 @@ pub fn router(state: AppState, config: &Config) -> Router {
         .layer(tower_http::catch_panic::CatchPanicLayer::custom(
             |_panic: Box<dyn std::any::Any + Send + 'static>| {
                 // Only that it happened: the payload of a panic can hold anything.
-                tracing::error!(
-                    target: crate::observability::REPORT_TARGET,
-                    "a request handler panicked"
-                );
+                // Logged as a warning: the tracker already has the panic from its own hook, and the
+                // 500 that follows is the one report-worthy event.
+                tracing::warn!("a request handler panicked");
                 Problem::internal().into_response()
             },
         ))

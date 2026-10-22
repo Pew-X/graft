@@ -172,10 +172,25 @@ async fn publish_source_inner(
     let frames = audio::check_source(&bytes, limits)
         .map_err(|e| Problem::invalid("audio", e.rule(), e.to_string()))?;
 
+    let hash = Sha256Hash::of(&bytes);
+    let identity = state.renderer.identity();
+    let record = ContentRecord::source(
+        hash,
+        frames,
+        RendererIdentity {
+            name: identity.name.to_owned(),
+            version: identity.version,
+            wasm_sha256: Sha256Hash::parse(&identity.wasm_sha256)
+                .map_err(|e| internal("reading the renderer identity", &e))?,
+        },
+    )
+    .map_err(|e| Problem::invalid("audio", "record", e.to_string()))?;
     // 2. Admission. A replay adds nothing to storage, so it needs neither.
+    // A replay is the same key for the same sound. A key reused for another sound is not free: it
+    // would write a blob before the conflict showed.
     let is_replay = state
         .store
-        .retry_key_exists(&request.retry_key)
+        .retry_key_matches(&request.retry_key, &record)
         .await
         .map_err(|e| internal("looking up the retry key", &e))?;
     if !is_replay {
@@ -190,7 +205,6 @@ async fn publish_source_inner(
     }
 
     // 3. The audio, then the row. The blob is written first and is safe to repeat.
-    let hash = Sha256Hash::of(&bytes);
     let for_repair = bytes.clone();
     let stored = state
         .blobs
@@ -203,18 +217,6 @@ async fn publish_source_inner(
             &"the store returned another hash",
         ));
     }
-    let identity = state.renderer.identity();
-    let record = ContentRecord::source(
-        hash,
-        frames,
-        RendererIdentity {
-            name: identity.name.to_owned(),
-            version: identity.version,
-            wasm_sha256: Sha256Hash::parse(&identity.wasm_sha256)
-                .map_err(|e| internal("reading the renderer identity", &e))?,
-        },
-    )
-    .map_err(|e| Problem::invalid("audio", "record", e.to_string()))?;
     let manage_key = new_manage_key().map_err(|e| internal("making a manage key", &e))?;
     let key_hash = *Sha256Hash::of(manage_key.as_bytes()).as_bytes();
     let mut outcome = None;

@@ -290,7 +290,7 @@ Written by ticket 16, deepening "Operational baseline".
 
 Wording for the service-level target, to be confirmed against measurements: "publishing and reading answer correctly for at least 99% of requests over a rolling 30 days, measured by requests that did not end in a 500 or a failed readiness check." It is a target for a one-person experiment, not a commitment to anyone.
 
-**Known limits, not hidden.** After the first rebuild of the rollups their table's constraint and index names drift from the migration's, so no later migration may name them. `/metrics` runs the ledger's lag query on every scrape, which is fine for one scraper at this scale. A request that finds the stored total stale waits for the blob store's listing to refresh it.
+**Known limits, not hidden.** After the first rebuild of the rollups their table's constraint and index names drift from the migration's, so no later migration may name them. `/metrics` runs the ledger's lag query on every scrape, which is fine for one scraper at this scale. A request that finds the stored total stale waits for the blob store's listing to refresh it. A flip that reuses a retry key for different content still costs a render before the conflict shows (a source upload is checked first and writes nothing). When the per-address table is full of live entries every new address pays a scan of it and is then admitted; the global cap still bounds publishing, and failed admin attempts fail closed.
 
 ## Publishing a flip
 
