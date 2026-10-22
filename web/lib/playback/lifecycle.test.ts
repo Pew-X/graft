@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Engine } from "./engine.ts";
-import { attachLifecycle } from "./lifecycle.ts";
+import { attachContextLifecycle, attachLifecycle } from "./lifecycle.ts";
 import { FakeClock, FakeGraph } from "./testing.ts";
 
 class FakeTarget {
@@ -99,4 +99,21 @@ test("detaching removes every listener, and later events do nothing", () => {
   s.engine.play();
   s.window.emit("pagehide");
   assert.equal(s.engine.state.kind, "rolling");
+});
+
+test("a context created after the first gesture can still pause playback when the system takes the audio", () => {
+  // attachLifecycle ran at mount, when no context existed; the context is attached once it does.
+  const clock = new FakeClock();
+  const graph = new FakeGraph(clock, [1.2, 0.6]);
+  const engine = new Engine({ graph, clock, lengths: [1.2, 0.6] });
+  const context = Object.assign(new FakeTarget(), { state: "running" });
+  const detach = attachContextLifecycle(engine, context);
+  engine.tapStage(1);
+  clock.advance(0.1);
+  context.state = "interrupted";
+  context.emit("statechange");
+  assert.equal(engine.state.kind, "paused");
+  assert.equal(graph.sounding.length, 0);
+  detach();
+  assert.equal(context.count(), 0);
 });

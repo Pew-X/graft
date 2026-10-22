@@ -28,7 +28,8 @@ impl Locked {
         let conn = pool.acquire().await.map_err(db)?;
         // From here the guard owns the connection, so an early return closes it.
         let mut locked = Self { conn: Some(conn) };
-        let millis = wait.as_millis();
+        // `lock_timeout = 0` means no timeout in Postgres, so a zero or sub-millisecond wait is raised to 1 ms.
+        let millis = wait.as_millis().max(1);
         sqlx::query(sqlx::AssertSqlSafe(format!("SET lock_timeout = {millis}")))
             .execute(locked.connection()?)
             .await

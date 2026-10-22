@@ -6,7 +6,7 @@ graft is an independent experiment. It is not affiliated with or endorsed by any
 
 Every fact the project shows about a sound is one of three things: declared (said by a person), computed (produced by the system) or unknown (not established). The same applies to this repository: where a claim is measured, the test or number that backs it is named; where it is not, it says so.
 
-> Status: foundation only (repository, renderer, render host, cross-host checks). Nothing here runs end to end yet. Sections below are filled in by the work that owns them.
+> Status: the backend runs end to end and is tested against real Postgres and a real S3-compatible object store: seed a source, publish a flip (rendered on the server by the canonical renderer), read the chain, manage your own publication with its key, report a sound, hide it as the operator, and serve audio through short-lived signed URLs. The web app is a shell and the playback engine has no screen yet; abuse limits, the event path, observability beyond the baseline, and deployment are not built. Sections below are filled in by the work that owns them.
 
 ## What it is, and is not
 
@@ -42,7 +42,7 @@ To run the service against that container:
 GRAFT_DATABASE_URL=postgres://postgres:graft@127.0.0.1:55432/postgres cargo run -p graft-api
 ```
 
-It serves `GET /v1/chains/{id}`, `GET /v1/publications/{id}`, `/openapi.json`, `/health`, `/ready` and `/metrics`. Publishing arrives with the next tickets. `graft-seed` creates a source (a root publication) from a canonical audio file; running it twice with the same key changes nothing.
+It serves `GET /v1/chains/{id}` and `GET /v1/publications/{id}`, `POST /v1/publications` (publish a flip), `PUT /v1/publications/{id}/fork-permission` and `POST /v1/publications/{id}/withdraw` (with the manage key), `POST /v1/reports`, `/openapi.json`, `/health`, `/ready` and `/metrics`, and operator routes under `/admin` when `GRAFT_ADMIN_SECRET` is set. `graft-seed` creates a source (a root publication) from a canonical audio file; running it twice with the same key changes nothing.
 
 ## Concurrency
 

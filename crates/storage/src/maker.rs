@@ -131,9 +131,10 @@ impl Store {
             let row =
                 sqlx::query("SELECT fork_permitted, hidden_reason FROM publications WHERE id = $1")
                     .bind(id.as_str())
-                    .fetch_one(&mut *conn)
+                    .fetch_optional(&mut *conn)
                     .await
-                    .map_err(db)?;
+                    .map_err(db)?
+                    .ok_or(StoreError::NotFound)?;
             Ok(StageFlags {
                 fork_permitted: row.try_get("fork_permitted").map_err(db)?,
                 hidden: match row

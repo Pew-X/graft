@@ -15,6 +15,15 @@ fn internal(context: &str, error: &dyn std::fmt::Display) -> Problem {
     Problem::internal()
 }
 
+/// A failed database call: a pool or lock that stayed busy is a retryable 503, anything else is ours.
+pub(crate) fn store_problem(context: &str, error: &StoreError) -> Problem {
+    match error {
+        StoreError::Busy => Problem::retry_later(),
+        StoreError::NotFound => Problem::not_found("there is no publication with this id"),
+        other => internal(context, other),
+    }
+}
+
 fn not_found() -> Problem {
     // The same body for an id that is malformed and one that does not exist.
     Problem::not_found("there is no publication with this id")
@@ -51,7 +60,7 @@ pub async fn get_chain(
         .store
         .chain(&id, state.limits.max_chain_depth)
         .await
-        .map_err(|e: StoreError| internal("reading a chain", &e))?
+        .map_err(|e: StoreError| store_problem("reading a chain", &e))?
         .ok_or_else(not_found)?;
     let entries = entry_views(&state, &chain).await?;
     Ok(Json(views::chain_view(&chain, entries)))
@@ -60,26 +69,65 @@ pub async fn get_chain(
 /// One view per entry of the chain. A hidden stage gets no audio URL: new requests for its audio
 /// are refused by never issuing one.
 async fn entry_views(state: &AppState, chain: &Chain) -> Result<Vec<EntryView>, Problem> {
+    let availability = availability(chain);
     let mut views = Vec::with_capacity(chain.entries.len());
-    for (entry, available) in chain.entries.iter().zip(availability(chain)) {
-        views.push(match (entry, available) {
-            (Entry::Present(stage), Some(Availability::Available)) => EntryView::Available(
-                Box::new(views::stage_view(stage, audio_for(state, stage).await?)),
-            ),
-            (Entry::Present(stage), Some(Availability::NoLongerHere(reason))) => {
-                EntryView::NoLongerHere(Box::new(views::removed_view(stage, reason)))
-            }
-            (Entry::Present(stage), Some(Availability::Held)) => {
-                // Held because of a rights hide above it: the reason shown is that one.
-                EntryView::Held(Box::new(views::removed_view(stage, HideReason::Rights)))
-            }
-            (Entry::Present(stage), None) => EntryView::Unavailable {
-                id: stage.id.to_string(),
-            },
-            (Entry::Unavailable(id), _) => EntryView::Unavailable { id: id.to_string() },
-        });
+    for index in 0..chain.entries.len() {
+        views.push(entry_view_at(state, chain, &availability, index).await?);
     }
     Ok(views)
+}
+
+/// The view of the entry at `index`, decided by the one availability rule. Only an available stage
+/// gets an audio URL, so only an available stage costs a signing.
+async fn entry_view_at(
+    state: &AppState,
+    chain: &Chain,
+    availability: &[Option<Availability>],
+    index: usize,
+) -> Result<EntryView, Problem> {
+    let (Some(entry), Some(available)) = (chain.entries.get(index), availability.get(index)) else {
+        return Err(internal(
+            "building a view",
+            &"an entry index is out of range",
+        ));
+    };
+    Ok(match (entry, available) {
+        (Entry::Present(stage), Some(Availability::Available)) => EntryView::Available(Box::new(
+            views::stage_view(stage, audio_for(state, stage).await?),
+        )),
+        (Entry::Present(stage), Some(Availability::NoLongerHere(reason))) => {
+            EntryView::NoLongerHere(Box::new(views::removed_view(stage, *reason)))
+        }
+        (Entry::Present(stage), Some(Availability::Held)) => {
+            // Held because of a rights hide above it: the reason shown is that one.
+            EntryView::Held(Box::new(views::removed_view(stage, HideReason::Rights)))
+        }
+        (Entry::Present(stage), None) => EntryView::Unavailable {
+            id: stage.id.to_string(),
+        },
+        (Entry::Unavailable(id), _) => EntryView::Unavailable { id: id.to_string() },
+    })
+}
+
+/// The view of one publication as every read shows it: its chain is read, the availability rule is
+/// applied, and only the requested stage is built.
+pub(crate) async fn publication_view(
+    state: &AppState,
+    id: &PublicationId,
+) -> Result<Option<EntryView>, Problem> {
+    let Some(chain) = state
+        .store
+        .chain(id, state.limits.max_chain_depth)
+        .await
+        .map_err(|e| store_problem("reading a publication", &e))?
+    else {
+        return Ok(None);
+    };
+    let availability = availability(&chain);
+    let last = chain.entries.len().saturating_sub(1);
+    Ok(Some(
+        entry_view_at(state, &chain, &availability, last).await?,
+    ))
 }
 
 /// One publication.
@@ -97,16 +145,10 @@ pub async fn get_publication(
     Path(id): Path<String>,
 ) -> Result<Json<EntryView>, Problem> {
     let id = PublicationId::parse(&id).map_err(|_| not_found())?;
-    // Read through the chain, so whether the stage may be heard is decided by the same rule and
-    // the same snapshot as everywhere else.
-    let chain = state
-        .store
-        .chain(&id, state.limits.max_chain_depth)
-        .await
-        .map_err(|e| internal("reading a publication", &e))?
-        .ok_or_else(not_found)?;
-    let mut entries = entry_views(&state, &chain).await?;
-    entries.pop().map(Json).ok_or_else(not_found)
+    publication_view(&state, &id)
+        .await?
+        .map(Json)
+        .ok_or_else(not_found)
 }
 
 /// The OpenAPI document for the public API.

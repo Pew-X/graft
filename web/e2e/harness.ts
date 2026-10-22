@@ -5,6 +5,7 @@
 import {
   Engine,
   LazyAudio,
+  attachContextLifecycle,
   attachLifecycle,
   type AudioContextConstructor,
   type Clock,
@@ -50,7 +51,9 @@ async function start(): Promise<void> {
   const graph = await audio.unlock();
   engine = new Engine({ graph, clock, lengths: LENGTHS });
   const context = audio.context as unknown as TapContext;
-  attachLifecycle(engine, { document, window, audioContext: context });
+  attachLifecycle(engine, { document, window });
+  // The context exists only now, after the gesture, so its lifecycle is attached here.
+  attachContextLifecycle(engine, context);
 }
 
 /** The loudest sample the analyser sees right now, 0 to 1. */

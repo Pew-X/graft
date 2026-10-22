@@ -40,6 +40,8 @@ export interface EngineOptions {
   lengths: readonly number[];
   /** Called after every change of state. */
   onChange?: (state: State) => void;
+  /** Called when the audio graph throws; the engine has already gone back to a silent, idle state. */
+  onError?: (error: unknown) => void;
 }
 
 interface Playing {
@@ -53,6 +55,10 @@ export class Engine {
   readonly #clock: Clock;
   readonly #lengths: readonly number[];
   readonly #onChange: ((state: State) => void) | undefined;
+  readonly #onError: ((error: unknown) => void) | undefined;
+  /** Events that arrived while another was being handled; they run in order afterwards. */
+  readonly #queue: Event[] = [];
+  #sending = false;
 
   #state: State = idle;
   #reducedMotion = false;
@@ -65,10 +71,14 @@ export class Engine {
 
   constructor(options: EngineOptions) {
     if (options.lengths.length < 1) throw new RangeError("a chain has at least one stage");
+    if (!options.lengths.every((n) => Number.isFinite(n) && n >= 0)) {
+      throw new RangeError("every stage length must be a finite number of seconds, zero or more");
+    }
     this.#graph = options.graph;
     this.#clock = options.clock;
     this.#lengths = options.lengths;
     this.#onChange = options.onChange;
+    this.#onError = options.onError;
   }
 
   get state(): State {
@@ -156,9 +166,38 @@ export class Engine {
   }
 
   #send(event: Event): void {
+    // An event raised while another is being handled (a voice that ends at once, say) waits its turn,
+    // so listeners always see states in order and a nested event never runs on half-applied state.
+    this.#queue.push(event);
+    if (this.#sending) return;
+    this.#sending = true;
+    try {
+      for (let next = this.#queue.shift(); next !== undefined; next = this.#queue.shift()) {
+        this.#handle(next);
+      }
+    } finally {
+      this.#sending = false;
+    }
+  }
+
+  #handle(event: Event): void {
     const { state, effects } = transition(this.#state, event, this.#lengths.length);
     this.#state = state;
-    for (const effect of effects) this.#run(effect);
+    try {
+      for (const effect of effects) this.#run(effect);
+    } catch (error) {
+      // The audio graph failed part way through. State and sound must not disagree, so go silent and
+      // idle, discard anything queued, and say what happened.
+      this.#queue.length = 0;
+      this.#stopVoice();
+      this.#clearRepeat();
+      this.#clearDwell();
+      this.#origin = null;
+      this.#state = idle;
+      this.#onChange?.(this.#state);
+      this.#onError?.(error);
+      return;
+    }
     this.#onChange?.(state);
   }
 
@@ -190,8 +229,11 @@ export class Engine {
     this.#origin = { mode, stage, offset, at: this.#clock.now() };
     const length = this.#lengths[stage] ?? 0;
     if (mode === "audition") {
-      // The whole output, once, from the chosen offset; no repeats.
-      this.#playVoice(stage, Math.min(offset, length), () => this.#send({ type: "auditionEnded" }));
+      // The whole output, once, from the chosen offset; no repeats. A stage resumed at (or within a few
+      // milliseconds of) its end would make no sound, so it plays again from the start.
+      const from = offset >= length - 0.005 ? 0 : offset;
+      this.#origin = { mode, stage, offset: from, at: this.#clock.now() };
+      this.#playVoice(stage, from, () => this.#send({ type: "auditionEnded" }));
       return;
     }
     // Roll: the stage repeats with a gap; `offset` is how far into the step this is, so a resumed

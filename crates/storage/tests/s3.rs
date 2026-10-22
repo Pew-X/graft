@@ -229,3 +229,29 @@ async fn stores_with_different_prefixes_do_not_see_each_other() {
     assert_eq!(seen_by_a, vec![in_a]);
     assert_eq!(a.get(in_b).await.expect("get"), None);
 }
+
+#[tokio::test]
+async fn a_store_does_not_list_objects_that_belong_to_a_longer_prefix() {
+    // One store at `p` and another at `p/inner`: a listing is recursive, so the first must not see
+    // (and the cleanup must never try to delete) the second's objects.
+    let outer = prefix();
+    let (a, b) = (store(&outer), store(&format!("{outer}/inner")));
+    let mine = a.put_if_absent(vec![1, 1, 1]).await.expect("put");
+    let theirs = b.put_if_absent(vec![2, 2, 2]).await.expect("put");
+    let seen_by_a: Vec<_> = a
+        .list()
+        .await
+        .expect("list")
+        .into_iter()
+        .map(|i| i.hash)
+        .collect();
+    assert_eq!(seen_by_a, vec![mine]);
+    let seen_by_b: Vec<_> = b
+        .list()
+        .await
+        .expect("list")
+        .into_iter()
+        .map(|i| i.hash)
+        .collect();
+    assert_eq!(seen_by_b, vec![theirs]);
+}

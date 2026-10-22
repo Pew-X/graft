@@ -137,7 +137,7 @@ const EXPECTED: Record<string, Record<string, State>> = {
   "paused while auditioning": {
     play: aud(1, 0.4), // resumes in the same mode: the audition, from where it stopped
     pause: paused(aud(1, 0.4)),
-    "tap the same stage": aud(1, 0),
+    "tap the same stage": aud(1, 0.4), // the mirror of the tap that paused it: it resumes
     "tap another stage": aud(3, 0),
     "scrub start": aud(2, 0.5),
     "scrub move": aud(2, 0.6),
@@ -222,6 +222,49 @@ test("an audition that ends by itself starts nothing again, and a tap after the 
   );
   const replay = transition(ended.state, { type: "tapStage", stage: 1, position: 0 }, STAGES);
   assert.equal(replay.effects.filter((e) => e.type === "start").length, 1);
+});
+
+test("a move the person asked for restarts the sound even when it lands on the same state", () => {
+  const starts = (r: ReturnType<typeof transition>): number =>
+    r.effects.filter((e) => e.type === "start").length;
+  // Previous at the first step is the same state, but the person pressed it: the step starts again.
+  assert.equal(starts(transition(roll(0, 0), { type: "previous" }, STAGES)), 1);
+  // Next at rest likewise, and so does an audition of the last stage moved on past the end.
+  assert.equal(starts(transition(roll(restStep(STAGES), 0), { type: "next" }, STAGES)), 1);
+  assert.equal(starts(transition(aud(3, 0), { type: "next" }, STAGES)), 1);
+  // Scrubbing to the offset the sound has already passed re-seeks.
+  assert.equal(
+    starts(transition(aud(2, 0.5), { type: "scrubMove", stage: 2, offset: 0.5 }, STAGES)),
+    1,
+  );
+  // Whereas a stale event that changes nothing does nothing.
+  assert.deepEqual(transition(aud(1, 0.9, true), { type: "auditionEnded" }, STAGES).effects, []);
+  assert.deepEqual(transition(roll(2, 0.7), { type: "play" }, STAGES).effects, []);
+});
+
+test("a position or stage that is not a finite number is ignored or treated as zero, never passed on", () => {
+  const bad = [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY];
+  for (const n of bad) {
+    assert.deepEqual(
+      transition(idle, { type: "scrubStart", stage: n, offset: 0.3 }, STAGES).state,
+      idle,
+      "a bad stage is ignored",
+    );
+    assert.deepEqual(
+      transition(idle, { type: "tapStage", stage: n, position: 0 }, STAGES).state,
+      idle,
+    );
+    assert.deepEqual(
+      transition(idle, { type: "scrubStart", stage: 1, offset: n }, STAGES).state,
+      aud(1, 0),
+      "a bad offset is zero",
+    );
+    assert.deepEqual(
+      transition(roll(2, 0.7), { type: "pause", position: n }, STAGES).state,
+      paused(roll(2, 0)),
+      "a bad position is zero",
+    );
+  }
 });
 
 test("a roll goes teaser, source to final, rest, and rest does not end", () => {

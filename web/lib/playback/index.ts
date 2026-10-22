@@ -1,5 +1,5 @@
 export { Engine, type AudioGraph, type Clock, type EngineOptions, type Voice } from "./engine.ts";
-export { attachLifecycle, type LifecycleSources } from "./lifecycle.ts";
+export { attachContextLifecycle, attachLifecycle, type LifecycleSources } from "./lifecycle.ts";
 export {
   currentStage,
   idle,

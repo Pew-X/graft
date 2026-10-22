@@ -346,3 +346,125 @@ test("pausing and resuming at any moment of a roll never changes which step play
     { numRuns: 200 },
   );
 });
+
+// ---- failure, ordering and edge cases found in review ----
+
+test("if the audio graph throws, the engine goes silent and idle, says so, and stays usable", () => {
+  const clock = new FakeClock();
+  const inner = new FakeGraph(clock, LENGTHS);
+  let broken = true;
+  const graph = {
+    voice(stage: number) {
+      const voice = inner.voice(stage);
+      const start = voice.start;
+      voice.start = (offset: number, attack: number) => {
+        if (broken) throw new TypeError("the buffer is gone");
+        start(offset, attack);
+      };
+      return voice;
+    },
+  };
+  const errors: unknown[] = [];
+  const seen: string[] = [];
+  const engine = new Engine({
+    graph,
+    clock,
+    lengths: LENGTHS,
+    onError: (e) => errors.push(e),
+    onChange: (s) => seen.push(s.kind),
+  });
+  engine.play();
+  assert.equal(engine.state.kind, "idle", "state must not claim sound that does not exist");
+  assert.deepEqual([engine.voices, engine.timers], [0, 0]);
+  assert.equal(errors.length, 1);
+  assert.equal(seen.at(-1), "idle");
+  broken = false;
+  engine.play();
+  assert.equal(engine.state.kind, "rolling", "the engine works again once the graph does");
+});
+
+test("an event raised while another is being handled waits its turn, so listeners see states in order", () => {
+  const clock = new FakeClock();
+  // A voice that ends the instant it starts, as a zero-length buffer would.
+  const graph = {
+    voice: () => {
+      const voice = {
+        onended: null as (() => void) | null,
+        start: () => voice.onended?.(),
+        stop: () => undefined,
+      };
+      return voice;
+    },
+  };
+  const seen: string[] = [];
+  const engine = new Engine({
+    graph,
+    clock,
+    lengths: [0, 1],
+    onChange: (s) =>
+      seen.push(s.kind === "auditioning" ? `auditioning${s.ended ? " ended" : ""}` : s.kind),
+  });
+  engine.tapStage(0);
+  assert.deepEqual(
+    seen,
+    ["auditioning", "auditioning ended"],
+    "the start is reported before the end that followed it",
+  );
+});
+
+test("a stage length that is not a finite number of seconds is refused at construction", () => {
+  const clock = new FakeClock();
+  const graph = new FakeGraph(clock, [1]);
+  for (const lengths of [[Number.NaN], [-1], [1, Number.POSITIVE_INFINITY], []]) {
+    assert.throws(() => new Engine({ graph, clock, lengths }), RangeError, JSON.stringify(lengths));
+  }
+});
+
+test("scrubbing with a position that is not a number does nothing wrong", () => {
+  const { graph, engine } = setup();
+  engine.scrubStart(Number.NaN, 0.2);
+  assert.equal(engine.state.kind, "idle");
+  engine.scrubStart(1, Number.NaN);
+  assert.deepEqual(
+    graph.sounds.map((s) => [s.stage, s.offset]),
+    [[1, 0]],
+    "a bad offset starts from the beginning",
+  );
+  engine.scrubMove(2, Number.POSITIVE_INFINITY);
+  assert.equal(graph.sounds.at(-1)?.stage, 2);
+  assert.ok(Number.isFinite(graph.sounds.at(-1)?.offset ?? Number.NaN));
+});
+
+test("previous at the first step starts that step again, and next at rest restarts the loop", () => {
+  const { clock, graph, engine } = setup();
+  engine.play();
+  clock.advance(1.5);
+  const before = graph.sounds.length;
+  engine.previous(); // already at the teaser: the same state, but the person asked
+  assert.equal(graph.sounds.length, before + 1, "the sound starts again");
+  assert.equal(graph.sounding.length, 1);
+  assert.equal(graph.sounds.at(-1)?.offset, 0);
+});
+
+test("an audition resumed at the very end plays again from the start instead of making no sound", () => {
+  const { clock, graph, engine } = setup();
+  engine.tapStage(2); // 0.72 s
+  clock.advance(0.7199);
+  engine.tapStage(2); // pause within a hair of the end
+  engine.play();
+  assert.equal(engine.state.kind, "auditioning");
+  engine.tapStage(2);
+  engine.tapStage(2); // resume by tapping the paused stage
+  assert.ok(graph.sounding.length <= 1);
+  assert.ok((graph.sounds.at(-1)?.offset ?? -1) < 0.72 - 0.005, "it does not start at the end");
+});
+
+test("tapping the stage that was paused resumes it, from where it stopped", () => {
+  const { clock, graph, engine } = setup();
+  engine.tapStage(3);
+  clock.advance(0.3);
+  engine.tapStage(3); // pauses
+  engine.tapStage(3); // resumes
+  assert.equal(engine.state.kind, "auditioning");
+  assert.ok(Math.abs((graph.sounds.at(-1)?.offset ?? -1) - 0.3) < 1e-9);
+});

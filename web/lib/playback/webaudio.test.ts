@@ -28,6 +28,9 @@ class FakeContext implements AudioContextLike {
     FakeContext.created.push(this);
   }
 
+  addEventListener(): void {}
+  removeEventListener(): void {}
+
   async resume(): Promise<void> {
     this.resumes += 1;
     this.state = "running";
@@ -40,6 +43,7 @@ class FakeContext implements AudioContextLike {
     return {
       connect: () => undefined,
       gain: {
+        value: 0.42,
         setValueAtTime: (v: number, t: number) => log.push(`gain=${v}@${t}`),
         linearRampToValueAtTime: (v: number, t: number) => log.push(`ramp=${v}@${t}`),
         setTargetAtTime: (v: number, t: number, k: number) => log.push(`target=${v}@${t}/${k}`),
@@ -159,7 +163,11 @@ test("a voice fades in over the attack, starts at its offset, and fades out over
   assert.deepEqual(ctx.calls, ["gain=0@10", `ramp=1@${10 + ATTACK}`, "start@10+0.25"]);
   ctx.calls.length = 0;
   voice.stop(RELEASE);
-  assert.deepEqual(ctx.calls, ["cancel@10", `target=0@10/${RELEASE / 4}`, `stop@${10 + RELEASE}`]);
+  assert.deepEqual(
+    ctx.calls,
+    ["cancel@10", "gain=0.42@10", `target=0@10/${RELEASE / 4}`, `stop@${10 + RELEASE}`],
+    "the release is anchored at the level the gain has now, so cancelling a ramp cannot make it jump",
+  );
   assert.doesNotThrow(() => voice.stop(RELEASE), "releasing twice is harmless");
 });
 

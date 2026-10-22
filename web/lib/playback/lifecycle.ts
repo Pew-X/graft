@@ -44,3 +44,24 @@ export function attachLifecycle(engine: Engine, sources: LifecycleSources): () =
     sources.audioContext?.removeEventListener("statechange", onContextState);
   };
 }
+
+/**
+ * Pause when the system claims the audio away from a context that exists only after the first gesture
+ * (iOS marks a context "interrupted" for a call or an alarm; a Bluetooth disconnect suspends it). Call
+ * it with the context once `LazyAudio.unlock` has created it. Returns a function that removes the listener.
+ */
+export function attachContextLifecycle(
+  engine: Engine,
+  context: Target & { readonly state: string },
+): () => void {
+  const onState = (): void => {
+    if (
+      ["suspended", "interrupted", "closed"].includes(context.state) &&
+      isSounding(engine.state)
+    ) {
+      engine.tabHidden();
+    }
+  };
+  context.addEventListener("statechange", onState);
+  return () => context.removeEventListener("statechange", onState);
+}

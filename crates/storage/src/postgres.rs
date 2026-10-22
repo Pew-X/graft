@@ -26,7 +26,11 @@ pub enum StoreError {
     /// A freshly chosen public id was already taken. Choose another and try again.
     #[error("the public id is already in use")]
     IdCollision,
-    /// Waiting for the lock on a stage took longer than allowed. Nothing was written.
+    /// The publication does not exist.
+    #[error("no such publication")]
+    NotFound,
+    /// Waiting for the lock on a stage, or for a database connection, took longer than allowed.
+    /// Nothing was written.
     #[error("the stage is busy")]
     Busy,
     /// Conflicts persisted through every attempt. Nothing was written; the caller may retry with
@@ -52,7 +56,7 @@ pub(crate) fn db(e: sqlx::Error) -> StoreError {
     // The driver's message can name the host; keep only the error class.
     let class = match &e {
         sqlx::Error::Database(d) => format!("{} ({})", d.message(), d.code().unwrap_or_default()),
-        sqlx::Error::PoolTimedOut => "pool timed out".to_owned(),
+        sqlx::Error::PoolTimedOut => return StoreError::Busy,
         sqlx::Error::Io(_) => "i/o error".to_owned(),
         other => other
             .to_string()
@@ -182,6 +186,9 @@ impl Store {
     ///
     /// The same key with the same content record returns the existing publication; the same key
     /// with a different record is a conflict and writes nothing.
+    ///
+    /// For sources and for fixtures. It does not take the stage lock and does not check a parent's
+    /// permission, hidden state or fork cap, so a flip must be created with `create_flip`, which does.
     pub async fn create_publication(&self, new: &NewPublication) -> Result<Outcome, StoreError> {
         let mut tx = self.pool.begin().await.map_err(db)?;
         insert_record(&mut tx, &new.record).await?;
@@ -303,6 +310,11 @@ where
     row.map(|r| stage_from_row(&r)).transpose()
 }
 
+/// A 32-bit unsigned value as the database's 32-bit signed integer, refusing what would wrap.
+fn int(value: u32) -> Result<i32, StoreError> {
+    i32::try_from(value).map_err(|_| StoreError::Corrupt("a value is too large to store".into()))
+}
+
 pub(crate) async fn insert_record(
     tx: &mut Transaction<'_, Postgres>,
     r: &ContentRecord,
@@ -316,20 +328,20 @@ pub(crate) async fn insert_record(
          ON CONFLICT (id) DO NOTHING",
     )
     .bind(r.id().as_bytes().as_slice())
-    .bind(graft_domain::record::FORMAT_VERSION as i32)
+    .bind(int(u32::try_from(graft_domain::record::FORMAT_VERSION).unwrap_or(u32::MAX))?)
     .bind(match r.kind() {
         Kind::Source => "source",
         Kind::Flip => "flip",
     })
     .bind(r.parent().map(PublicationId::as_str))
     .bind(r.source_blob().as_bytes().as_slice())
-    .bind(cut.start as i32)
-    .bind(cut.end as i32)
-    .bind(t.map(|t| t.p as i32))
-    .bind(t.map(|t| t.q as i32))
-    .bind(t.map(|t| t.method as i32))
+    .bind(int(cut.start)?)
+    .bind(int(cut.end)?)
+    .bind(t.map(|t| int(t.p)).transpose()?)
+    .bind(t.map(|t| int(t.q)).transpose()?)
+    .bind(t.map(|t| int(t.method)).transpose()?)
     .bind(&r.renderer().name)
-    .bind(r.renderer().version as i32)
+    .bind(int(r.renderer().version)?)
     .bind(r.renderer().wasm_sha256.as_bytes().as_slice())
     .bind(r.output_blob().as_bytes().as_slice())
     .bind(r.canonical_bytes())

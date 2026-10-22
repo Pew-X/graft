@@ -8,6 +8,8 @@ import type { AudioGraph, Voice } from "./engine.ts";
 
 // The slice of the Web Audio API this module uses, so it can be tested with a fake.
 export interface ParamLike {
+  /** The value right now, including any ramp in flight. */
+  readonly value: number;
   setValueAtTime(value: number, time: number): unknown;
   linearRampToValueAtTime(value: number, time: number): unknown;
   setTargetAtTime(value: number, time: number, timeConstant: number): unknown;
@@ -35,6 +37,8 @@ export interface AudioContextLike {
   readonly state: string;
   readonly destination: unknown;
   onstatechange: (() => void) | null;
+  addEventListener(type: string, listener: () => void): void;
+  removeEventListener(type: string, listener: () => void): void;
   resume(): Promise<void>;
   close(): Promise<void>;
   createGain(): GainLike;
@@ -109,7 +113,11 @@ export class WebAudioGraph implements AudioGraph {
       },
       stop(release = RELEASE) {
         const now = context.currentTime;
+        // Cancelling a ramp in flight sends the gain back to its last scheduled value, which is a
+        // jump. Read where it is now, pin it there, and fade out from that level.
+        const current = gain.gain.value;
         gain.gain.cancelScheduledValues(now);
+        gain.gain.setValueAtTime(current, now);
         gain.gain.setTargetAtTime(0, now, release / 4);
         try {
           source.stop(now + release);

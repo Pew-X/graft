@@ -225,8 +225,16 @@ impl BlobStore for S3BlobStore {
                 .try_collect()
                 .await
                 .map_err(|e| class(&e))?;
+            // Only objects exactly at `<prefix>/<hash>`: a listing is recursive, so objects of
+            // another environment under a longer prefix must not be mistaken for ours.
+            let depth = self
+                .prefix
+                .as_deref()
+                .map_or(0, |p| p.split('/').filter(|x| !x.is_empty()).count())
+                + 1;
             Ok(metas
                 .into_iter()
+                .filter(|m| m.location.parts().count() == depth)
                 .filter_map(|m| {
                     let hash = Sha256Hash::parse(m.location.filename()?).ok()?;
                     Some(BlobInfo {

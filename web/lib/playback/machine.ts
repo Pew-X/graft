@@ -60,6 +60,8 @@ export interface Result {
 export const idle: State = { kind: "idle" };
 
 const clamp = (n: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, n));
+/** A position from the outside world: a number that is not finite is no position at all, so it is 0. */
+const seconds = (n: number): number => (Number.isFinite(n) && n > 0 ? n : 0);
 
 function same(a: State, b: State): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
@@ -96,8 +98,14 @@ function enter(state: State, stages: number): Effect[] {
   }
 }
 
-function go(prev: State, next: State, stages: number): Result {
-  return { state: next, effects: same(prev, next) ? [] : enter(next, stages) };
+/**
+ * Move to `next`. The state does not record the passing of time, so "the same state" can still need
+ * new effects: pressing previous at the first step, next at rest, or scrubbing to the offset the sound
+ * has already passed must restart the sound. `restart` says the person asked for the move; without
+ * it, a result equal to the old state means nothing happened and nothing is done.
+ */
+function go(prev: State, next: State, stages: number, restart = false): Result {
+  return { state: next, effects: restart || !same(prev, next) ? enter(next, stages) : [] };
 }
 
 const audition = (stage: number, offset: number): Auditioning => ({
@@ -112,20 +120,23 @@ export function transition(state: State, event: Event, stages: number): Result {
   const last = stages - 1;
   const rest = restStep(stages);
   const stageIn = (n: number): number => clamp(Math.trunc(n), 0, last);
+  const nothing: Result = { state, effects: [] };
+  // A stage that is not a finite number is no stage: the event is ignored, never guessed at.
+  const badStage = (n: number): boolean => !Number.isFinite(n);
 
   // Events that mean the same thing in every state.
   switch (event.type) {
     case "routeChange":
       return go(state, idle, stages);
     case "reducedMotion":
-      return { state, effects: [] }; // a presentation setting: it changes no playback state
+      return nothing; // a presentation setting: it changes no playback state
     case "scrubStart":
     case "scrubMove":
-      return go(state, audition(stageIn(event.stage), Math.max(0, event.offset)), stages);
+      return badStage(event.stage)
+        ? nothing
+        : go(state, audition(stageIn(event.stage), seconds(event.offset)), stages, true);
     case "scrubEnd":
-      return { state, effects: [] }; // the audition simply continues from where it was released
-    case "tapStage":
-      break; // depends on the state, below
+      return nothing; // the audition simply continues from where it was released
     default:
       break;
   }
@@ -136,46 +147,52 @@ export function transition(state: State, event: Event, stages: number): Result {
         case "play":
           return go(state, { kind: "rolling", step: 0, elapsed: 0 }, stages); // first tap: the teaser
         case "tapStage":
-          return go(state, audition(stageIn(event.stage), 0), stages);
+          return badStage(event.stage)
+            ? nothing
+            : go(state, audition(stageIn(event.stage), 0), stages, true);
         default:
-          return { state, effects: [] }; // pause, next, previous and the timers' events mean nothing here
+          return nothing; // pause, next, previous and the timers' events mean nothing here
       }
 
     case "rolling":
       switch (event.type) {
         case "play":
-          return { state, effects: [] }; // already rolling
+          return nothing; // already rolling
         case "pause":
         case "tabHidden":
           return go(
             state,
             {
               kind: "paused",
-              from: { kind: "rolling", step: state.step, elapsed: Math.max(0, event.position) },
+              from: { kind: "rolling", step: state.step, elapsed: seconds(event.position) },
             },
             stages,
           );
         case "tapStage":
-          return go(state, audition(stageIn(event.stage), 0), stages);
+          return badStage(event.stage)
+            ? nothing
+            : go(state, audition(stageIn(event.stage), 0), stages, true);
         case "next":
           return go(
             state,
             { kind: "rolling", step: Math.min(state.step + 1, rest), elapsed: 0 },
             stages,
+            true,
           );
         case "previous":
           return go(
             state,
             { kind: "rolling", step: Math.max(state.step - 1, 0), elapsed: 0 },
             stages,
+            true,
           );
         case "dwellEnded":
           // Rest has no dwell, so a late timer there is ignored.
           return state.step >= rest
-            ? { state, effects: [] }
+            ? nothing
             : go(state, { kind: "rolling", step: state.step + 1, elapsed: 0 }, stages);
         default:
-          return { state, effects: [] }; // auditionEnded is stale in roll mode
+          return nothing; // auditionEnded is stale in roll mode
       }
 
     case "auditioning":
@@ -190,7 +207,7 @@ export function transition(state: State, event: Event, stages: number): Result {
         case "pause":
         case "tabHidden":
           return state.ended
-            ? { state, effects: [] } // nothing is sounding, so nothing to pause
+            ? nothing // nothing is sounding, so nothing to pause
             : go(
                 state,
                 {
@@ -198,18 +215,19 @@ export function transition(state: State, event: Event, stages: number): Result {
                   from: {
                     kind: "auditioning",
                     stage: state.stage,
-                    offset: Math.max(0, event.position),
+                    offset: seconds(event.position),
                     ended: false,
                   },
                 },
                 stages,
               );
         case "tapStage": {
+          if (badStage(event.stage)) return nothing;
           const stage = stageIn(event.stage);
-          if (stage !== state.stage) return go(state, audition(stage, 0), stages);
+          if (stage !== state.stage) return go(state, audition(stage, 0), stages, true);
           // The same stage: a second tap pauses it while it plays, and replays it once it has ended.
           return state.ended
-            ? go(state, audition(stage, 0), stages)
+            ? go(state, audition(stage, 0), stages, true)
             : go(
                 state,
                 {
@@ -217,7 +235,7 @@ export function transition(state: State, event: Event, stages: number): Result {
                   from: {
                     kind: "auditioning",
                     stage,
-                    offset: Math.max(0, event.position),
+                    offset: seconds(event.position),
                     ended: false,
                   },
                 },
@@ -225,13 +243,13 @@ export function transition(state: State, event: Event, stages: number): Result {
               );
         }
         case "next":
-          return go(state, audition(Math.min(state.stage + 1, last), 0), stages);
+          return go(state, audition(Math.min(state.stage + 1, last), 0), stages, true);
         case "previous":
-          return go(state, audition(Math.max(state.stage - 1, 0), 0), stages);
+          return go(state, audition(Math.max(state.stage - 1, 0), 0), stages, true);
         case "auditionEnded":
           return go(state, { ...state, ended: true }, stages);
         default:
-          return { state, effects: [] }; // dwellEnded is stale in an audition
+          return nothing; // dwellEnded is stale in an audition
       }
 
     case "paused": {
@@ -244,8 +262,14 @@ export function transition(state: State, event: Event, stages: number): Result {
             from.kind === "rolling" ? { ...from } : { ...from, ended: false },
             stages,
           );
-        case "tapStage":
-          return go(state, audition(stageIn(event.stage), 0), stages);
+        case "tapStage": {
+          if (badStage(event.stage)) return nothing;
+          const stage = stageIn(event.stage);
+          // Tapping the stage that was paused resumes it, the mirror of the tap that paused it.
+          return from.kind === "auditioning" && from.stage === stage
+            ? go(state, { ...from, ended: false }, stages)
+            : go(state, audition(stage, 0), stages, true);
+        }
         case "next":
         case "previous": {
           const delta = event.type === "next" ? 1 : -1;
@@ -256,7 +280,7 @@ export function transition(state: State, event: Event, stages: number): Result {
           return go(state, { kind: "paused", from: moved }, stages);
         }
         default:
-          return { state, effects: [] }; // pause, tabHidden and the timers' events: nothing is sounding
+          return nothing; // pause, tabHidden and the timers' events: nothing is sounding
       }
     }
   }

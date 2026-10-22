@@ -288,17 +288,21 @@ impl BlobStore for FsBlobStore {
             match tokio::fs::metadata(&target).await {
                 Ok(meta) => {
                     // Already there: refresh its time if it is old, so the orphan cleanup cannot
-                    // mistake it for a leftover.
+                    // mistake it for a leftover. If it vanishes in between (the cleanup deleted
+                    // it), fall through and write it again.
                     let age = now_ms().saturating_sub(modified_ms(&meta));
                     let refresh = i64::try_from(self.refresh_after.as_millis()).unwrap_or(i64::MAX);
-                    if age >= refresh {
-                        let file = std::fs::OpenOptions::new()
-                            .write(true)
-                            .open(&target)
-                            .map_err(|e| io(&e))?;
-                        file.set_modified(SystemTime::now()).map_err(|e| io(&e))?;
+                    if age < refresh {
+                        return Ok(hash);
                     }
-                    return Ok(hash);
+                    match std::fs::OpenOptions::new().write(true).open(&target) {
+                        Ok(file) => {
+                            file.set_modified(SystemTime::now()).map_err(|e| io(&e))?;
+                            return Ok(hash);
+                        }
+                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                        Err(e) => return Err(io(&e)),
+                    }
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
                 Err(e) => return Err(io(&e)),

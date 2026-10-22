@@ -385,3 +385,56 @@ async fn a_flip_cannot_name_itself_or_a_later_publication_so_chains_cannot_loop(
     assert_eq!(publications(db.store.pool()).await, 1);
     db.drop_db().await;
 }
+
+#[tokio::test]
+async fn a_zero_lock_wait_answers_busy_at_once_instead_of_waiting_for_ever() {
+    // `lock_timeout = 0` means "no timeout" in Postgres, so a zero wait must be raised, not passed on.
+    let db = TestDb::create().await;
+    let parent = source();
+    db.store.create_publication(&parent).await.expect("seed");
+    let mut holder = db.store.pool().acquire().await.expect("connection");
+    sqlx::query("SELECT pg_advisory_lock(hashtextextended($1, 0))")
+        .bind(parent.id.as_str())
+        .execute(&mut *holder)
+        .await
+        .expect("lock");
+    let mut request = flip(&parent, "k1", 5);
+    request.lock_wait = Duration::ZERO;
+    let started = Instant::now();
+    let err = db
+        .store
+        .create_flip(&request)
+        .await
+        .expect_err("must not wait for ever");
+    assert_eq!(err, StoreError::Busy);
+    assert!(
+        started.elapsed() < Duration::from_secs(3),
+        "waited {:?}",
+        started.elapsed()
+    );
+    drop(holder);
+    db.drop_db().await;
+}
+
+#[tokio::test]
+async fn a_flag_change_on_a_publication_that_does_not_exist_is_not_found_not_a_database_error() {
+    use graft_domain::chain::HideReason;
+    let db = TestDb::create().await;
+    let ghost = PublicationId::from_bits(12345);
+    let wait = Duration::from_secs(5);
+    assert_eq!(
+        db.store
+            .set_hidden(&ghost, Some(HideReason::Rights), wait)
+            .await,
+        Err(StoreError::NotFound)
+    );
+    assert_eq!(
+        db.store.withdraw(&ghost, wait).await,
+        Err(StoreError::NotFound)
+    );
+    assert_eq!(
+        db.store.set_fork_permission(&ghost, false, wait).await,
+        Err(StoreError::NotFound)
+    );
+    db.drop_db().await;
+}

@@ -1,7 +1,8 @@
 /**
- * Playback constants. The choreography numbers come from the spec (Appendix E); the three marked
- * "tuning" are first values that the builder tunes by ear later, so they are named constants and
- * not scattered numbers.
+ * Playback constants. The choreography numbers come from the spec (Appendix E). The per-stage gains
+ * are a tuning hook: empty for now, edited by ear later. Two further knobs the spec lists as tuning
+ * items, a cross-fade at a stage change and a cap on the teaser for a very short finished flip, are
+ * not implemented: they wait for the listening pass (ticket 25) and would be added with their effect.
  */
 
 /** Canonical audio: 48 kHz mono signed 16-bit. */
@@ -21,11 +22,7 @@ export const ATTACK = 0.006;
 /** Fade-out when a sound is released, in seconds. */
 export const RELEASE = 0.02;
 
-/** Tuning: overlap between the end of one step and the start of the next, in seconds. 0 = none. */
-export const CROSSFADE = 0;
 /** Tuning: per-stage gains for matching loudness across stages. Empty: every stage plays at 1. */
 export const STAGE_GAINS: readonly number[] = [];
 /** The gain applied to a stage. */
 export const stageGain = (stage: number): number => STAGE_GAINS[stage] ?? 1;
-/** Tuning: longest the teaser may last, in seconds, for a very short finished flip. */
-export const TEASER_MAX_SECONDS = DWELL_MAX;
