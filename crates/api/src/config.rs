@@ -34,6 +34,14 @@ pub struct Config {
     pub limits: Limits,
     /// How long a signed blob URL stays valid, in seconds.
     pub blob_url_ttl_secs: u64,
+    /// Most flips of one stage within an hour; beyond it flips are refused politely.
+    pub max_forks_per_stage_per_hour: u32,
+    /// How many times a publish that conflicted with concurrent work is retried inside the service.
+    pub serialization_retries: u32,
+    /// The canonical renderer artefact the service loads at start-up.
+    pub renderer_wasm: Option<std::path::PathBuf>,
+    /// Words refused in titles and names, on top of the built-in list.
+    pub extra_deny_words: Vec<String>,
 }
 
 impl Config {
@@ -91,13 +99,44 @@ impl Config {
         )?;
         let mut blob_url_ttl_secs = 300;
         number(&lookup, "GRAFT_BLOB_URL_TTL_SECS", &mut blob_url_ttl_secs)?;
+        let mut max_forks_per_stage_per_hour = 20;
+        number(
+            &lookup,
+            "GRAFT_MAX_FORKS_PER_STAGE_PER_HOUR",
+            &mut max_forks_per_stage_per_hour,
+        )?;
+        let mut serialization_retries = 5;
+        number(
+            &lookup,
+            "GRAFT_SERIALIZATION_RETRIES",
+            &mut serialization_retries,
+        )?;
         validate(&limits, blob_url_ttl_secs)?;
+        if max_forks_per_stage_per_hour == 0 {
+            return Err(ConfigError::Invalid {
+                name: "GRAFT_MAX_FORKS_PER_STAGE_PER_HOUR",
+                reason: "must be at least 1".to_owned(),
+            });
+        }
+        let extra_deny_words = lookup("GRAFT_DENY_WORDS")
+            .map(|v| {
+                v.split(',')
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_owned)
+                    .collect()
+            })
+            .unwrap_or_default();
         Ok(Self {
             bind,
             database_url,
             cors_origins,
             limits,
             blob_url_ttl_secs,
+            max_forks_per_stage_per_hour,
+            serialization_retries,
+            renderer_wasm: lookup("GRAFT_RENDERER_WASM").map(std::path::PathBuf::from),
+            extra_deny_words,
         })
     }
 }
@@ -171,6 +210,11 @@ mod tests {
         );
         assert_eq!(c.limits, Limits::default());
         assert_eq!(c.blob_url_ttl_secs, 300);
+        assert_eq!(
+            (c.max_forks_per_stage_per_hour, c.serialization_retries),
+            (20, 5)
+        );
+        assert!(c.renderer_wasm.is_none() && c.extra_deny_words.is_empty());
     }
 
     #[test]
@@ -207,6 +251,7 @@ mod tests {
             ("GRAFT_MAX_CUT_FRAMES", "999999999"),
             ("GRAFT_MAX_TITLE_CHARS", "0"),
             ("GRAFT_BLOB_URL_TTL_SECS", "0"),
+            ("GRAFT_MAX_FORKS_PER_STAGE_PER_HOUR", "0"),
         ] {
             let result = Config::from_lookup(env(&[
                 ("GRAFT_DATABASE_URL", "postgres://x"),

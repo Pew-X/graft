@@ -44,6 +44,29 @@
         ],
         "type": "object"
       },
+      "CutRequest": {
+        "additionalProperties": false,
+        "description": "A cut of the parent's audio, in frames of 48 kHz mono audio, half-open.",
+        "properties": {
+          "end": {
+            "description": "First frame not included.",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "start": {
+            "description": "First frame included.",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "type": "object"
+      },
       "CutView": {
         "description": "A frame range of 48 kHz audio, half-open.",
         "properties": {
@@ -188,6 +211,29 @@
             "description": "What went wrong this time, for a person.",
             "type": "string"
           },
+          "field": {
+            "description": "The request field the problem is about, when there is one.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "retry_after_secs": {
+            "description": "Seconds to wait before trying again, when waiting helps.",
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "rule": {
+            "description": "A stable name for the rule that refused it, such as `too_long` or `inverted`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "status": {
             "description": "The HTTP status.",
             "format": "int32",
@@ -208,6 +254,87 @@
           "title",
           "status",
           "detail"
+        ],
+        "type": "object"
+      },
+      "PublishFlipRequest": {
+        "additionalProperties": false,
+        "description": "A flip to publish. No audio travels: the server renders it.",
+        "properties": {
+          "author": {
+            "description": "The maker's name as typed. Plain text, never a handle.",
+            "type": "string"
+          },
+          "cut": {
+            "$ref": "#/components/schemas/CutRequest",
+            "description": "The cut of the parent's audio."
+          },
+          "parent_id": {
+            "description": "Public id of the stage being flipped.",
+            "type": "string"
+          },
+          "preview_hash": {
+            "description": "SHA-256 (hex) of the audio the client's preview rendered. A cross-check only.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "retry_key": {
+            "description": "Chosen by the client when the publish step opens: 16 to 128 characters from `A-Z a-z 0-9 . _ : -`.\nRepeating a request with the same key and the same content returns the same publication.",
+            "type": "string"
+          },
+          "speed": {
+            "$ref": "#/components/schemas/SpeedRequest",
+            "description": "The varispeed fraction."
+          },
+          "title": {
+            "description": "Title as typed; links and handles are removed, and the response says so.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "parent_id",
+          "cut",
+          "speed",
+          "title",
+          "author",
+          "retry_key"
+        ],
+        "type": "object"
+      },
+      "PublishedFlip": {
+        "description": "The result of publishing.",
+        "properties": {
+          "adjusted_fields": {
+            "description": "Fields whose text was changed by removing a link or a handle.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "manage_key": {
+            "description": "The key that manages this publication. Shown once, in the response that creates it, and\nnever again: only its hash is stored. Absent when the request was a replay.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "preview_matches": {
+            "description": "Whether the client's preview hash matched the server's render; absent when none was sent.\nOn a mismatch the server's audio is what was stored.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "publication": {
+            "$ref": "#/components/schemas/EntryView",
+            "description": "The new publication, as one entry of a chain."
+          }
+        },
+        "required": [
+          "publication",
+          "adjusted_fields"
         ],
         "type": "object"
       },
@@ -233,6 +360,29 @@
           "name",
           "version",
           "wasm_sha256"
+        ],
+        "type": "object"
+      },
+      "SpeedRequest": {
+        "additionalProperties": false,
+        "description": "The speed as an exact fraction: `p/q` input frames per output frame, between 1/4 and 4.",
+        "properties": {
+          "p": {
+            "description": "Numerator, 1 to 2^20.",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "q": {
+            "description": "Denominator, 1 to 2^20.",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "p",
+          "q"
         ],
         "type": "object"
       },
@@ -382,6 +532,107 @@
         "summary": "The chain ending at a publication, source first.",
         "tags": [
           "routes"
+        ]
+      }
+    },
+    "/v1/publications": {
+      "post": {
+        "operationId": "publish_flip",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishFlipRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishedFlip"
+                }
+              }
+            },
+            "description": "The same request was already published; nothing changed"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishedFlip"
+                }
+              }
+            },
+            "description": "Published; the manage key is in this response only"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The maker closed this stage to flips"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No such parent"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Key conflict, hidden parent or chain too deep"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "A field breaks a rule; `field` and `rule` say which"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "This stage was flipped too often this hour"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Busy; send the same request again"
+          }
+        },
+        "summary": "Publish a flip of an existing stage.",
+        "tags": [
+          "publish"
         ]
       }
     },

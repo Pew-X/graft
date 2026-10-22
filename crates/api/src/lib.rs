@@ -5,6 +5,7 @@ pub mod http;
 pub mod metrics;
 pub mod openapi;
 pub mod problem;
+pub mod publish;
 pub mod routes;
 pub mod seed;
 pub mod views;

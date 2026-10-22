@@ -73,6 +73,13 @@ pub trait Render: Send + Sync {
     /// See [`RenderError`].
     fn render(&self, cut: &[i16], ratio: Ratio, method: Method) -> Result<Vec<i16>, RenderError>;
 
+    /// Output frames a render of `in_len` input frames at `ratio` would produce, so a caller can
+    /// apply its own length limits before rendering.
+    ///
+    /// # Errors
+    /// [`RenderError::InvalidParameters`] when the renderer refuses the parameters.
+    fn output_frames(&self, in_len: u32, ratio: Ratio) -> Result<u32, RenderError>;
+
     /// The identity of the renderer in use.
     fn identity(&self) -> &RendererIdentity;
 }
@@ -414,6 +421,10 @@ impl Render for RenderHost {
     fn render(&self, cut: &[i16], ratio: Ratio, method: Method) -> Result<Vec<i16>, RenderError> {
         self.run(cut, ratio.p, ratio.q, method as u32, None)
             .map(|(out, _)| out)
+    }
+
+    fn output_frames(&self, in_len: u32, ratio: Ratio) -> Result<u32, RenderError> {
+        RenderHost::output_frames(self, in_len, ratio)
     }
 
     fn identity(&self) -> &RendererIdentity {

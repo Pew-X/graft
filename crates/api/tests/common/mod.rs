@@ -13,6 +13,7 @@ use graft_domain::hash::Sha256Hash;
 use graft_domain::ids::PublicationId;
 use graft_domain::limits::Limits;
 use graft_domain::record::{ContentRecord, Cut, METHOD_HERMITE, RendererIdentity, Transform};
+use graft_render_host::{Limits as HostLimits, Render, RenderHost};
 use graft_storage::testing::TestDb;
 use graft_storage::{MemoryBlobStore, NewPublication, Outcome};
 use http_body_util::BodyExt;
@@ -20,11 +21,30 @@ use serde_json::Value;
 use std::sync::Arc;
 use tower::ServiceExt;
 
+/// The canonical renderer, built from source once per test binary (never a cached file: a stale
+/// artefact would make a test pass or fail for the wrong reason) and loaded through the pin check.
+pub fn host() -> Arc<RenderHost> {
+    static HOST: std::sync::OnceLock<Arc<RenderHost>> = std::sync::OnceLock::new();
+    HOST.get_or_init(|| {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let status = std::process::Command::new("sh")
+            .arg(root.join("scripts/build-wasm.sh"))
+            .status()
+            .expect("run scripts/build-wasm.sh");
+        assert!(status.success(), "scripts/build-wasm.sh failed");
+        let wasm = std::fs::read(root.join("target/wasm32-unknown-unknown/wasm/graft_render.wasm"))
+            .expect("read the artefact");
+        Arc::new(RenderHost::load(&wasm, HostLimits::default()).expect("load the artefact"))
+    })
+    .clone()
+}
+
 pub struct Harness {
     pub db: TestDb,
     pub blobs: Arc<MemoryBlobStore>,
     pub app: Router,
     pub limits: Limits,
+    pub metrics: Arc<graft_api::metrics::Metrics>,
 }
 
 pub fn renderer() -> RendererIdentity {
@@ -44,7 +64,12 @@ pub fn renderer() -> RendererIdentity {
 
 /// A one-second triangle wave as canonical audio: 48 kHz mono s16le.
 pub fn audio(seed: i16) -> Vec<u8> {
-    (0..48_000i32)
+    audio_frames(48_000, seed)
+}
+
+/// The same triangle wave, `frames` long.
+pub fn audio_frames(frames: i32, seed: i16) -> Vec<u8> {
+    (0..frames)
         .flat_map(|i| {
             let tri = ((i % 200) - 100) * 100;
             (tri as i16).wrapping_add(seed).to_le_bytes()
@@ -58,23 +83,36 @@ impl Harness {
     }
 
     pub async fn with_limits(limits: Limits) -> Self {
+        Self::configured(|c| c.limits = limits).await
+    }
+
+    /// A harness whose configuration is adjusted by `tweak` before the service is built.
+    pub async fn configured(tweak: impl FnOnce(&mut Config)) -> Self {
         let db = TestDb::create().await;
         let blobs = Arc::new(MemoryBlobStore::default());
         let mut config =
             Config::from_lookup(|n| (n == "GRAFT_DATABASE_URL").then(|| db.url.clone()))
                 .expect("config");
-        config.limits = limits.clone();
-        let state = AppState::new(&config, db.store.clone(), blobs.clone());
+        tweak(&mut config);
+        let limits = config.limits.clone();
+        let renderer: Arc<dyn Render> = host();
+        let state = AppState::new(&config, db.store.clone(), blobs.clone(), renderer);
+        let metrics = state.metrics.clone();
         let app = router(state, &config);
         Self {
             db,
             blobs,
             app,
             limits,
+            metrics,
         }
     }
 
     pub async fn seed(&self, key: &str, seed_audio: i16) -> Outcome {
+        self.seed_frames(key, 48_000, seed_audio).await
+    }
+
+    pub async fn seed_frames(&self, key: &str, frames: i32, seed_audio: i16) -> Outcome {
         seed_source(
             &self.db.store,
             self.blobs.as_ref(),
@@ -89,7 +127,7 @@ impl Harness {
                     work_author: Some("pat".into()),
                     url: None,
                 },
-                audio: audio(seed_audio),
+                audio: audio_frames(frames, seed_audio),
                 renderer: renderer(),
             },
         )
@@ -143,6 +181,42 @@ impl Harness {
         let request = Request::builder()
             .uri(uri)
             .body(Body::empty())
+            .expect("request");
+        let response = self.app.clone().oneshot(request).await.expect("response");
+        let (parts, body) = response.into_parts();
+        let bytes = body.collect().await.expect("body").to_bytes();
+        let json = serde_json::from_slice(&bytes)
+            .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&bytes).into()));
+        (parts.status, parts.headers, json)
+    }
+
+    pub async fn count(&self, table: &'static str) -> i64 {
+        sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT count(*) FROM {table}")))
+            .fetch_one(self.db.store.pool())
+            .await
+            .expect("count")
+    }
+
+    pub async fn post(
+        &self,
+        uri: &str,
+        body: &Value,
+    ) -> (StatusCode, axum::http::HeaderMap, Value) {
+        self.post_raw(uri, body.to_string(), "application/json")
+            .await
+    }
+
+    pub async fn post_raw(
+        &self,
+        uri: &str,
+        body: String,
+        content_type: &str,
+    ) -> (StatusCode, axum::http::HeaderMap, Value) {
+        let request = Request::builder()
+            .method("POST")
+            .uri(uri)
+            .header(header::CONTENT_TYPE, content_type)
+            .body(Body::from(body))
             .expect("request");
         let response = self.app.clone().oneshot(request).await.expect("response");
         let (parts, body) = response.into_parts();

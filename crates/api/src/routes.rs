@@ -20,7 +20,7 @@ fn not_found() -> Problem {
     Problem::not_found("there is no publication with this id")
 }
 
-async fn audio_for(state: &AppState, stage: &StoredStage) -> Result<AudioView, Problem> {
+pub(crate) async fn audio_for(state: &AppState, stage: &StoredStage) -> Result<AudioView, Problem> {
     let url = state
         .blobs
         .signed_url(stage.record.output_blob(), state.blob_url_ttl)

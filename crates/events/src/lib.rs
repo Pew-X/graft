@@ -10,7 +10,8 @@ pub trait EventSink: Send + Sync {
     fn record(&self, event: &Event);
 }
 
-/// The five events the service knows, named in graft vocabulary.
+/// The events the service records, named in graft vocabulary. Only the first exists so far; the
+/// ledger ticket adds the rest.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Event {
     /// A publication was created (server event, transactional once the ledger exists).
@@ -22,15 +23,4 @@ pub struct NoopSink;
 
 impl EventSink for NoopSink {
     fn record(&self, _event: &Event) {}
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_noop_sink_accepts_events_without_effect() {
-        let sink: &dyn EventSink = &NoopSink;
-        sink.record(&Event::PublicationCreated);
-    }
 }

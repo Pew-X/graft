@@ -2,6 +2,7 @@
 
 use graft_api::config::Config;
 use graft_api::http::{AppState, router};
+use graft_render_host::{Limits as HostLimits, RenderHost};
 use graft_storage::{BlobStore, FsBlobStore, MemoryBlobStore, Store};
 use std::sync::Arc;
 
@@ -27,7 +28,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Arc::new(MemoryBlobStore::default())
         }
     };
-    let state = AppState::new(&config, store, blobs);
+    let wasm_path = config
+        .renderer_wasm
+        .clone()
+        .ok_or("GRAFT_RENDERER_WASM is required: the path to the canonical renderer artefact")?;
+    // Loading checks the artefact against the pinned hash for the version it reports.
+    let renderer = Arc::new(RenderHost::load(
+        &std::fs::read(wasm_path)?,
+        HostLimits::default(),
+    )?);
+    let state = AppState::new(&config, store, blobs, renderer);
     let app = router(state, &config);
     let listener = tokio::net::TcpListener::bind(config.bind).await?;
     tracing::info!(bind = %config.bind, "listening");

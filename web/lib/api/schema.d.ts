@@ -21,6 +21,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/publications": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Publish a flip of an existing stage. */
+    post: operations["publish_flip"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/publications/{id}": {
     parameters: {
       query?: never;
@@ -58,6 +75,19 @@ export interface components {
       stages: components["schemas"]["EntryView"][];
       /** @description Set to "depth_cap" when the walk stopped before reaching a source. */
       truncated?: string | null;
+    };
+    /** @description A cut of the parent's audio, in frames of 48 kHz mono audio, half-open. */
+    CutRequest: {
+      /**
+       * Format: int32
+       * @description First frame not included.
+       */
+      end: number;
+      /**
+       * Format: int32
+       * @description First frame included.
+       */
+      start: number;
     };
     /** @description A frame range of 48 kHz audio, half-open. */
     CutView: {
@@ -111,6 +141,15 @@ export interface components {
     Problem: {
       /** @description What went wrong this time, for a person. */
       detail: string;
+      /** @description The request field the problem is about, when there is one. */
+      field?: string | null;
+      /**
+       * Format: int32
+       * @description Seconds to wait before trying again, when waiting helps.
+       */
+      retry_after_secs?: number | null;
+      /** @description A stable name for the rule that refused it, such as `too_long` or `inverted`. */
+      rule?: string | null;
       /**
        * Format: int32
        * @description The HTTP status.
@@ -120,6 +159,43 @@ export interface components {
       title: string;
       /** @description A URI naming the kind of problem; stable, so clients can switch on it. */
       type: string;
+    };
+    /** @description A flip to publish. No audio travels: the server renders it. */
+    PublishFlipRequest: {
+      /** @description The maker's name as typed. Plain text, never a handle. */
+      author: string;
+      /** @description The cut of the parent's audio. */
+      cut: components["schemas"]["CutRequest"];
+      /** @description Public id of the stage being flipped. */
+      parent_id: string;
+      /** @description SHA-256 (hex) of the audio the client's preview rendered. A cross-check only. */
+      preview_hash?: string | null;
+      /**
+       * @description Chosen by the client when the publish step opens: 16 to 128 characters from `A-Z a-z 0-9 . _ : -`.
+       *     Repeating a request with the same key and the same content returns the same publication.
+       */
+      retry_key: string;
+      /** @description The varispeed fraction. */
+      speed: components["schemas"]["SpeedRequest"];
+      /** @description Title as typed; links and handles are removed, and the response says so. */
+      title: string;
+    };
+    /** @description The result of publishing. */
+    PublishedFlip: {
+      /** @description Fields whose text was changed by removing a link or a handle. */
+      adjusted_fields: string[];
+      /**
+       * @description The key that manages this publication. Shown once, in the response that creates it, and
+       *     never again: only its hash is stored. Absent when the request was a replay.
+       */
+      manage_key?: string | null;
+      /**
+       * @description Whether the client's preview hash matched the server's render; absent when none was sent.
+       *     On a mismatch the server's audio is what was stored.
+       */
+      preview_matches?: boolean | null;
+      /** @description The new publication, as one entry of a chain. */
+      publication: components["schemas"]["EntryView"];
     };
     /** @description Which renderer produced the audio. */
     RendererView: {
@@ -132,6 +208,19 @@ export interface components {
       version: number;
       /** @description SHA-256 of the `.wasm`, lowercase hex. */
       wasm_sha256: string;
+    };
+    /** @description The speed as an exact fraction: `p/q` input frames per output frame, between 1/4 and 4. */
+    SpeedRequest: {
+      /**
+       * Format: int32
+       * @description Numerator, 1 to 2^20.
+       */
+      p: number;
+      /**
+       * Format: int32
+       * @description Denominator, 1 to 2^20.
+       */
+      q: number;
     };
     /** @description The exact speed fraction and the method that applied it. */
     SpeedView: {
@@ -212,6 +301,93 @@ export interface operations {
       };
       /** @description No such publication */
       404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  publish_flip: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PublishFlipRequest"];
+      };
+    };
+    responses: {
+      /** @description The same request was already published; nothing changed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PublishedFlip"];
+        };
+      };
+      /** @description Published; the manage key is in this response only */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PublishedFlip"];
+        };
+      };
+      /** @description The maker closed this stage to flips */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description No such parent */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Key conflict, hidden parent or chain too deep */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description A field breaks a rule; `field` and `rule` say which */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description This stage was flipped too often this hour */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Busy; send the same request again */
+      503: {
         headers: {
           [name: string]: unknown;
         };
