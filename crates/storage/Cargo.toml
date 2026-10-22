@@ -1,0 +1,13 @@
+[package]
+name = "graft-storage"
+description = "Postgres and blob store access behind traits."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+graft-domain.workspace = true
+
+[lints]
+workspace = true

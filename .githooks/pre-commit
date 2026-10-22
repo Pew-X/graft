@@ -1,0 +1,9 @@
+#!/bin/sh
+# Fast checks only (formatting), so the hook never obstructs flow. CI runs everything else.
+set -e
+cd "$(git rev-parse --show-toplevel)"
+cargo fmt --all --check
+if [ -d web/node_modules ]; then
+  (cd web && pnpm exec prettier --check . >/dev/null)
+fi
+node scripts/check-repo.mjs >/dev/null
