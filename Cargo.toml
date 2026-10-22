@@ -25,7 +25,7 @@ expect_used = "deny"
 panic = "deny"
 dbg_macro = "deny"
 todo = "deny"
-print_stdout = "warn"
+print_stdout = "warn" # command-line tools opt out locally
 
 # The canonical renderer artefact. Only graft-render is built with this
 # profile (cargo build --profile wasm -p graft-render --target wasm32-unknown-unknown).

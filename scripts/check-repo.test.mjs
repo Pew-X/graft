@@ -24,8 +24,23 @@ test("planning artefacts and stray markdown are rejected", () => {
     "docs/plan.md": "x",
     "NOTES.md": "x",
     "crates/render/README.md": "x",
+    "PLAN.MD": "x",
+    "web/docs/x.txt": "x",
+    "notes/brief.pdf": "x",
+    "web/vault/y.ts": "x",
   }).join("\n");
-  for (const path of ["vault/notes.txt", "SPEC.md", "GLOSSARY.md", "docs/plan.md", "NOTES.md", "crates/render/README.md"]) {
+  for (const path of [
+    "vault/notes.txt",
+    "SPEC.md",
+    "GLOSSARY.md",
+    "docs/plan.md",
+    "NOTES.md",
+    "crates/render/README.md",
+    "PLAN.MD",
+    "web/docs/x.txt",
+    "notes/brief.pdf",
+    "web/vault/y.ts",
+  ]) {
     assert.ok(found.includes(path), `${path} should be reported`);
   }
 });
@@ -39,6 +54,10 @@ test("banned vocabulary is rejected in documentation and web copy, with the line
   const found = run({ "README.md": "ok line\nWe take a cut and drop it.\n", "web/app/page.tsx": "<p>verified by us</p>" });
   assert.match(found.join("\n"), /README\.md:2: "take" is not graft vocabulary/);
   assert.match(found.join("\n"), /web\/app\/page\.tsx:1: "verified"/);
+});
+
+test("vocabulary is also checked in any web source file, not only page components", () => {
+  assert.match(run({ "web/lib/copy.ts": 'export const m = "chef special";' }).join("\n"), /web\/lib\/copy\.ts:1: "chef"/);
 });
 
 test("words that only contain a banned word are fine", () => {

@@ -6,17 +6,18 @@ import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 const ALLOWED_MARKDOWN = new Set(["README.md", "ARCHITECTURE.md"]);
-const PLANNING_PREFIXES = ["vault/", ".claude/", ".scratch/", "docs/", ".obsidian/"];
-const PLANNING_NAMES = /^(SPEC[^/]*|GLOSSARY[^/]*)\.md$|\.md\.local$/;
+const PLANNING_DIRS = /(^|\/)(vault|\.claude|\.scratch|docs|\.obsidian)\//i;
+const DOCUMENT = /\.(md|mdx|markdown|txt|org|rst|pdf|docx?)$/i;
+const PLANNING_NAMES = /^(spec|glossary)[^/]*\.md$|\.local$/i;
 const LOCKFILES = /(^|\/)(Cargo\.lock|pnpm-lock\.yaml|package-lock\.json)$/;
-const BINARY = /\.(png|jpe?g|gif|webp|ico|woff2?|wasm|pcm|bin)$/i;
+const BINARY = /\.(png|jpe?g|gif|webp|ico|woff2?|wasm|pcm|bin|pdf|docx?)$/i;
 
 const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b/;
 // Words that belong to the audited product or overclaim; never graft vocabulary.
 const BANNED = /\b(drop|drops|stack|stacks|take|takes|recipe|recipes|kitchen|chef|verified|proven|certified|owned by|cleared)\b/i;
 
 /** Files whose prose is user-facing: documentation and the web app's copy. */
-const isProse = (path) => ALLOWED_MARKDOWN.has(path) || /^web\/(app|src)\/.*\.(tsx|mdx)$/.test(path);
+const isProse = (path) => ALLOWED_MARKDOWN.has(path) || /^web\/.*\.(tsx?|mdx)$/.test(path) && !/\.(test|spec)\.|\/node_modules\//.test(path);
 
 /**
  * @param {string[]} files tracked paths
@@ -26,12 +27,12 @@ const isProse = (path) => ALLOWED_MARKDOWN.has(path) || /^web\/(app|src)\/.*\.(t
 export function checkFiles(files, read) {
   const found = [];
   for (const path of files) {
-    if (PLANNING_PREFIXES.some((p) => path.startsWith(p)) || PLANNING_NAMES.test(path.split("/").pop() ?? "")) {
+    if (PLANNING_DIRS.test(path) || PLANNING_NAMES.test(path.split("/").pop() ?? "")) {
       found.push(`${path}: planning artefacts stay local and gitignored`);
       continue;
     }
-    if (path.endsWith(".md") && !ALLOWED_MARKDOWN.has(path)) {
-      found.push(`${path}: only README.md and ARCHITECTURE.md may be committed as markdown`);
+    if (DOCUMENT.test(path) && !ALLOWED_MARKDOWN.has(path)) {
+      found.push(`${path}: only README.md and ARCHITECTURE.md may be committed as documents`);
       continue;
     }
     if (BINARY.test(path)) continue;

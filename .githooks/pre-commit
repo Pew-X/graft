@@ -6,3 +6,4 @@ cargo fmt --all --check
 if [ -d web/node_modules ]; then
   (cd web && pnpm exec prettier --check . >/dev/null)
 fi
+node scripts/check-repo.mjs >/dev/null

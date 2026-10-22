@@ -2,6 +2,7 @@ name: ci
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [dev, staging, main]
 
@@ -10,7 +11,7 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -38,7 +39,9 @@ jobs:
         run: node scripts/lint-commit-msg.mjs --title "$TITLE"
       - name: Every commit message is plain conventional text, no trailers
         if: github.event_name == 'pull_request'
-        run: node scripts/lint-commit-msg.mjs --range "origin/${{ github.base_ref }}..HEAD"
+        env:
+          BASE: ${{ github.base_ref }}
+        run: node scripts/lint-commit-msg.mjs --range "origin/$BASE..HEAD"
 
   rust:
     name: rust
@@ -64,7 +67,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2.87.30
         with:
-          tool: cargo-deny,cargo-audit
+          tool: cargo-deny@0.20.2,cargo-audit@0.22.2
       - run: cargo deny check
       - run: cargo audit
 

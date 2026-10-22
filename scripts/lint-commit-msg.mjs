@@ -20,9 +20,26 @@ const FORBIDDEN = [
   [/\p{Extended_Pictographic}/u, "emoji"],
 ];
 
-/** @returns {string[]} problems found in one commit message or title */
+const SCISSORS = /^# -+ >8 -+$/m;
+const TRAILER_LINE = /^([A-Za-z][A-Za-z0-9-]*|BREAKING CHANGE):(\s|$)/;
+const ALLOWED_TRAILER_KEYS = new Set(["breaking change", "refs", "fixes", "closes"]);
+
+/** Drops what git adds to the editor template: comment lines and the verbose diff after the scissors line. */
+export function stripEditorTemplate(message) {
+  const cut = message.search(SCISSORS);
+  const kept = cut === -1 ? message : message.slice(0, cut);
+  return kept
+    .split("\n")
+    .filter((l) => !l.startsWith("#"))
+    .join("\n");
+}
+
+/**
+ * @param {string} message
+ * @returns {string[]} problems found in one commit message or title
+ */
 export function lintMessage(message) {
-  const lines = message.replace(/\r\n/g, "\n").split("\n").filter((l) => !l.startsWith("#"));
+  const lines = message.replace(/\r\n/g, "\n").split("\n");
   const header = (lines[0] ?? "").trimEnd();
   const problems = [];
   if (!HEADER.test(header)) {
@@ -33,6 +50,14 @@ export function lintMessage(message) {
   const text = lines.join("\n");
   for (const [pattern, what] of FORBIDDEN) {
     if (pattern.test(text)) problems.push(`contains a forbidden ${what}`);
+  }
+  // Any trailer-shaped line in the last paragraph is refused unless its key is on the short allowlist.
+  const paragraphs = text.trim().split(/\n\s*\n/);
+  if (paragraphs.length > 1) {
+    for (const line of (paragraphs.at(-1) ?? "").split("\n")) {
+      const key = line.match(TRAILER_LINE) && line.slice(0, line.indexOf(":")).trim().toLowerCase();
+      if (key && !ALLOWED_TRAILER_KEYS.has(key)) problems.push(`contains a forbidden trailer (${line.slice(0, line.indexOf(":"))})`);
+    }
   }
   return problems;
 }
@@ -54,7 +79,7 @@ function main(argv) {
   const value = argv[1];
   /** @type {{label: string, message: string}[]} */
   let items;
-  if (flag === "--file" && value) items = [{ label: value, message: readFileSync(value, "utf8") }];
+  if (flag === "--file" && value) items = [{ label: value, message: stripEditorTemplate(readFileSync(value, "utf8")) }];
   else if (flag === "--title" && value) items = [{ label: "title", message: value }];
   else if (flag === "--range" && value) items = commitsInRange(value).map((c) => ({ label: c.sha, message: c.message }));
   else {
