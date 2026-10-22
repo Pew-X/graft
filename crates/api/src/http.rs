@@ -1,6 +1,7 @@
 //! The HTTP surface: routing, request ids, security headers, CORS, health, readiness and metrics.
 
 use crate::config::Config;
+use crate::guard::{Class, Clock, Guards, SystemClock};
 use crate::maker;
 use crate::metrics::Metrics;
 use crate::moderation;
@@ -56,6 +57,8 @@ pub struct AppState {
     pub publish: PublishSettings,
     /// SHA-256 of the operator secret; `None` when admin access is not configured.
     pub admin_secret_hash: Option<[u8; 32]>,
+    /// The kill switch, the per-visitor limits, the global cap and the storage threshold.
+    pub guards: Arc<Guards>,
 }
 
 /// Settings the publish route reads.
@@ -80,9 +83,30 @@ impl AppState {
         blobs: Arc<dyn BlobStore>,
         renderer: Arc<dyn Render>,
     ) -> Self {
+        Self::with_clock(config, store, blobs, renderer, Arc::new(SystemClock))
+    }
+
+    /// As `new`, with the time source the guardrails read, so a test can move time.
+    #[must_use]
+    pub fn with_clock(
+        config: &Config,
+        store: Store,
+        blobs: Arc<dyn BlobStore>,
+        renderer: Arc<dyn Render>,
+        clock: Arc<dyn Clock>,
+    ) -> Self {
+        let metrics = Arc::new(Metrics::default());
+        metrics.set_publishing_open(config.guardrails.publishing_default);
         Self {
             readiness: Arc::new(StoreReadiness(store.clone())),
-            metrics: Arc::new(Metrics::default()),
+            metrics,
+            guards: Arc::new(Guards::new(
+                &config.guardrails,
+                &config.limits,
+                store.clone(),
+                blobs.clone(),
+                clock,
+            )),
             store,
             blobs,
             limits: config.limits.clone(),
@@ -133,16 +157,20 @@ pub fn router(state: AppState, config: &Config) -> Router {
         )
         .route(
             "/v1/reports",
-            post(moderation::file_report).layer(axum::extract::DefaultBodyLimit::max(
-                moderation::MAX_BODY_BYTES,
-            )),
+            post(moderation::file_report)
+                .layer(axum::extract::DefaultBodyLimit::max(
+                    moderation::MAX_BODY_BYTES,
+                ))
+                .layer(middleware::from_fn_with_state(state.clone(), report_guard)),
         )
         .merge(admin_routes(state.clone()))
         .route(
             "/v1/publications",
-            post(publish::publish_flip).layer(axum::extract::DefaultBodyLimit::max(
-                publish::MAX_BODY_BYTES,
-            )),
+            post(publish::publish_flip)
+                .layer(axum::extract::DefaultBodyLimit::max(
+                    publish::MAX_BODY_BYTES,
+                ))
+                .layer(middleware::from_fn_with_state(state.clone(), publish_guard)),
         )
         .fallback(|| async { Problem::not_found("there is nothing at this address") })
         .method_not_allowed_fallback(|| async { Problem::method_not_allowed() })
@@ -156,6 +184,14 @@ fn admin_routes(state: AppState) -> Router<AppState> {
     Router::new()
         .route("/admin/reports", get(moderation::list_reports))
         .route(
+            "/admin/switch",
+            get(moderation::get_switch)
+                .put(moderation::set_switch)
+                .layer(axum::extract::DefaultBodyLimit::max(
+                    moderation::MAX_BODY_BYTES,
+                )),
+        )
+        .route(
             "/admin/publications/{id}/hide",
             post(moderation::hide)
                 .layer(axum::extract::DefaultBodyLimit::max(
@@ -167,6 +203,64 @@ fn admin_routes(state: AppState) -> Router<AppState> {
             state,
             moderation::require_admin,
         ))
+}
+
+/// The guard in front of every route that adds to what is published: the kill switch first, then
+/// the visitor's own limit. Both run before the body is read, so a refused request costs nothing.
+/// A new publishing route (a source upload, client events) is added here and in `WRITE_ROUTES`.
+pub(crate) async fn publish_guard(
+    State(state): State<AppState>,
+    request: Request,
+    next: Next,
+) -> Response {
+    if let Some(refusal) = publishing_closed(&state).await {
+        return refusal;
+    }
+    let ip = state
+        .guards
+        .client_ip(request.extensions(), request.headers());
+    match state
+        .guards
+        .limiter
+        .try_admit(Class::Publish, ip, state.guards.clock.now_secs())
+    {
+        Ok(()) => next.run(request).await,
+        Err(wait) => {
+            state.metrics.refusal("rate_limited_publish");
+            Problem::rate_limited(wait).into_response()
+        }
+    }
+}
+
+/// The guard in front of reports: the visitor's own limit only. Reports stay open when publishing
+/// is switched off, because they are how a problem is raised.
+async fn report_guard(State(state): State<AppState>, request: Request, next: Next) -> Response {
+    let ip = state
+        .guards
+        .client_ip(request.extensions(), request.headers());
+    match state
+        .guards
+        .limiter
+        .try_admit(Class::Report, ip, state.guards.clock.now_secs())
+    {
+        Ok(()) => next.run(request).await,
+        Err(wait) => {
+            state.metrics.refusal("rate_limited_report");
+            Problem::rate_limited(wait).into_response()
+        }
+    }
+}
+
+/// The refusal to send when the kill switch is closed, or `None` when publishing is open.
+pub(crate) async fn publishing_closed(state: &AppState) -> Option<Response> {
+    let open = state.guards.switch.publishing_open().await;
+    state.metrics.set_publishing_open(open);
+    if open {
+        None
+    } else {
+        state.metrics.refusal("publishing_off");
+        Some(Problem::publishing_off().into_response())
+    }
 }
 
 fn cors(config: &Config) -> CorsLayer {

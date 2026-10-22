@@ -2,6 +2,7 @@
 
 pub mod blobs;
 pub mod config;
+pub mod guard;
 pub mod http;
 pub mod maker;
 pub mod metrics;

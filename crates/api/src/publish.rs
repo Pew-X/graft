@@ -127,8 +127,8 @@ where
         (status = 409, description = "Key conflict, hidden parent or chain too deep", body = Problem, content_type = "application/problem+json"),
         (status = 403, description = "The maker closed this stage to flips", body = Problem, content_type = "application/problem+json"),
         (status = 422, description = "A field breaks a rule; `field` and `rule` say which", body = Problem, content_type = "application/problem+json"),
-        (status = 429, description = "This stage was flipped too often this hour", body = Problem, content_type = "application/problem+json"),
-        (status = 503, description = "Busy; send the same request again", body = Problem, content_type = "application/problem+json"),
+        (status = 429, description = "This stage was flipped too often this hour, this visitor published too often (`rate-limited`), or everyone together reached the publish cap (`publish-cap`); `Retry-After` says when to try again", body = Problem, content_type = "application/problem+json"),
+        (status = 503, description = "Busy, send the same request again (`retry-later`); publishing is switched off (`publishing-off`); or there is no room for new audio (`storage-full`)", body = Problem, content_type = "application/problem+json"),
     )
 )]
 pub async fn publish_flip(
@@ -187,6 +187,19 @@ pub async fn publish_flip(
             Some(flags) if flags.hidden => return Err(Problem::parent_unavailable()),
             Some(flags) if !flags.fork_permitted => return Err(Problem::fork_not_permitted()),
             Some(_) => {}
+        }
+    }
+
+    // 2b. Admission, still before any slow work: room to store the audio, and a token from the
+    // global budget. A replay adds nothing to storage, so it takes neither.
+    if !is_replay {
+        if state.guards.storage.is_full().await {
+            state.metrics.refusal("storage_full");
+            return Err(Problem::storage_full());
+        }
+        if let Err(problem) = state.guards.take_global_token(&state.store).await {
+            state.metrics.refusal("publish_cap");
+            return Err(problem);
         }
     }
 

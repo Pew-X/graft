@@ -223,6 +223,59 @@ impl Problem {
             )
         }
     }
+
+    /// 503: the operator has closed publishing. Reads and plays are unaffected.
+    #[must_use]
+    pub fn publishing_off() -> Self {
+        Self::base(
+            "urn:graft:problem:publishing-off",
+            "Publishing is switched off",
+            503,
+            "publishing is switched off for now; everything already published still plays, and you can try again later",
+        )
+    }
+
+    /// 429: this visitor has done this too often within the window.
+    #[must_use]
+    pub fn rate_limited(retry_after_secs: u32) -> Self {
+        Self {
+            retry_after_secs: Some(retry_after_secs),
+            ..Self::base(
+                "urn:graft:problem:rate-limited",
+                "Slow down a little",
+                429,
+                format!("you have done this a lot lately; try again in {retry_after_secs} seconds"),
+            )
+        }
+    }
+
+    /// 429: everyone together have published as much as is admitted for now.
+    #[must_use]
+    pub fn publish_cap(retry_after_secs: u64) -> Self {
+        let wait = u32::try_from(retry_after_secs).unwrap_or(u32::MAX);
+        Self {
+            retry_after_secs: Some(wait),
+            ..Self::base(
+                "urn:graft:problem:publish-cap",
+                "Publishing is at its limit for now",
+                429,
+                format!(
+                    "a lot has been published in a short time and new publishes are paused briefly; try again in {wait} seconds"
+                ),
+            )
+        }
+    }
+
+    /// 503: the audio store has reached its admission threshold.
+    #[must_use]
+    pub fn storage_full() -> Self {
+        Self::base(
+            "urn:graft:problem:storage-full",
+            "No room for new sounds right now",
+            503,
+            "there is no room for new publications right now; everything already published still plays",
+        )
+    }
 }
 
 impl IntoResponse for Problem {

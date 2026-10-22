@@ -26,6 +26,8 @@ struct Inner {
 pub struct Metrics {
     inner: Mutex<Inner>,
     preview_mismatches: std::sync::atomic::AtomicU64,
+    refusals: Mutex<BTreeMap<&'static str, u64>>,
+    publishing_open: std::sync::atomic::AtomicBool,
 }
 
 impl Metrics {
@@ -59,6 +61,20 @@ impl Metrics {
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
+    /// Count one request refused by a guardrail. `reason` is one of a fixed set of names, never
+    /// anything taken from a request, so the label cannot grow and cannot hold an address.
+    pub fn refusal(&self, reason: &'static str) {
+        if let Ok(mut refusals) = self.refusals.lock() {
+            *refusals.entry(reason).or_default() += 1;
+        }
+    }
+
+    /// Record whether publishing is open, for the kill switch gauge.
+    pub fn set_publishing_open(&self, open: bool) {
+        self.publishing_open
+            .store(open, std::sync::atomic::Ordering::Relaxed);
+    }
+
     /// Render everything in the Prometheus text exposition format.
     #[must_use]
     pub fn render(&self) -> String {
@@ -70,6 +86,22 @@ impl Metrics {
             "graft_preview_mismatch_total {}\n",
             self.preview_mismatches
                 .load(std::sync::atomic::Ordering::Relaxed)
+        ));
+        out.push_str("# TYPE graft_refusals_total counter\n");
+        if let Ok(refusals) = self.refusals.lock() {
+            for (reason, n) in refusals.iter() {
+                out.push_str(&format!(
+                    "graft_refusals_total{{reason=\"{reason}\"}} {n}\n"
+                ));
+            }
+        }
+        out.push_str("# TYPE graft_publishing_open gauge\n");
+        out.push_str(&format!(
+            "graft_publishing_open {}\n",
+            u8::from(
+                self.publishing_open
+                    .load(std::sync::atomic::Ordering::Relaxed)
+            )
         ));
         out.push_str("# TYPE graft_http_requests_total counter\n");
         for ((method, route, status), n) in &inner.requests {

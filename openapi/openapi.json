@@ -793,7 +793,7 @@
                 }
               }
             },
-            "description": "This stage was flipped too often this hour"
+            "description": "This stage was flipped too often this hour, this visitor published too often (`rate-limited`), or everyone together reached the publish cap (`publish-cap`); `Retry-After` says when to try again"
           },
           "503": {
             "content": {
@@ -803,7 +803,7 @@
                 }
               }
             },
-            "description": "Busy; send the same request again"
+            "description": "Busy, send the same request again (`retry-later`); publishing is switched off (`publishing-off`); or there is no room for new audio (`storage-full`)"
           }
         },
         "summary": "Publish a flip of an existing stage.",
@@ -1029,6 +1029,16 @@
               }
             },
             "description": "A field breaks a rule; `field` and `rule` say which"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "This visitor has filed too many reports lately; `Retry-After` says when to try again"
           }
         },
         "summary": "File a report about a publication. No account; no identity is collected.",

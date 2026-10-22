@@ -3,6 +3,7 @@
 pub mod blob;
 pub mod flip;
 pub mod gate;
+pub mod guardrails;
 mod lock;
 pub mod maker;
 pub mod orphans;
@@ -15,6 +16,7 @@ pub mod testing;
 pub use blob::{BlobError, BlobInfo, BlobStore, FsBlobStore, MemoryBlobStore};
 pub use flip::{FlipOutcome, NewFlip, Refusal};
 pub use gate::{Gate, NoGate};
+pub use guardrails::PublishToken;
 pub use maker::StageFlags;
 pub use orphans::{CleanupError, CleanupReport, remove_orphans};
 pub use postgres::{ForkFlags, NewPublication, Outcome, Store, StoreError};

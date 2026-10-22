@@ -3,6 +3,8 @@
 //! names the guarantee it protects.
 
 mod common;
+#[path = "publish/guardrails.rs"]
+mod guardrails;
 
 use axum::http::StatusCode;
 use common::{Harness, is_problem};

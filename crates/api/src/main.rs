@@ -31,9 +31,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = router(state, &config);
     let listener = tokio::net::TcpListener::bind(config.bind).await?;
     tracing::info!(bind = %config.bind, "listening");
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
+    // The connecting address is what the per-visitor limits count (or the entry a trusted proxy
+    // appended, see GRAFT_TRUSTED_PROXY_HOPS); it is held in memory for one window and never stored.
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await?;
     Ok(())
 }
 

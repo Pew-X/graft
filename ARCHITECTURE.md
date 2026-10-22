@@ -226,6 +226,15 @@ Written by ticket 05; later tickets add rows. Every value is read from the envir
 | `GRAFT_ADMIN_SECRET` | unset | the operator secret (at least 24 characters); when unset every admin request is refused |
 | `GRAFT_MAX_CONCURRENT_RENDERS` | 4 | most renders running at once; a request that waits over 5 s for a turn gets 503 retry-later |
 | `GRAFT_LOCK_WAIT_MS` | 10000 | how long a publish or a flag change waits for the lock on its stage before answering 503 |
+| `GRAFT_PUBLISHING` | `on` | whether publishing is open until the operator sets the kill switch (`on` or `off`) |
+| `GRAFT_SWITCH_CACHE_MS` | 2000 | how long a read of the kill switch is reused; the most a change made on another instance needs to be seen |
+| `GRAFT_TRUSTED_PROXY_HOPS` | 0 | trusted proxies in front of the service; with 1 behind a load balancer the visitor is the last `X-Forwarded-For` entry |
+| `GRAFT_PUBLISH_PER_IP`, `GRAFT_PUBLISH_WINDOW_SECS` | 20, 3600 | publishes one address may make within the window |
+| `GRAFT_REPORT_PER_IP`, `GRAFT_REPORT_WINDOW_SECS` | 10, 3600 | reports one address may file within the window |
+| `GRAFT_ADMIN_FAILURES_PER_IP`, `GRAFT_ADMIN_WINDOW_SECS` | 10, 900 | refused admin attempts one address may make before it waits |
+| `GRAFT_GLOBAL_PUBLISH_PER_HOUR`, `GRAFT_GLOBAL_PUBLISH_BURST` | 120, 30 | the global publish cap: tokens refilled per hour, and the most admitted in one burst |
+| `GRAFT_STORAGE_LIMIT_BYTES` | 8,000,000,000 | what the host allows for audio; the admission threshold is this minus the overshoot bound |
+| `GRAFT_STORAGE_REFRESH_SECS` | 60 | how often the stored total is read again |
 
 Without a bucket or `GRAFT_BLOB_DIR` the service keeps audio in memory and says so in its log. The seed script refuses to seed into memory, and also reads `GRAFT_RENDERER_WASM` (the artefact, checked against the pins).
 
@@ -296,6 +305,31 @@ Written by ticket 09.
 **A held stage cannot be flipped**; neither can a hidden one (409, with their own problem types). A fork accepted just before a hide on one of its ancestors becomes a descendant like any other and is held; a fork of a descendant cannot acquire the hidden stage's lock, because it is keyed on its own parent, so a rights hide above it can land a moment after a fork was accepted. That is harmless, because holding is computed when a chain is read, and it is tested.
 
 **What a takedown achieves.** New requests for the audio of a hidden or held stage are refused; URLs already issued expire within their short lifetime; copies already downloaded cannot be recalled. A rights hide also holds everything built on the hidden stage while it stands. The report path and the operator's decision are the whole procedure; they do not verify anything about rights, and graft states that plainly.
+
+## Abuse guardrails
+
+The public write surface is anonymous, so what keeps it safe and cheap is a small set of limits. Each refuses politely with a stated reason (a problem document with a stable `type`, and a `Retry-After` header where waiting helps); none loses a request silently and none answers with an opaque 500.
+
+| Guardrail | Default | Refusal |
+|---|---|---|
+| Kill switch (publishing) | open | 503 `publishing-off` |
+| Per-address publish limit | 20 per hour | 429 `rate-limited` |
+| Per-address report limit | 10 per hour | 429 `rate-limited` |
+| Per-address failed admin attempts | 10 per 15 minutes | 429 `rate-limited` |
+| Global publish cap | 120 per hour, burst 30 | 429 `publish-cap` |
+| Storage admission threshold | 8 GB minus the overshoot bound | 503 `storage-full` |
+
+**The kill switch** is a row in the database (`runtime_settings`), read through a short cache, and set through the operator's `PUT /admin/switch` (`GET` reads it). It needs no redeploy. It closes every route that adds to what is published: flips now, and the source upload and client event routes when they exist. Reads, reports, a maker's own withdrawal and the operator's routes stay open, so a bad moment can always be reported, undone and reopened. A test lists every write route, checks the list against the public interface document, and asserts the switch closes exactly the routes marked as closed; a new write route fails it until someone decides which kind it is. An instance sees its own change at once and another instance's within `GRAFT_SWITCH_CACHE_MS`. If the database cannot be read the last known state stands; before any read, the configured default.
+
+**Per-address limits** count in the memory of one process, in a sliding window, and are forgotten when the window passes or the process restarts. An address is never written to a row, a log line or a metric label, and not stored in any other form either, hashed included; a test dumps every table, the log and the metrics after a mixed run and looks for it. IPv6 visitors count by their /64. With one instance behind a load balancer the connecting address is the balancer, so `GRAFT_TRUSTED_PROXY_HOPS` says how many proxies to trust: the visitor is the `X-Forwarded-For` entry that many places from the right, and anything the visitor wrote further left is ignored. Because the counts are per process, a second instance gives each visitor a second allowance; the global cap, which lives in the database, is what holds across instances. The table of tracked addresses is bounded; when it is full new addresses are not tracked, and the global cap still applies. Failed admin attempts are counted, successes are not, so the operator is not locked out by using the routes.
+
+**The global publish cap** is a token bucket in one database row: a publish acquires one token, tokens refill at a fixed rate up to the burst. It is one conditional update, so any number of simultaneous publishers on any number of instances are admitted exactly as often as there are tokens (a test sends 40 at once against a burst of 7 and sees 7 admitted and 33 refused with a wait). A replay of a publish already made acquires no token and is never refused by the cap or the threshold. A publish that is refused later for another reason has still used its token, which only makes the bound conservative.
+
+**The storage threshold is an admission threshold, not a quota.** The stored total is read from the blob store at most once per `GRAFT_STORAGE_REFRESH_SECS` and compared with the threshold outside any transaction, so it never makes unrelated publishes conflict. Publishes admitted between two reads add to the total, and the global cap bounds how many: at most the burst plus what the cap refills in one refresh interval, each no larger than the largest blob the limits allow. That is the documented **overshoot bound**; with the defaults it is 32 blobs of 1.92 MB, about 61 MB, and the threshold is the host's limit minus it. The service refuses to start if the limit does not exceed the bound. A test publishes a burst while the total is frozen below the threshold and asserts the final total is within the bound of the threshold and under the host's limit, then asserts that after a refresh publishes are refused and store nothing. If the total cannot be read, the last known value is used, and with none, publishing is admitted: refusing everything over a failed listing would be worse than the bounded overshoot. Reading the total lists every audio object, which is cheap at this scale and is the thing to replace first if it grew.
+
+**Public text** policy is configuration (`GRAFT_DENY_WORDS`, on top of the built-in list) and is read at start-up; changing it needs a restart.
+
+**Residual risk, stated plainly.** Someone could still publish what they should not. These limits cap how fast, how much and from how many places, and the reports, the hide and the switch let the operator respond; they do not make misuse impossible. Addresses behind one shared connection share an allowance, and a person with many addresses can exceed the per-address limit, which is why the global cap exists.
 
 ## Blobs
 

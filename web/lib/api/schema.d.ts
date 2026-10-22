@@ -492,7 +492,7 @@ export interface operations {
           "application/problem+json": components["schemas"]["Problem"];
         };
       };
-      /** @description This stage was flipped too often this hour */
+      /** @description This stage was flipped too often this hour, this visitor published too often (`rate-limited`), or everyone together reached the publish cap (`publish-cap`); `Retry-After` says when to try again */
       429: {
         headers: {
           [name: string]: unknown;
@@ -501,7 +501,7 @@ export interface operations {
           "application/problem+json": components["schemas"]["Problem"];
         };
       };
-      /** @description Busy; send the same request again */
+      /** @description Busy, send the same request again (`retry-later`); publishing is switched off (`publishing-off`); or there is no room for new audio (`storage-full`) */
       503: {
         headers: {
           [name: string]: unknown;
@@ -669,6 +669,15 @@ export interface operations {
       };
       /** @description A field breaks a rule; `field` and `rule` say which */
       422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description This visitor has filed too many reports lately; `Retry-After` says when to try again */
+      429: {
         headers: {
           [name: string]: unknown;
         };

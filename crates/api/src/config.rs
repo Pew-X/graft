@@ -59,6 +59,191 @@ pub struct Config {
     pub blob_refresh_secs: u64,
     /// The orphan cleanup leaves blobs younger than this alone, in seconds.
     pub orphan_grace_secs: u64,
+    /// The abuse guardrails: kill switch default, per-visitor limits, global cap, storage threshold.
+    pub guardrails: Guardrails,
+}
+
+/// A limit on how often something may happen: `count` times within `window_secs`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Rate {
+    /// How many are allowed in the window.
+    pub count: u32,
+    /// The length of the window, in seconds.
+    pub window_secs: u64,
+}
+
+/// The settings of the abuse guardrails (ARCHITECTURE.md, "Abuse guardrails").
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Guardrails {
+    /// Whether publishing is open when the operator has not set the kill switch.
+    pub publishing_default: bool,
+    /// How long a read of the kill switch is reused, in milliseconds: the most a toggle made on
+    /// another instance can take to be seen.
+    pub switch_cache_ms: u64,
+    /// How many trusted proxies sit in front of the service; 0 uses the connecting address.
+    pub trusted_proxy_hops: usize,
+    /// Per visitor address: publishing a flip or a source.
+    pub publish_per_ip: Rate,
+    /// Per visitor address: filing reports.
+    pub report_per_ip: Rate,
+    /// Per visitor address: refused admin attempts before further attempts wait.
+    pub admin_failures_per_ip: Rate,
+    /// The global publish cap: publishes admitted per hour, across all visitors and instances.
+    pub global_publish_per_hour: u32,
+    /// The most publishes admitted in one burst.
+    pub global_publish_burst: u32,
+    /// The storage the host allows for audio, in bytes. The admission threshold is this minus the
+    /// documented overshoot bound.
+    pub storage_limit_bytes: u64,
+    /// How often the storage total is read again, in seconds.
+    pub storage_refresh_secs: u64,
+}
+
+impl Guardrails {
+    /// The most bytes that can be stored beyond the threshold before the next refresh notices:
+    /// the burst plus what the cap refills in one refresh interval, each as large as the largest
+    /// blob the limits allow. A bound, not a measurement.
+    #[must_use]
+    pub fn overshoot_bound_bytes(&self, limits: &Limits) -> u64 {
+        let largest_blob = u64::from(limits.max_output_frames.max(limits.max_source_frames)) * 2;
+        let refill =
+            (u64::from(self.global_publish_per_hour) * self.storage_refresh_secs).div_ceil(3600);
+        (u64::from(self.global_publish_burst) + refill) * largest_blob
+    }
+
+    /// New publishes are refused once the stored total reaches this.
+    #[must_use]
+    pub fn admission_threshold_bytes(&self, limits: &Limits) -> u64 {
+        self.storage_limit_bytes
+            .saturating_sub(self.overshoot_bound_bytes(limits))
+    }
+}
+
+fn guardrails(
+    lookup: &impl Fn(&str) -> Option<String>,
+    limits: &Limits,
+) -> Result<Guardrails, ConfigError> {
+    let mut g = Guardrails {
+        publishing_default: true,
+        switch_cache_ms: 2000,
+        trusted_proxy_hops: 0,
+        publish_per_ip: Rate {
+            count: 20,
+            window_secs: 3600,
+        },
+        report_per_ip: Rate {
+            count: 10,
+            window_secs: 3600,
+        },
+        admin_failures_per_ip: Rate {
+            count: 10,
+            window_secs: 900,
+        },
+        global_publish_per_hour: 120,
+        global_publish_burst: 30,
+        storage_limit_bytes: 8_000_000_000,
+        storage_refresh_secs: 60,
+    };
+    match lookup("GRAFT_PUBLISHING").as_deref().map(str::trim) {
+        None | Some("on") => {}
+        Some("off") => g.publishing_default = false,
+        Some(_) => {
+            return Err(ConfigError::Invalid {
+                name: "GRAFT_PUBLISHING",
+                reason: "must be `on` or `off`".to_owned(),
+            });
+        }
+    }
+    number(lookup, "GRAFT_SWITCH_CACHE_MS", &mut g.switch_cache_ms)?;
+    number(
+        lookup,
+        "GRAFT_TRUSTED_PROXY_HOPS",
+        &mut g.trusted_proxy_hops,
+    )?;
+    number(lookup, "GRAFT_PUBLISH_PER_IP", &mut g.publish_per_ip.count)?;
+    number(
+        lookup,
+        "GRAFT_PUBLISH_WINDOW_SECS",
+        &mut g.publish_per_ip.window_secs,
+    )?;
+    number(lookup, "GRAFT_REPORT_PER_IP", &mut g.report_per_ip.count)?;
+    number(
+        lookup,
+        "GRAFT_REPORT_WINDOW_SECS",
+        &mut g.report_per_ip.window_secs,
+    )?;
+    number(
+        lookup,
+        "GRAFT_ADMIN_FAILURES_PER_IP",
+        &mut g.admin_failures_per_ip.count,
+    )?;
+    number(
+        lookup,
+        "GRAFT_ADMIN_WINDOW_SECS",
+        &mut g.admin_failures_per_ip.window_secs,
+    )?;
+    number(
+        lookup,
+        "GRAFT_GLOBAL_PUBLISH_PER_HOUR",
+        &mut g.global_publish_per_hour,
+    )?;
+    number(
+        lookup,
+        "GRAFT_GLOBAL_PUBLISH_BURST",
+        &mut g.global_publish_burst,
+    )?;
+    number(
+        lookup,
+        "GRAFT_STORAGE_LIMIT_BYTES",
+        &mut g.storage_limit_bytes,
+    )?;
+    number(
+        lookup,
+        "GRAFT_STORAGE_REFRESH_SECS",
+        &mut g.storage_refresh_secs,
+    )?;
+    for (name, value) in [
+        ("GRAFT_PUBLISH_PER_IP", u64::from(g.publish_per_ip.count)),
+        ("GRAFT_PUBLISH_WINDOW_SECS", g.publish_per_ip.window_secs),
+        ("GRAFT_REPORT_PER_IP", u64::from(g.report_per_ip.count)),
+        ("GRAFT_REPORT_WINDOW_SECS", g.report_per_ip.window_secs),
+        (
+            "GRAFT_ADMIN_FAILURES_PER_IP",
+            u64::from(g.admin_failures_per_ip.count),
+        ),
+        (
+            "GRAFT_ADMIN_WINDOW_SECS",
+            g.admin_failures_per_ip.window_secs,
+        ),
+        (
+            "GRAFT_GLOBAL_PUBLISH_PER_HOUR",
+            u64::from(g.global_publish_per_hour),
+        ),
+        (
+            "GRAFT_GLOBAL_PUBLISH_BURST",
+            u64::from(g.global_publish_burst),
+        ),
+        ("GRAFT_STORAGE_REFRESH_SECS", g.storage_refresh_secs),
+    ] {
+        if value == 0 {
+            return Err(ConfigError::Invalid {
+                name,
+                reason: "must be at least 1".to_owned(),
+            });
+        }
+    }
+    // The threshold is the host's limit minus the overshoot bound; a limit smaller than the bound
+    // would leave no room to admit anything, and the service would silently refuse every publish.
+    if g.storage_limit_bytes <= g.overshoot_bound_bytes(limits) {
+        return Err(ConfigError::Invalid {
+            name: "GRAFT_STORAGE_LIMIT_BYTES",
+            reason: format!(
+                "must exceed the overshoot bound of {} bytes (the burst plus one refresh interval of the global cap, each as large as the largest blob)",
+                g.overshoot_bound_bytes(limits)
+            ),
+        });
+    }
+    Ok(g)
 }
 
 impl std::fmt::Debug for Config {
@@ -232,6 +417,7 @@ impl Config {
             &mut serialization_retries,
         )?;
         validate(&limits, blob_url_ttl_secs)?;
+        let guardrails = guardrails(&lookup, &limits)?;
         if max_forks_per_stage_per_hour == 0 {
             return Err(ConfigError::Invalid {
                 name: "GRAFT_MAX_FORKS_PER_STAGE_PER_HOUR",
@@ -264,6 +450,7 @@ impl Config {
             s3,
             blob_refresh_secs,
             orphan_grace_secs,
+            guardrails,
         })
     }
 }
@@ -496,6 +683,68 @@ mod tests {
             ("GRAFT_MAX_OUTPUT_FRAMES", "100"),
         ]));
         assert!(matches!(bad, Err(ConfigError::Invalid { .. })));
+    }
+
+    #[test]
+    fn the_guardrail_defaults_leave_a_threshold_below_the_hosts_limit_by_the_overshoot_bound() {
+        let c = Config::from_lookup(env(&[("GRAFT_DATABASE_URL", "postgres://x")])).expect("valid");
+        let g = &c.guardrails;
+        // The largest blob is the 20 s output: 960,000 frames of 2 bytes. A burst of 30 plus one
+        // minute of the 120-an-hour cap (2) is 32 of them.
+        assert_eq!(g.overshoot_bound_bytes(&c.limits), 32 * 1_920_000);
+        assert_eq!(
+            g.admission_threshold_bytes(&c.limits),
+            8_000_000_000 - 32 * 1_920_000
+        );
+        assert!(g.publishing_default);
+        assert_eq!(g.trusted_proxy_hops, 0);
+    }
+
+    #[test]
+    fn a_storage_limit_that_leaves_no_room_for_the_overshoot_is_refused_at_start_up() {
+        let err = Config::from_lookup(env(&[
+            ("GRAFT_DATABASE_URL", "postgres://x"),
+            ("GRAFT_STORAGE_LIMIT_BYTES", "1000000"),
+        ]))
+        .expect_err("refused");
+        assert!(
+            err.to_string().contains("GRAFT_STORAGE_LIMIT_BYTES"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn guardrail_settings_can_be_overridden_and_nonsense_is_refused_by_name() {
+        let c = Config::from_lookup(env(&[
+            ("GRAFT_DATABASE_URL", "postgres://x"),
+            ("GRAFT_PUBLISHING", "off"),
+            ("GRAFT_TRUSTED_PROXY_HOPS", "2"),
+            ("GRAFT_PUBLISH_PER_IP", "5"),
+            ("GRAFT_PUBLISH_WINDOW_SECS", "60"),
+        ]))
+        .expect("valid");
+        assert!(!c.guardrails.publishing_default);
+        assert_eq!(c.guardrails.trusted_proxy_hops, 2);
+        assert_eq!(
+            c.guardrails.publish_per_ip,
+            Rate {
+                count: 5,
+                window_secs: 60
+            }
+        );
+        for (name, value) in [
+            ("GRAFT_PUBLISHING", "maybe"),
+            ("GRAFT_PUBLISH_PER_IP", "0"),
+            ("GRAFT_GLOBAL_PUBLISH_BURST", "0"),
+            ("GRAFT_STORAGE_REFRESH_SECS", "0"),
+        ] {
+            let err = Config::from_lookup(env(&[
+                ("GRAFT_DATABASE_URL", "postgres://x"),
+                (name, value),
+            ]))
+            .expect_err("refused");
+            assert!(err.to_string().contains(name), "{name}: {err}");
+        }
     }
 
     #[test]
