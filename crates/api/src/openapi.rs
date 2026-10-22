@@ -23,7 +23,8 @@ use utoipa::OpenApi;
         publish::publish_flip,
         maker::set_fork_permission,
         maker::withdraw,
-        moderation::file_report
+        moderation::file_report,
+        crate::ingest::ingest_events
     ),
     components(schemas(
         Problem,
@@ -35,7 +36,10 @@ use utoipa::OpenApi;
         SpeedView,
         RendererView,
         DetailsView,
-        AudioView
+        AudioView,
+        crate::ingest::IngestRequest,
+        crate::ingest::ClientEvent,
+        crate::ingest::IngestReceipt
     ))
 )]
 struct ApiDoc;

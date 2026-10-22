@@ -227,6 +227,20 @@ impl Store {
         Ok(written)
     }
 
+    /// Which of `ids` are publications that exist.
+    pub async fn existing_publication_ids(
+        &self,
+        ids: &[String],
+    ) -> Result<std::collections::HashSet<String>, StoreError> {
+        let found: Vec<String> =
+            sqlx::query_scalar("SELECT id FROM publications WHERE id = ANY($1)")
+                .bind(ids)
+                .fetch_all(&self.pool)
+                .await
+                .map_err(db)?;
+        Ok(found.into_iter().collect())
+    }
+
     /// Claim up to `limit` unsent events, hand them to `deliver`, and mark them sent if it
     /// succeeds.
     ///

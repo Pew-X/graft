@@ -5,6 +5,7 @@ pub mod config;
 pub mod events;
 pub mod guard;
 pub mod http;
+pub mod ingest;
 pub mod maker;
 pub mod metrics;
 pub mod moderation;

@@ -7,6 +7,8 @@ mod common;
 mod events;
 #[path = "publish/guardrails.rs"]
 mod guardrails;
+#[path = "publish/ingest.rs"]
+mod ingest;
 
 use axum::http::StatusCode;
 use common::{Harness, is_problem};

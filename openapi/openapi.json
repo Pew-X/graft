@@ -44,6 +44,41 @@
         ],
         "type": "object"
       },
+      "ClientEvent": {
+        "additionalProperties": false,
+        "description": "One event as the browser reports it.",
+        "properties": {
+          "event_id": {
+            "description": "Chosen by the browser, 16 to 64 characters from `A-Z a-z 0-9 _ -`. The dedupe key: an id\nalready stored is not stored again.",
+            "type": "string"
+          },
+          "kind": {
+            "description": "One of `roll_opened`, `stage_played`, `flip_started`.",
+            "type": "string"
+          },
+          "occurred_at_ms": {
+            "description": "When it happened by the browser's clock, milliseconds since the Unix epoch. A time far from\nthe server's is replaced by the nearest acceptable one.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "publication_id": {
+            "description": "The public id of the stage (for a roll, its last stage). Events naming a publication that\ndoes not exist are dropped.",
+            "type": "string"
+          },
+          "session_id": {
+            "description": "The page load's session id, 8 to 64 characters from `A-Z a-z 0-9 _ -`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "event_id",
+          "session_id",
+          "kind",
+          "occurred_at_ms",
+          "publication_id"
+        ],
+        "type": "object"
+      },
       "CutRequest": {
         "additionalProperties": false,
         "description": "A cut of the parent's audio, in frames of 48 kHz mono audio, half-open.",
@@ -238,6 +273,38 @@
         },
         "required": [
           "permitted"
+        ],
+        "type": "object"
+      },
+      "IngestReceipt": {
+        "description": "The receipt: deliberately all there is to learn.",
+        "properties": {
+          "accepted": {
+            "description": "Events newly stored. Fewer than sent when some were repeats, named a publication that does\nnot exist, or the browser signalled that it must not be measured.",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "accepted"
+        ],
+        "type": "object"
+      },
+      "IngestRequest": {
+        "additionalProperties": false,
+        "description": "A batch of events.",
+        "properties": {
+          "events": {
+            "description": "The events, at most the configured batch size (20 by default).",
+            "items": {
+              "$ref": "#/components/schemas/ClientEvent"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "events"
         ],
         "type": "object"
       },
@@ -708,6 +775,67 @@
         "summary": "The chain ending at a publication, source first.",
         "tags": [
           "routes"
+        ]
+      }
+    },
+    "/v1/events": {
+      "post": {
+        "operationId": "ingest_events",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestReceipt"
+                }
+              }
+            },
+            "description": "How many events were newly stored"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "A field breaks a rule, or the batch is too large; `field` and `rule` say which"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "This visitor or session sent too much; `Retry-After` says when to try again"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Publishing, which includes event reporting, is switched off"
+          }
+        },
+        "summary": "Report a batch of client events.",
+        "tags": [
+          "crate::ingest"
         ]
       }
     },

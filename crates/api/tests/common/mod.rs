@@ -109,6 +109,8 @@ impl Harness {
         // comes from one unnamed address, and most tests are about something else.
         config.guardrails.publish_per_ip.count = 1_000_000;
         config.guardrails.report_per_ip.count = 1_000_000;
+        config.guardrails.ingest_per_ip.count = 1_000_000;
+        config.guardrails.ingest_session_events.count = 1_000_000;
         config.guardrails.global_publish_per_hour = 1_000_000;
         config.guardrails.global_publish_burst = 1_000_000;
         // ...and so is the storage threshold: the limit sits above the overshoot bound of that burst.

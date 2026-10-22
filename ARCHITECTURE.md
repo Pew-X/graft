@@ -235,6 +235,9 @@ Written by ticket 05; later tickets add rows. Every value is read from the envir
 | `GRAFT_GLOBAL_PUBLISH_PER_HOUR`, `GRAFT_GLOBAL_PUBLISH_BURST` | 120, 30 | the global publish cap: tokens refilled per hour, and the most admitted in one burst |
 | `GRAFT_STORAGE_LIMIT_BYTES` | 8,000,000,000 | what the host allows for audio; the admission threshold is this minus the overshoot bound |
 | `GRAFT_STORAGE_REFRESH_SECS` | 60 | how often the stored total is read again |
+| `GRAFT_INGEST_PER_IP`, `GRAFT_INGEST_WINDOW_SECS` | 30, 60 | client event batches one address may send within the window |
+| `GRAFT_INGEST_SESSION_EVENTS`, `GRAFT_INGEST_SESSION_WINDOW_SECS` | 300, 3600 | events one session id may send within the window |
+| `GRAFT_INGEST_MAX_BATCH` | 20 | most events in one client batch |
 | `GRAFT_EVENT_PIPELINE` | `on` | whether this process runs the relay, the consumer and the retention job (`on` or `off`) |
 | `GRAFT_RELAY_BATCH`, `GRAFT_RELAY_INTERVAL_MS` | 100, 1000 | events per delivered batch, and the pause between relay passes |
 | `GRAFT_EVENT_RETENTION_DAYS`, `GRAFT_RETENTION_INTERVAL_SECS` | 30, 3600 | how long raw events are kept, and how often the retention job runs |
@@ -319,10 +322,12 @@ The public write surface is anonymous, so what keeps it safe and cheap is a smal
 | Per-address publish limit | 20 per hour | 429 `rate-limited` |
 | Per-address report limit | 10 per hour | 429 `rate-limited` |
 | Per-address failed admin attempts | 10 per 15 minutes | 429 `rate-limited` |
+| Per-address client event batches | 30 per minute | 429 `rate-limited` |
+| Per-session client events | 300 per hour | 429 `rate-limited` |
 | Global publish cap | 120 per hour, burst 30 | 429 `publish-cap` |
 | Storage admission threshold | 8 GB minus the overshoot bound | 503 `storage-full` |
 
-**The kill switch** is a row in the database (`runtime_settings`), read through a short cache, and set through the operator's `PUT /admin/switch` (`GET` reads it). It needs no redeploy. It closes every route that adds to what is published: flips now, and the source upload and client event routes when they exist. Reads, reports, a maker's own withdrawal and the operator's routes stay open, so a bad moment can always be reported, undone and reopened. A test lists every write route, checks the list against the public interface document, and asserts the switch closes exactly the routes marked as closed; a new write route fails it until someone decides which kind it is. An instance sees its own change at once and another instance's within `GRAFT_SWITCH_CACHE_MS`. If the database cannot be read the last known state stands; before any read, the configured default.
+**The kill switch** is a row in the database (`runtime_settings`), read through a short cache, and set through the operator's `PUT /admin/switch` (`GET` reads it). It needs no redeploy. It closes every route that adds to what is published: flips, client event batches, and the source upload route when it exists. Reads, reports, a maker's own withdrawal and the operator's routes stay open, so a bad moment can always be reported, undone and reopened. A test lists every write route, checks the list against the public interface document, and asserts the switch closes exactly the routes marked as closed; a new write route fails it until someone decides which kind it is. An instance sees its own change at once and another instance's within `GRAFT_SWITCH_CACHE_MS`. If the database cannot be read the last known state stands; before any read, the configured default.
 
 **Per-address limits** count in the memory of one process, in a sliding window, and are forgotten when the window passes or the process restarts. An address is never written to a row, a log line or a metric label, and not stored in any other form either, hashed included; a test dumps every table, the log and the metrics after a mixed run and looks for it. IPv6 visitors count by their /64. With one instance behind a load balancer the connecting address is the balancer, so `GRAFT_TRUSTED_PROXY_HOPS` says how many proxies to trust: the visitor is the `X-Forwarded-For` entry that many places from the right, and anything the visitor wrote further left is ignored. Because the counts are per process, a second instance gives each visitor a second allowance; the global cap, which lives in the database, is what holds across instances. The table of tracked addresses is bounded; when it is full new addresses are not tracked, and the global cap still applies. Failed admin attempts are counted, successes are not, so the operator is not locked out by using the routes.
 
@@ -447,6 +452,20 @@ Written by ticket 13. The consumer, rollups and the operator's read are the next
 **Retention.** Raw events are kept 30 days. The retention job deletes only events that were sent and are older than the window, and skips any row a relay is working on, so it can run alongside the relay and can never discard an event that was not delivered (tests: an old unsent event survives; a purge racing a relay loses and duplicates nothing).
 
 **Wiring.** The service starts the relay (to the in-process consumer), and the retention job, unless `GRAFT_EVENT_PIPELINE=off`; claims skip locked rows, so any number of instances may run them.
+
+## Client events are best-effort
+
+Written by ticket 15.
+
+`POST /v1/events` accepts a batch of the three events the browser reports: `roll_opened`, `stage_played` and `flip_started`. It writes into the same ledger as the server events, with origin `client`, and that is where the similarity ends. **Only server events can never diverge from their write.** A client event is a count the browser chose to send: it can be lost (the tab closed, the network failed, a privacy signal was on), repeated, or invented by anyone, so it never feeds a public fact. The public "flipped N times" is read from the publications; a test floods the endpoint and finds that count unchanged, and another looks through every public response for anything event-derived and finds nothing.
+
+**Guards, in the order they run.** The kill switch and the per-address batch limit run before the body is read. Then the body is capped at 16 KB and a batch at 20 events; an event needs a 16 to 64 character id (the dedupe key), a session id of 8 to 64 characters, one of the three client kinds (a server kind from a browser is refused) and no field beyond those, so nothing else can be stored. A batch whose browser signals Global Privacy Control or Do Not Track is ignored whole: the client sends nothing in that case (ticket 32), and honouring the signal on the server as well is defence in depth; the answer is the same receipt with nothing accepted. A session id may send 300 events an hour, counted in memory; it is a browser's choice, so this stops one page flooding and not someone who invents a new id each time, which is what the per-address limit and the rest are for. An event naming a publication that does not exist is dropped, not refused, so one stale id loses one event and not the batch, and the refusal does not tell a probe which ids exist. Timestamps are the browser's, clamped: more than five minutes ahead of the server becomes the server's now, older than a day becomes a day ago.
+
+**The receipt is minimal.** `{"accepted": n}`: the events newly stored. Fewer than sent means some were repeats, dropped, or ignored for a privacy signal; it does not say which. Limits refuse politely with a `Retry-After`.
+
+**Privacy.** The ledger has no column for an address or a user agent, and the handler stores only the event's own fields: a test sends a batch with a distinctive address, forwarding header and user agent and finds none of them in the row.
+
+**A stated bound, not a claim of scale.** A test sends 40 full batches at once while a flip is published and checks the publish finishes well inside ten seconds. It is a sanity check that event ingest does not hold up publishing, and it says nothing about load.
 
 ## Rollups and the analytical read path
 

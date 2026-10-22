@@ -61,6 +61,8 @@ pub struct AppState {
     pub guards: Arc<Guards>,
     /// What the consumer has counted, for the operator's read and the metrics.
     pub consumer_stats: Arc<graft_events::ConsumerStats>,
+    /// Most events in one client batch.
+    pub ingest_max_batch: usize,
 }
 
 /// Settings the publish route reads.
@@ -112,6 +114,7 @@ impl AppState {
             store,
             blobs,
             consumer_stats: Arc::new(graft_events::ConsumerStats::default()),
+            ingest_max_batch: config.events.ingest_max_batch as usize,
             limits: config.limits.clone(),
             blob_url_ttl: std::time::Duration::from_secs(config.blob_url_ttl_secs),
             renderer,
@@ -168,6 +171,14 @@ pub fn router(state: AppState, config: &Config) -> Router {
         )
         .merge(admin_routes(state.clone()))
         .route(
+            "/v1/events",
+            post(crate::ingest::ingest_events)
+                .layer(axum::extract::DefaultBodyLimit::max(
+                    crate::ingest::MAX_BODY_BYTES,
+                ))
+                .layer(middleware::from_fn_with_state(state.clone(), ingest_guard)),
+        )
+        .route(
             "/v1/publications",
             post(publish::publish_flip)
                 .layer(axum::extract::DefaultBodyLimit::max(
@@ -217,7 +228,29 @@ pub(crate) async fn publish_guard(
     request: Request,
     next: Next,
 ) -> Response {
-    if let Some(refusal) = publishing_closed(&state).await {
+    write_guard(
+        &state,
+        Class::Publish,
+        "rate_limited_publish",
+        request,
+        next,
+    )
+    .await
+}
+
+/// The same guard in front of the client event batches, with their own limit.
+async fn ingest_guard(State(state): State<AppState>, request: Request, next: Next) -> Response {
+    write_guard(&state, Class::Ingest, "rate_limited_ingest", request, next).await
+}
+
+async fn write_guard(
+    state: &AppState,
+    class: Class,
+    refusal: &'static str,
+    request: Request,
+    next: Next,
+) -> Response {
+    if let Some(refusal) = publishing_closed(state).await {
         return refusal;
     }
     let ip = state
@@ -226,11 +259,11 @@ pub(crate) async fn publish_guard(
     match state
         .guards
         .limiter
-        .try_admit(Class::Publish, ip, state.guards.clock.now_secs())
+        .try_admit(class, ip, state.guards.clock.now_secs())
     {
         Ok(()) => next.run(request).await,
         Err(wait) => {
-            state.metrics.refusal("rate_limited_publish");
+            state.metrics.refusal(refusal);
             Problem::rate_limited(wait).into_response()
         }
     }

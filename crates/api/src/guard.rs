@@ -137,6 +137,8 @@ pub enum Class {
     Report,
     /// A refused admin attempt.
     AdminFailure,
+    /// A batch of client events.
+    Ingest,
 }
 
 /// Most addresses tracked at once. Beyond this the limiter stops tracking new ones rather than
@@ -159,6 +161,7 @@ impl RateLimiter {
                 (Class::Publish, g.publish_per_ip),
                 (Class::Report, g.report_per_ip),
                 (Class::AdminFailure, g.admin_failures_per_ip),
+                (Class::Ingest, g.ingest_per_ip),
             ]),
             seen: Mutex::new(HashMap::new()),
         }
@@ -291,6 +294,53 @@ pub fn client_ip(peer: Option<IpAddr>, forwarded_for: Option<&str>, hops: usize)
         .unwrap_or(peer)
 }
 
+/// How many events one session id may send within a window, counted in memory only. A session id
+/// is chosen by the browser, so this stops one honest page from flooding; it does not stop someone
+/// who invents a new id every time, which is what the per-address limit and the global bounds are
+/// for.
+pub struct SessionVelocity {
+    rate: Rate,
+    seen: Mutex<HashMap<String, VecDeque<f64>>>,
+}
+
+impl SessionVelocity {
+    fn new(g: &Guardrails) -> Self {
+        Self {
+            rate: g.ingest_session_events,
+            seen: Mutex::new(HashMap::new()),
+        }
+    }
+
+    /// Count `n` events for `session`, or refuse with the seconds to wait. All or nothing.
+    pub fn try_add(&self, session: &str, n: usize, now: f64) -> Result<(), u32> {
+        let window = self.rate.window_secs as f64;
+        let limit = self.rate.count as usize;
+        let Ok(mut seen) = self.seen.lock() else {
+            return Ok(());
+        };
+        if !seen.contains_key(session) && seen.len() >= MAX_TRACKED {
+            seen.retain(|_, q| {
+                expire(q, now, window);
+                !q.is_empty()
+            });
+            if seen.len() >= MAX_TRACKED {
+                return Ok(());
+            }
+        }
+        let q = seen.entry(session.to_owned()).or_default();
+        expire(q, now, window);
+        if q.len() + n > limit {
+            let oldest = q.front().copied().unwrap_or(now);
+            let wait = (oldest + window - now)
+                .ceil()
+                .clamp(1.0, f64::from(u32::MAX));
+            return Err(wait as u32);
+        }
+        q.extend(std::iter::repeat_n(now, n));
+        Ok(())
+    }
+}
+
 /// Whether new publishes are admitted given how much audio is stored.
 ///
 /// The total is read from the blob store at most once per refresh interval and compared with the
@@ -369,6 +419,8 @@ pub struct Guards {
     pub limiter: RateLimiter,
     /// Storage admission.
     pub storage: StorageGauge,
+    /// Per-session limits on client events.
+    pub sessions: SessionVelocity,
     trusted_proxy_hops: usize,
     global_per_hour: u32,
     global_burst: u32,
@@ -387,6 +439,7 @@ impl Guards {
         Self {
             switch: KillSwitch::new(store, clock.clone(), g),
             limiter: RateLimiter::new(g),
+            sessions: SessionVelocity::new(g),
             storage: StorageGauge::new(blobs, clock.clone(), g, limits),
             clock,
             trusted_proxy_hops: g.trusted_proxy_hops,

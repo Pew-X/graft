@@ -21,6 +21,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/events": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Report a batch of client events. */
+    post: operations["ingest_events"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/publications": {
     parameters: {
       query?: never;
@@ -130,6 +147,29 @@ export interface components {
       /** @description Set to "depth_cap" when the walk stopped before reaching a source. */
       truncated?: string | null;
     };
+    /** @description One event as the browser reports it. */
+    ClientEvent: {
+      /**
+       * @description Chosen by the browser, 16 to 64 characters from `A-Z a-z 0-9 _ -`. The dedupe key: an id
+       *     already stored is not stored again.
+       */
+      event_id: string;
+      /** @description One of `roll_opened`, `stage_played`, `flip_started`. */
+      kind: string;
+      /**
+       * Format: int64
+       * @description When it happened by the browser's clock, milliseconds since the Unix epoch. A time far from
+       *     the server's is replaced by the nearest acceptable one.
+       */
+      occurred_at_ms: number;
+      /**
+       * @description The public id of the stage (for a roll, its last stage). Events naming a publication that
+       *     does not exist are dropped.
+       */
+      publication_id: string;
+      /** @description The page load's session id, 8 to 64 characters from `A-Z a-z 0-9 _ -`. */
+      session_id: string;
+    };
     /** @description A cut of the parent's audio, in frames of 48 kHz mono audio, half-open. */
     CutRequest: {
       /**
@@ -194,6 +234,20 @@ export interface components {
     ForkPermissionRequest: {
       /** @description True to allow new flips of this stage, false to close it. Existing flips are untouched. */
       permitted: boolean;
+    };
+    /** @description The receipt: deliberately all there is to learn. */
+    IngestReceipt: {
+      /**
+       * Format: int32
+       * @description Events newly stored. Fewer than sent when some were repeats, named a publication that does
+       *     not exist, or the browser signalled that it must not be measured.
+       */
+      accepted: number;
+    };
+    /** @description A batch of events. */
+    IngestRequest: {
+      /** @description The events, at most the configured batch size (20 by default). */
+      events: components["schemas"]["ClientEvent"][];
     };
     /** @description One line of a credit block. */
     LineView: {
@@ -416,6 +470,57 @@ export interface operations {
       };
       /** @description No such publication */
       404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  ingest_events: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IngestRequest"];
+      };
+    };
+    responses: {
+      /** @description How many events were newly stored */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IngestReceipt"];
+        };
+      };
+      /** @description A field breaks a rule, or the batch is too large; `field` and `rule` say which */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description This visitor or session sent too much; `Retry-After` says when to try again */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Publishing, which includes event reporting, is switched off */
+      503: {
         headers: {
           [name: string]: unknown;
         };

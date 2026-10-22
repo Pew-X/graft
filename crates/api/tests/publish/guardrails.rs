@@ -131,6 +131,7 @@ async fn the_default_applies_until_the_operator_sets_the_switch_and_another_inst
 /// write route.
 const WRITE_ROUTES: &[(&str, &str, bool)] = &[
     ("POST", "/v1/publications", true),
+    ("POST", "/v1/events", true),
     // Reports stay open so a problem can always be raised; a maker can always withdraw; the
     // operator's own routes are how the switch is reopened.
     ("POST", "/v1/reports", false),

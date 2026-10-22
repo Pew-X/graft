@@ -78,6 +78,8 @@ pub struct EventSettings {
     pub retention_days: u32,
     /// Pause between retention passes, in seconds.
     pub retention_interval_secs: u64,
+    /// Most events in one client batch.
+    pub ingest_max_batch: u32,
 }
 
 fn event_settings(lookup: &impl Fn(&str) -> Option<String>) -> Result<EventSettings, ConfigError> {
@@ -87,6 +89,7 @@ fn event_settings(lookup: &impl Fn(&str) -> Option<String>) -> Result<EventSetti
         relay_interval_ms: 1000,
         retention_days: 30,
         retention_interval_secs: 3600,
+        ingest_max_batch: 20,
     };
     match lookup("GRAFT_EVENT_PIPELINE").as_deref().map(str::trim) {
         None | Some("on") => {}
@@ -106,7 +109,9 @@ fn event_settings(lookup: &impl Fn(&str) -> Option<String>) -> Result<EventSetti
         "GRAFT_RETENTION_INTERVAL_SECS",
         &mut e.retention_interval_secs,
     )?;
+    number(lookup, "GRAFT_INGEST_MAX_BATCH", &mut e.ingest_max_batch)?;
     for (name, value) in [
+        ("GRAFT_INGEST_MAX_BATCH", u64::from(e.ingest_max_batch)),
         ("GRAFT_RELAY_BATCH", u64::from(e.relay_batch)),
         ("GRAFT_RELAY_INTERVAL_MS", e.relay_interval_ms),
         ("GRAFT_EVENT_RETENTION_DAYS", u64::from(e.retention_days)),
@@ -147,6 +152,10 @@ pub struct Guardrails {
     pub report_per_ip: Rate,
     /// Per visitor address: refused admin attempts before further attempts wait.
     pub admin_failures_per_ip: Rate,
+    /// Per visitor address: client event batches.
+    pub ingest_per_ip: Rate,
+    /// Per session id: client events (not batches) within the window.
+    pub ingest_session_events: Rate,
     /// The global publish cap: publishes admitted per hour, across all visitors and instances.
     pub global_publish_per_hour: u32,
     /// The most publishes admitted in one burst.
@@ -198,6 +207,14 @@ fn guardrails(
             count: 10,
             window_secs: 900,
         },
+        ingest_per_ip: Rate {
+            count: 30,
+            window_secs: 60,
+        },
+        ingest_session_events: Rate {
+            count: 300,
+            window_secs: 3600,
+        },
         global_publish_per_hour: 120,
         global_publish_burst: 30,
         storage_limit_bytes: 8_000_000_000,
@@ -241,6 +258,22 @@ fn guardrails(
         "GRAFT_ADMIN_WINDOW_SECS",
         &mut g.admin_failures_per_ip.window_secs,
     )?;
+    number(lookup, "GRAFT_INGEST_PER_IP", &mut g.ingest_per_ip.count)?;
+    number(
+        lookup,
+        "GRAFT_INGEST_WINDOW_SECS",
+        &mut g.ingest_per_ip.window_secs,
+    )?;
+    number(
+        lookup,
+        "GRAFT_INGEST_SESSION_EVENTS",
+        &mut g.ingest_session_events.count,
+    )?;
+    number(
+        lookup,
+        "GRAFT_INGEST_SESSION_WINDOW_SECS",
+        &mut g.ingest_session_events.window_secs,
+    )?;
     number(
         lookup,
         "GRAFT_GLOBAL_PUBLISH_PER_HOUR",
@@ -264,6 +297,16 @@ fn guardrails(
     for (name, value) in [
         ("GRAFT_PUBLISH_PER_IP", u64::from(g.publish_per_ip.count)),
         ("GRAFT_PUBLISH_WINDOW_SECS", g.publish_per_ip.window_secs),
+        ("GRAFT_INGEST_PER_IP", u64::from(g.ingest_per_ip.count)),
+        ("GRAFT_INGEST_WINDOW_SECS", g.ingest_per_ip.window_secs),
+        (
+            "GRAFT_INGEST_SESSION_EVENTS",
+            u64::from(g.ingest_session_events.count),
+        ),
+        (
+            "GRAFT_INGEST_SESSION_WINDOW_SECS",
+            g.ingest_session_events.window_secs,
+        ),
         ("GRAFT_REPORT_PER_IP", u64::from(g.report_per_ip.count)),
         ("GRAFT_REPORT_WINDOW_SECS", g.report_per_ip.window_secs),
         (
@@ -818,7 +861,8 @@ mod tests {
                 relay_batch: 100,
                 relay_interval_ms: 1000,
                 retention_days: 30,
-                retention_interval_secs: 3600
+                retention_interval_secs: 3600,
+                ingest_max_batch: 20
             }
         );
         let c = Config::from_lookup(env(&[
