@@ -7,6 +7,7 @@
 
 pub mod canon;
 pub mod host;
+pub mod hosted;
 pub mod input;
 pub mod native;
 pub mod run;

@@ -13,7 +13,7 @@ One deployable Rust service plus a Next.js UI, built as a Cargo workspace. The a
 | `graft-storage` | domain | Postgres and blob store access behind traits |
 | `graft-render-host` | domain | runs the canonical `.wasm` under wasmtime |
 | `graft-events` | domain | outbox, relay, consumer, rollups behind an event-sink trait |
-| `graft-vectors` | render | the renderer vector table: loader, generators, native and wasmtime harnesses (test support; nothing ships it) |
+| `graft-vectors` | render, render-host | the renderer vector table: loader, generators, and the native, wasmtime and render-host harnesses (test support; nothing ships it) |
 | `graft-api` | domain, storage, render-host, events | HTTP layer, OpenAPI, rate limits, admin routes, configuration |
 
 Nothing depends on `graft-api`. `graft-render` is deliberately kept apart: the renderer is one artefact that must build alone, with no dependencies, to a reproducible `.wasm`.
@@ -100,7 +100,39 @@ The agreed exit to a TypeScript renderer applies if the artefact will not instan
 
 ## Render host
 
-_Not written yet. Tickets 03 and 03b write it._
+`graft-render-host` runs the pinned `.wasm` for the service. The publish path calls one trait, `Render::render(cut, ratio, method)`, and gets audio or a typed `RenderError`. The crate accepts audio as slices and returns audio as vectors; it has no network surface, and `scripts/check-crate-graph.mjs` fails if it gains a dependency outside a short allowlist (no HTTP, socket or async-runtime crate).
+
+### Loading
+
+`RenderHost::load` checks the artefact before anything runs. It refuses a module that imports anything or lacks any of the six exports, instantiates it once to read `graft_version()`, hashes the exact bytes it was given, and compares that hash with the line for that version in `fixtures/renderer/PINS`, which is compiled into the binary. An unpinned version or a different hash is a startup error. The resulting identity (`graft-render`, version, SHA-256) is what a content record embeds.
+
+### Per-render isolation and limits
+
+- The module is compiled once and shared (engine, module and pre-linked instance are `Send + Sync`); every render gets a fresh store and a fresh instance. Nothing a render does to memory or globals survives it, and a trapped instance is discarded, which matters because a trap leaves the module's internal frame pointer unrestored.
+- Memory: a resource limiter refuses growth past `Limits::max_memory_bytes` (default 64 MiB; the renderer's own worst case, 2^21 input frames at speed 1/4, needs about 21 MiB). A refusal is recorded, so the caller gets `MemoryLimit` even if the module coped with the failed allocation.
+- Interruption: fuel, not wall-clock epochs. Fuel is a count of executed instructions rather than elapsed time, so a request uses the same budget whatever the machine's speed and the tests are not timing-dependent. It is not bit-identical across platforms: the worst-case render counted 412,822,442 on macOS arm64 and 412,806,057 on Linux x86_64 (a difference of about 0.004%), so the budget needs headroom and is not a place to hide behaviour. The default budget is `Limits::max_fuel` = 1,000,000,000, about 2.4 times the most expensive render the renderer will accept (see the measurements). A module that runs out gets `Interrupted`. The module has no imports, so it can call nothing outside itself; its own instructions are metered by fuel and its memory growth by the memory limit. A test interrupts an endless loop with a 50,000,000 fuel budget and asserts that it returns within 5 seconds (in practice a few milliseconds).
+- SIMD (including relaxed SIMD), multi-memory and 64-bit memories are switched off in the engine configuration; the engine is built without wasmtime's `threads` feature, so shared memory and atomics are unavailable.
+- Errors: a negative return code is `InvalidParameters` (-1) or `OutputTooSmall` (-2); a trap is `Trapped`; any other return value is `Internal`. The host never panics on module output.
+
+### What the tests show
+
+Hostile modules written by hand (an endless loop, an `unreachable`, a memory-growth loop, a negative code outside the contract, an import, a missing export, a SIMD module, a shared-memory module) check each mapping, and that the next render on the same host still works. The real renderer's costliest accepted render is also interrupted when given a fuel budget that is too small. The real renderer is run through the host in `graft-vectors`: every vector in the table (including all error codes), render A then B then A with identical bytes, and 8 threads sharing one host. The per-render isolation tests use a module that copies its input and adds a per-instance counter, so reused state or a shared instance would change the output. During development two deliberate breaks (ignoring the memory-limit record, mapping out-of-fuel to a different error) each made a test fail; those were manual checks, not automated ones.
+
+### Measurements
+
+Measured by `crates/render-host/examples/measure.rs`, run by the `renderer` CI job on a GitHub-hosted `ubuntu-24.04` runner (the job summary keeps the output). Method: load once, one warm-up render per case, then 15 timed renders; the table shows the median and the slowest. Fuel and linear memory are the host's own accounting; the process peak is read from `/proc/self/status`. The input is the LCG noise used by the vectors, Hermite method.
+
+Cold start on the runner: load, compile and pin check 35.7 ms; first render 0.11 ms.
+
+| case | input frames | output frames | median | slowest | fuel | linear memory |
+|---|---|---|---|---|---|---|
+| cut cap at speed 1 | 480,000 | 480,000 | 7.9 ms | 14.8 ms | 103,206,760 | 2.9 MiB |
+| speed 1/4, output at the 20 s cap | 240,000 | 959,997 | 14.7 ms | 16.4 ms | 206,406,021 | 3.4 MiB |
+| speed 1/4, cut cap (beyond the output cap) | 480,000 | 1,919,997 | 27.0 ms | 27.5 ms | 412,806,057 | 5.7 MiB |
+| speed 4, cut cap | 480,000 | 120,000 | 2.2 ms | 2.4 ms | 25,806,782 | 2.2 MiB |
+| speed 4, renderer input ceiling | 2,097,152 | 524,288 | 8.3 ms | 9.8 ms | 112,728,765 | 6.2 MiB |
+
+Process peak resident memory over the whole run: about 29 MB. What this sizes: a render is milliseconds and a few MiB; the 1,000,000,000 fuel budget is about 2.4 times the most expensive render the renderer will accept, and the 64 MiB limit is about three times the renderer's own worst case. These are single-threaded timings on a shared runner, not throughput or scale claims, and the numbers on the target host are added by ticket 03b.
 
 ## Determinism evidence
 
