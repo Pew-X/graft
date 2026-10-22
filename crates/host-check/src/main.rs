@@ -1,6 +1,6 @@
 //! Serves the start-up check result. See the library documentation for what it does and does not do.
 
-use graft_fly_check::{
+use graft_host_check::{
     REQUEST_DEADLINE, Response, Snapshot, build_snapshot, parse_request_line, plain,
     read_first_line, route, startup_failure, unreadable,
 };
@@ -102,6 +102,6 @@ fn main() {
 
 fn fail(message: &str) -> i32 {
     // Standard error is the only channel a failing start-up has.
-    let _ = writeln!(std::io::stderr(), "graft-fly-check: {message}");
+    let _ = writeln!(std::io::stderr(), "graft-host-check: {message}");
     1
 }

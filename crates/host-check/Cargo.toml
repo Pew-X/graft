@@ -1,5 +1,5 @@
 [package]
-name = "graft-fly-check"
+name = "graft-host-check"
 description = "Throwaway check service for the first deployment: replays the vector table inside the target host and serves only health and read-only results. Removed by the deploy pipeline ticket."
 version.workspace = true
 edition.workspace = true

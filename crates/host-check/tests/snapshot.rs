@@ -2,7 +2,7 @@
 
 //! The start-up run, against the real artefact and a tampered table.
 
-use graft_fly_check::{build_snapshot, route};
+use graft_host_check::{build_snapshot, route};
 use graft_vectors::table::Table;
 use std::path::PathBuf;
 use std::process::Command;
@@ -33,7 +33,7 @@ fn no_env(_: &str) -> Option<String> {
 fn the_real_artefact_and_table_give_a_healthy_snapshot_with_the_numbers_we_need() {
     let table = Table::parse(&table_text()).expect("table");
     let snap = build_snapshot(&artefact(), &table, &|n| {
-        (n == "FLY_REGION").then(|| "test".to_string())
+        (n == "AWS_REGION").then(|| "test".to_string())
     })
     .expect("snapshot");
     assert!(snap.healthy, "{}", snap.results_json);
@@ -41,7 +41,7 @@ fn the_real_artefact_and_table_give_a_healthy_snapshot_with_the_numbers_we_need(
     assert_eq!(doc["checks"]["failed"], 0);
     assert!(doc["checks"]["total"].as_u64().expect("count") > 100);
     assert_eq!(doc["renderer"]["version"], 1);
-    assert_eq!(doc["instance"]["fly_region"], "test");
+    assert_eq!(doc["instance"]["region"], "test");
     assert_eq!(doc["measurements"].as_array().expect("array").len(), 5);
     assert!(
         doc["cold_start_ms"]["load_and_compile_and_pin_check"]

@@ -10,15 +10,15 @@ COPY . .
 # rust-toolchain.toml names the exact toolchain and the wasm32 target; install them explicitly.
 RUN rustup toolchain install \
  && sh scripts/build-wasm.sh \
- && cargo build --release --locked -p graft-fly-check
+ && cargo build --release --locked -p graft-host-check
 
 FROM debian:bookworm-slim
 RUN useradd --system --no-create-home graft
 WORKDIR /app
-COPY --from=build /src/target/release/graft-fly-check /app/graft-fly-check
+COPY --from=build /src/target/release/graft-host-check /app/graft-host-check
 COPY --from=build /src/target/wasm32-unknown-unknown/wasm/graft_render.wasm /app/graft_render.wasm
 COPY --from=build /src/fixtures/vectors/vectors.json /app/vectors.json
 ENV PORT=8080
 EXPOSE 8080
 USER graft
-CMD ["/app/graft-fly-check"]
+CMD ["/app/graft-host-check"]

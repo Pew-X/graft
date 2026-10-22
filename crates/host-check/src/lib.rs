@@ -148,7 +148,7 @@ pub fn route(method: &str, path: &str, snapshot: &Snapshot) -> Response {
 
 /// Runs the table and the worst-case measurements against `wasm` and builds the snapshot.
 ///
-/// `env` supplies the platform's environment (Fly sets region and app name); it is a parameter so
+/// `env` supplies the platform's environment (the region and execution environment the platform sets); it is a parameter so
 /// tests do not read the process environment.
 ///
 /// # Errors
@@ -189,8 +189,8 @@ pub fn build_snapshot(
     let doc = json!({
         "renderer": {"name": identity.name, "version": identity.version, "wasm_sha256": identity.wasm_sha256},
         "instance": {
-            "fly_region": env("FLY_REGION"),
-            "fly_app": env("FLY_APP_NAME"),
+            "region": env("AWS_REGION"),
+            "execution_env": env("AWS_EXECUTION_ENV"),
             "cpus": std::thread::available_parallelism().map(std::num::NonZero::get).ok(),
             "host_memory_total_kb": meminfo_total_kb(),
         },
