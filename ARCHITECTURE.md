@@ -110,7 +110,7 @@ The agreed exit to a TypeScript renderer applies if the artefact will not instan
 
 - The module is compiled once and shared (engine, module and pre-linked instance are `Send + Sync`); every render gets a fresh store and a fresh instance. Nothing a render does to memory or globals survives it, and a trapped instance is dropped, which matters because a trap leaves the module's internal frame pointer unrestored.
 - Memory: a resource limiter refuses growth past `Limits::max_memory_bytes` (default 64 MiB; the renderer's own worst case, 2^21 input frames at speed 1/4, needs about 21 MiB). A refusal is recorded, so the caller gets `MemoryLimit` even if the module coped with the failed allocation.
-- Interruption: fuel, not wall-clock epochs. Fuel is a deterministic count of executed instructions, so the same request is interrupted at the same point on any machine and the tests are not timing-dependent. The default budget is `Limits::max_fuel` = 1,000,000,000, about 2.4 times the most expensive render the renderer will accept (see the measurements). A module that runs out gets `Interrupted`. The host calls no host functions and the module has no imports, so nothing can block outside the fuel count.
+- Interruption: fuel, not wall-clock epochs. Fuel is a count of executed instructions rather than elapsed time, so a request uses the same budget whatever the machine's speed and the tests are not timing-dependent. It is not bit-identical across platforms: the worst-case render counted 412,822,442 on macOS arm64 and 412,806,057 on Linux x86_64 (a difference of about 0.004%), so the budget needs headroom and is not a place to hide behaviour. The default budget is `Limits::max_fuel` = 1,000,000,000, about 2.4 times the most expensive render the renderer will accept (see the measurements). A module that runs out gets `Interrupted`. The host calls no host functions and the module has no imports, so nothing can block outside the fuel count.
 - SIMD, multi-memory and 64-bit memories are off in the engine configuration; threads are not compiled in.
 - Errors: a negative return code is `InvalidParameters` (-1) or `OutputTooSmall` (-2); a trap is `Trapped`; any other return value is `Internal`. The host never panics on module output.
 
@@ -120,7 +120,19 @@ Hostile modules written by hand (an endless loop, an `unreachable`, a memory-gro
 
 ### Measurements
 
-_Numbers are added below after the first run on the CI runner._
+Measured by `crates/render-host/examples/measure.rs`, run by the `renderer` CI job on a GitHub-hosted `ubuntu-24.04` runner (the job summary keeps the output). Method: load once, one warm-up render per case, then 15 timed renders; the table shows the median and the slowest. Fuel and linear memory are the host's own accounting; the process peak is read from `/proc/self/status`. The input is the LCG noise used by the vectors, Hermite method.
+
+Cold start on the runner: load, compile and pin check 35.7 ms; first render 0.11 ms.
+
+| case | input frames | output frames | median | slowest | fuel | linear memory |
+|---|---|---|---|---|---|---|
+| cut cap at speed 1 | 480,000 | 480,000 | 7.9 ms | 14.8 ms | 103,206,760 | 2.9 MiB |
+| speed 1/4, output at the 20 s cap | 240,000 | 959,997 | 14.7 ms | 16.4 ms | 206,406,021 | 3.4 MiB |
+| speed 1/4, cut cap (beyond the output cap) | 480,000 | 1,919,997 | 27.0 ms | 27.5 ms | 412,806,057 | 5.7 MiB |
+| speed 4, cut cap | 480,000 | 120,000 | 2.2 ms | 2.4 ms | 25,806,782 | 2.2 MiB |
+| speed 4, renderer input ceiling | 2,097,152 | 524,288 | 8.3 ms | 9.8 ms | 112,728,765 | 6.2 MiB |
+
+Process peak resident memory over the whole run: about 29 MB. What this sizes: a render is milliseconds and a few MiB; the 1,000,000,000 fuel budget is about 2.4 times the most expensive render the renderer will accept, and the 64 MiB limit is about three times the renderer's own worst case. These are single-threaded timings on a shared runner, not throughput or scale claims, and the numbers on the target host are added by ticket 03b.
 
 ## Determinism evidence
 
