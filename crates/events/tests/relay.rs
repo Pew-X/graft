@@ -48,7 +48,7 @@ async fn a_relay_delivers_every_unsent_event_once_in_bounded_batches_and_marks_t
     assert_eq!(relay.drain().await.expect("drain"), 15);
     assert_eq!(sink.delivered().len(), 25);
     assert_eq!(ids(&sink.delivered()).len(), 25);
-    let backlog = db.store.event_backlog().await.expect("backlog");
+    let backlog = db.store.event_backlog(0).await.expect("backlog");
     assert_eq!(backlog.unsent, 0);
     assert_eq!(relay.run_once().await.expect("pass"), 0, "nothing left");
     db.drop_db().await;
@@ -83,7 +83,7 @@ async fn two_relays_over_one_backlog_deliver_every_row_and_skip_none() {
         200,
         "claims skip rows another relay holds, so nothing is delivered twice either"
     );
-    assert_eq!(db.store.event_backlog().await.expect("backlog").unsent, 0);
+    assert_eq!(db.store.event_backlog(0).await.expect("backlog").unsent, 0);
     db.drop_db().await;
 }
 
@@ -148,9 +148,9 @@ async fn a_sink_that_refuses_leaves_the_rows_unsent_and_the_next_pass_delivers_t
     sink.fail_next(1);
     let relay = Relay::new(db.store.clone(), sink.clone(), 100);
     assert_eq!(relay.run_once().await.expect("pass"), 0);
-    assert_eq!(db.store.event_backlog().await.expect("backlog").unsent, 5);
+    assert_eq!(db.store.event_backlog(0).await.expect("backlog").unsent, 5);
     assert_eq!(relay.run_once().await.expect("pass"), 5);
-    assert_eq!(db.store.event_backlog().await.expect("backlog").unsent, 0);
+    assert_eq!(db.store.event_backlog(0).await.expect("backlog").unsent, 0);
     db.drop_db().await;
 }
 

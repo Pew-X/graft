@@ -12,7 +12,7 @@ One deployable Rust service plus a Next.js UI, built as a Cargo workspace. The a
 | `graft-render` | nothing at all | the integer renderer and its C-ABI wrapper, compiled to the canonical `.wasm` |
 | `graft-storage` | domain | Postgres store (migrations, idempotent writes, flip creation under the stage lock, maker and operator flag changes, reports, the chain read), the blob store trait with an in-memory, a directory-backed and an S3-compatible implementation, and the orphan cleanup. `Store` is a concrete type on purpose: the test seam is a real Postgres, so a trait would never have a second implementation. The blob store and the event sink are traits because they do have fakes |
 | `graft-render-host` | domain | runs the canonical `.wasm` under wasmtime |
-| `graft-events` | domain, storage | the event-sink trait, the Postgres-only sink and a recording sink, the relay that delivers claimed ledger rows to a sink, and the retention job; the consumer and rollups arrive with their ticket. The ledger's SQL stays in `graft-storage` so that a server event commits in the same transaction as its write |
+| `graft-events` | domain, storage | the event-sink trait, the Postgres-only sink and a recording sink, the relay that delivers claimed ledger rows to a sink, the idempotent consumer and the retention job. The ledger's SQL stays in `graft-storage` so that a server event commits in the same transaction as its write |
 | `graft-vectors` | render, render-host | the renderer vector table: loader, generators, and the native, wasmtime and render-host harnesses (test support; nothing ships it) |
 | `graft-host-check` | render-host, vectors | throwaway check service for the first deployment (see "Check on the target host"); removed by the deploy pipeline ticket |
 | `graft-api` | domain, storage, render-host, events | HTTP layer: reads, publishing, maker actions, reports and the operator routes; the OpenAPI document; configuration; the seed script and the cleanup command. Rate limits arrive with the abuse-guardrail ticket |
@@ -235,6 +235,9 @@ Written by ticket 05; later tickets add rows. Every value is read from the envir
 | `GRAFT_GLOBAL_PUBLISH_PER_HOUR`, `GRAFT_GLOBAL_PUBLISH_BURST` | 120, 30 | the global publish cap: tokens refilled per hour, and the most admitted in one burst |
 | `GRAFT_STORAGE_LIMIT_BYTES` | 8,000,000,000 | what the host allows for audio; the admission threshold is this minus the overshoot bound |
 | `GRAFT_STORAGE_REFRESH_SECS` | 60 | how often the stored total is read again |
+| `GRAFT_EVENT_PIPELINE` | `on` | whether this process runs the relay, the consumer and the retention job (`on` or `off`) |
+| `GRAFT_RELAY_BATCH`, `GRAFT_RELAY_INTERVAL_MS` | 100, 1000 | events per delivered batch, and the pause between relay passes |
+| `GRAFT_EVENT_RETENTION_DAYS`, `GRAFT_RETENTION_INTERVAL_SECS` | 30, 3600 | how long raw events are kept, and how often the retention job runs |
 
 Without a bucket or `GRAFT_BLOB_DIR` the service keeps audio in memory and says so in its log. The seed script refuses to seed into memory, and also reads `GRAFT_RENDERER_WASM` (the artefact, checked against the pins).
 
@@ -429,7 +432,7 @@ Written by ticket 21. The code is in `web/lib/playback/`: a pure state machine (
 
 ## Events and the outbox
 
-Written by ticket 13. The consumer, rollups and the admin read path are the next section's business (ticket 14); the client ingest endpoint is ticket 15.
+Written by ticket 13. The consumer, rollups and the operator's read are the next section (ticket 14); the client ingest endpoint is ticket 15.
 
 **The table is the source of truth; any queue is transport.** Every event is a row in one append-only `events` table with an origin (`server` or `client`) and a relay state (`unsent` or `sent`). A queue, if one is deployed, only carries copies of rows that already exist; a rebuild replays the table, never the queue. The sink the relay delivers to is a trait, so the deployed queue and the Postgres-only sink (the batch goes straight to the consumer in the same process, the default for tests and local runs) are interchangeable and the consumer is the same either way.
 
@@ -443,7 +446,23 @@ Written by ticket 13. The consumer, rollups and the admin read path are the next
 
 **Retention.** Raw events are kept 30 days. The retention job deletes only events that were sent and are older than the window, and skips any row a relay is working on, so it can run alongside the relay and can never discard an event that was not delivered (tests: an old unsent event survives; a purge racing a relay loses and duplicates nothing).
 
-**What is not wired yet.** The relay is a library with tests; the service starts it when the consumer exists (ticket 14), so no row is marked sent to nowhere in the meantime.
+**Wiring.** The service starts the relay (to the in-process consumer), and the retention job, unless `GRAFT_EVENT_PIPELINE=off`; claims skip locked rows, so any number of instances may run them.
+
+## Rollups and the analytical read path
+
+Written by ticket 14.
+
+**Two read paths, on purpose.** The lineage data (publications, content records) is the transactional store: what the public reads, and the only source of a public fact. A stage's "flipped N times" is counted from it and never from events; a test floods the ledger and then wipes every event-derived table and finds the public count unchanged. The rollups are derived, eventually consistent and rebuildable: they are an analytical read path that only the operator sees, through the secret-protected `GET /admin/rollups` and this document. This is the OLTP-versus-derived-state split in a deliberately small form. It is an engineering demonstration of the pattern, kept separate from the product contract: a small experimental product does not need a distributed design.
+
+**The consumer is idempotent on the event id.** It inserts each delivered id into a dedupe set (`processed_events`) and counts only those that were new, in one transaction, so a duplicate, a replay, a shuffled delivery or any batching gives the same counts. Rollup rows are keyed by hour (UTC), event kind and publication or stage, and hold counts only: no session id, address or agent (a test lists the columns and looks through the rows). The dedupe ids are kept at least as long as the events, and the retention job removes them with the events, except for ids of events still unsent.
+
+**The properties, stated as the tests state them.** Applying a generated stream once, twice, shuffled, in random batch sizes, and rebuilding from the ledger all give identical rollups, and those equal the counts worked out by hand from the generated specification.
+
+**Rebuild is a swap.** The rebuild command (`graft-rebuild-rollups`) locks the rollup and dedupe tables, snapshots the ledger in one statement, writes a fresh rollup table from the snapshot, and renames it over the live one in the same transaction, making the dedupe set equal to the snapshot's event ids. Consumers wait on the lock for that moment. The ledger is not locked, so events keep being accepted; one that arrived after the snapshot is not in the dedupe set and is counted once by the consumer when its turn comes, and one that arrived before it is already counted by the rebuild and recognised as a repeat. The approach is recorded as: apply the tail after the swap, by the ordinary consumer, with no pause of acceptance. A test forces that interleaving and finds each event exactly once; another shows a rebuild that fails part way leaves the live rollups and the table list untouched.
+
+**What cannot be rebuilt.** Raw events are kept for 30 days (`GRAFT_EVENT_RETENTION_DAYS`); hourly rollups are kept. When retention deletes events it records how far back the ledger has been trimmed, and a rebuild carries every hour at or before that point over as it is instead of recounting it from a ledger that no longer holds its events (the hour that straddles the point is carried over too). So a rebuild can fix recent counts but cannot recover rollups older than the window; a test shows an old hour surviving a rebuild after its events were deleted.
+
+**What the operator reads.** `GET /admin/rollups?hours=N` (1 to 720, default 24) returns hourly counts by kind, the relay backlog (events not yet delivered and the age of the oldest) and the consumer lag (events not yet counted and the age of the oldest: the event-to-rollup lag), computed against the service clock so tests can fix the time. Reports say sessions' events, never people, and the response says that client events are best-effort. The metrics endpoint exposes `graft_relay_backlog`, `graft_relay_oldest_unsent_age_seconds`, `graft_consumer_lag_seconds`, `graft_events_applied_total` and `graft_events_duplicates_total`.
 
 ## Security
 

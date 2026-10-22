@@ -16,6 +16,7 @@ tracing = "0.1"
 [dev-dependencies]
 graft-storage = { workspace = true, features = ["test-support"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
+proptest = "1"
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "postgres"] }
 
 [lints]

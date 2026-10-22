@@ -135,6 +135,9 @@ pub struct StoredEvent {
     pub session_id: Option<String>,
     /// When it happened, milliseconds since the Unix epoch.
     pub occurred_at_ms: i64,
+    /// The start of the hour it happened in (UTC), milliseconds since the Unix epoch, as the
+    /// database computed it, so every counting path agrees on which hour an event belongs to.
+    pub hour_ms: i64,
     /// The publication or stage it is about.
     pub publication_id: Option<String>,
     /// The qualifier.
@@ -164,7 +167,9 @@ pub(crate) async fn append(conn: &mut PgConnection, event: &NewEvent) -> Result<
 }
 
 const EVENT_COLUMNS: &str = "seq, event_id, kind, origin, session_id, \
-    (extract(epoch from occurred_at) * 1000)::bigint AS occurred_ms, publication_id, detail";
+    (extract(epoch from occurred_at) * 1000)::bigint AS occurred_ms, \
+    (floor(extract(epoch from occurred_at) / 3600) * 3600000)::bigint AS hour_ms, \
+    publication_id, detail";
 
 fn stored(row: &sqlx::postgres::PgRow) -> Result<StoredEvent, StoreError> {
     let kind: String = row.try_get("kind").map_err(db)?;
@@ -181,6 +186,7 @@ fn stored(row: &sqlx::postgres::PgRow) -> Result<StoredEvent, StoreError> {
         },
         session_id: row.try_get("session_id").map_err(db)?,
         occurred_at_ms: row.try_get("occurred_ms").map_err(db)?,
+        hour_ms: row.try_get("hour_ms").map_err(db)?,
         publication_id: row.try_get("publication_id").map_err(db)?,
         detail: row.try_get("detail").map_err(db)?,
     })
@@ -202,8 +208,7 @@ pub enum Claimed<E> {
 pub struct Backlog {
     /// Events not yet delivered.
     pub unsent: i64,
-    /// Age of the oldest undelivered event, in milliseconds (0 when there is none), by the
-    /// database clock.
+    /// Age of the oldest undelivered event, in milliseconds (0 when there is none).
     pub oldest_unsent_age_ms: i64,
 }
 
@@ -262,14 +267,17 @@ impl Store {
     }
 
     /// Delete events that happened before `cutoff_ms`, up to `limit` of them, never an unsent one
-    /// and never one a relay is working on. Safe to run alongside the relay. Returns how many were
-    /// deleted.
+    /// and never one a relay is working on. Safe to run alongside the relay. The consumer's dedupe
+    /// ids for the same period go too, except those of events still unsent, and the ledger's floor
+    /// is recorded so a rebuild knows which hours it can no longer recount. Returns how many events
+    /// were deleted.
     pub async fn delete_old_sent_events(
         &self,
         cutoff_ms: i64,
         limit: u32,
     ) -> Result<u64, StoreError> {
-        let result = sqlx::query(
+        let mut tx = self.pool.begin().await.map_err(db)?;
+        let deleted = sqlx::query(
             "DELETE FROM events WHERE seq IN ( \
                SELECT seq FROM events \
                WHERE relay_state = 'sent' AND occurred_at < to_timestamp($1::float8 / 1000.0) \
@@ -277,25 +285,49 @@ impl Store {
         )
         .bind(cutoff_ms as f64)
         .bind(i64::from(limit))
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await
-        .map_err(db)?;
-        Ok(result.rows_affected())
+        .map_err(db)?
+        .rows_affected();
+        if deleted > 0 {
+            sqlx::query(
+                "DELETE FROM processed_events p WHERE p.occurred_at < to_timestamp($1::float8 / 1000.0) \
+                   AND NOT EXISTS (SELECT 1 FROM events e WHERE e.event_id = p.event_id \
+                                   AND e.relay_state = 'unsent')",
+            )
+            .bind(cutoff_ms as f64)
+            .execute(&mut *tx)
+            .await
+            .map_err(db)?;
+            sqlx::query(
+                "INSERT INTO runtime_settings (key, value) VALUES ($1, $2) \
+                 ON CONFLICT (key) DO UPDATE SET updated_at = now(), \
+                   value = GREATEST(runtime_settings.value::bigint, EXCLUDED.value::bigint)::text",
+            )
+            .bind(crate::rollups::FLOOR_KEY)
+            .bind(cutoff_ms.to_string())
+            .execute(&mut *tx)
+            .await
+            .map_err(db)?;
+        }
+        tx.commit().await.map_err(db)?;
+        Ok(deleted)
     }
 
-    /// How far behind delivery is, by the database clock.
-    pub async fn event_backlog(&self) -> Result<Backlog, StoreError> {
+    /// How far behind delivery is at `now_ms`.
+    pub async fn event_backlog(&self, now_ms: i64) -> Result<Backlog, StoreError> {
         let row = sqlx::query(
             "SELECT count(*)::bigint AS unsent, \
-                    COALESCE((extract(epoch from now() - min(occurred_at)) * 1000)::bigint, 0) AS age \
+                    COALESCE(($1::float8 - min(extract(epoch from occurred_at) * 1000))::bigint, 0) AS age \
              FROM events WHERE relay_state = 'unsent'",
         )
+        .bind(now_ms as f64)
         .fetch_one(&self.pool)
         .await
         .map_err(db)?;
         Ok(Backlog {
             unsent: row.try_get("unsent").map_err(db)?,
-            oldest_unsent_age_ms: row.try_get("age").map_err(db)?,
+            oldest_unsent_age_ms: row.try_get::<i64, _>("age").map_err(db)?.max(0),
         })
     }
 

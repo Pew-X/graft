@@ -969,6 +969,7 @@ version = "0.0.0"
 dependencies = [
  "graft-domain",
  "graft-storage",
+ "proptest",
  "sqlx",
  "thiserror",
  "tokio",

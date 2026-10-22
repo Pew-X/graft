@@ -59,6 +59,8 @@ pub struct AppState {
     pub admin_secret_hash: Option<[u8; 32]>,
     /// The kill switch, the per-visitor limits, the global cap and the storage threshold.
     pub guards: Arc<Guards>,
+    /// What the consumer has counted, for the operator's read and the metrics.
+    pub consumer_stats: Arc<graft_events::ConsumerStats>,
 }
 
 /// Settings the publish route reads.
@@ -109,6 +111,7 @@ impl AppState {
             )),
             store,
             blobs,
+            consumer_stats: Arc::new(graft_events::ConsumerStats::default()),
             limits: config.limits.clone(),
             blob_url_ttl: std::time::Duration::from_secs(config.blob_url_ttl_secs),
             renderer,
@@ -183,6 +186,7 @@ pub fn router(state: AppState, config: &Config) -> Router {
 fn admin_routes(state: AppState) -> Router<AppState> {
     Router::new()
         .route("/admin/reports", get(moderation::list_reports))
+        .route("/admin/rollups", get(crate::events::get_rollups))
         .route(
             "/admin/switch",
             get(moderation::get_switch)
@@ -295,7 +299,9 @@ async fn ready(State(state): State<AppState>) -> Response {
 }
 
 async fn metrics(State(state): State<AppState>) -> Response {
-    let mut response = state.metrics.render().into_response();
+    let mut text = state.metrics.render();
+    text.push_str(&crate::events::metrics_text(&state).await);
+    let mut response = text.into_response();
     response.headers_mut().insert(
         header::CONTENT_TYPE,
         HeaderValue::from_static("text/plain; version=0.0.4; charset=utf-8"),

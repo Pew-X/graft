@@ -61,6 +61,65 @@ pub struct Config {
     pub orphan_grace_secs: u64,
     /// The abuse guardrails: kill switch default, per-visitor limits, global cap, storage threshold.
     pub guardrails: Guardrails,
+    /// The event pipeline: whether this process runs the relay and consumer, and its pacing.
+    pub events: EventSettings,
+}
+
+/// How this process runs the event pipeline (ARCHITECTURE.md, "Events and the outbox").
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EventSettings {
+    /// Whether this process runs the relay, the consumer and the retention job.
+    pub pipeline: bool,
+    /// Events delivered per batch.
+    pub relay_batch: u32,
+    /// Pause between relay passes, in milliseconds.
+    pub relay_interval_ms: u64,
+    /// Raw events are kept this many days.
+    pub retention_days: u32,
+    /// Pause between retention passes, in seconds.
+    pub retention_interval_secs: u64,
+}
+
+fn event_settings(lookup: &impl Fn(&str) -> Option<String>) -> Result<EventSettings, ConfigError> {
+    let mut e = EventSettings {
+        pipeline: true,
+        relay_batch: 100,
+        relay_interval_ms: 1000,
+        retention_days: 30,
+        retention_interval_secs: 3600,
+    };
+    match lookup("GRAFT_EVENT_PIPELINE").as_deref().map(str::trim) {
+        None | Some("on") => {}
+        Some("off") => e.pipeline = false,
+        Some(_) => {
+            return Err(ConfigError::Invalid {
+                name: "GRAFT_EVENT_PIPELINE",
+                reason: "must be `on` or `off`".to_owned(),
+            });
+        }
+    }
+    number(lookup, "GRAFT_RELAY_BATCH", &mut e.relay_batch)?;
+    number(lookup, "GRAFT_RELAY_INTERVAL_MS", &mut e.relay_interval_ms)?;
+    number(lookup, "GRAFT_EVENT_RETENTION_DAYS", &mut e.retention_days)?;
+    number(
+        lookup,
+        "GRAFT_RETENTION_INTERVAL_SECS",
+        &mut e.retention_interval_secs,
+    )?;
+    for (name, value) in [
+        ("GRAFT_RELAY_BATCH", u64::from(e.relay_batch)),
+        ("GRAFT_RELAY_INTERVAL_MS", e.relay_interval_ms),
+        ("GRAFT_EVENT_RETENTION_DAYS", u64::from(e.retention_days)),
+        ("GRAFT_RETENTION_INTERVAL_SECS", e.retention_interval_secs),
+    ] {
+        if value == 0 {
+            return Err(ConfigError::Invalid {
+                name,
+                reason: "must be at least 1".to_owned(),
+            });
+        }
+    }
+    Ok(e)
 }
 
 /// A limit on how often something may happen: `count` times within `window_secs`.
@@ -418,6 +477,7 @@ impl Config {
         )?;
         validate(&limits, blob_url_ttl_secs)?;
         let guardrails = guardrails(&lookup, &limits)?;
+        let events = event_settings(&lookup)?;
         if max_forks_per_stage_per_hour == 0 {
             return Err(ConfigError::Invalid {
                 name: "GRAFT_MAX_FORKS_PER_STAGE_PER_HOUR",
@@ -451,6 +511,7 @@ impl Config {
             blob_refresh_secs,
             orphan_grace_secs,
             guardrails,
+            events,
         })
     }
 }
@@ -737,6 +798,41 @@ mod tests {
             ("GRAFT_PUBLISH_PER_IP", "0"),
             ("GRAFT_GLOBAL_PUBLISH_BURST", "0"),
             ("GRAFT_STORAGE_REFRESH_SECS", "0"),
+        ] {
+            let err = Config::from_lookup(env(&[
+                ("GRAFT_DATABASE_URL", "postgres://x"),
+                (name, value),
+            ]))
+            .expect_err("refused");
+            assert!(err.to_string().contains(name), "{name}: {err}");
+        }
+    }
+
+    #[test]
+    fn the_event_pipeline_defaults_and_overrides_and_refuses_nonsense_by_name() {
+        let c = Config::from_lookup(env(&[("GRAFT_DATABASE_URL", "postgres://x")])).expect("valid");
+        assert_eq!(
+            c.events,
+            EventSettings {
+                pipeline: true,
+                relay_batch: 100,
+                relay_interval_ms: 1000,
+                retention_days: 30,
+                retention_interval_secs: 3600
+            }
+        );
+        let c = Config::from_lookup(env(&[
+            ("GRAFT_DATABASE_URL", "postgres://x"),
+            ("GRAFT_EVENT_PIPELINE", "off"),
+            ("GRAFT_EVENT_RETENTION_DAYS", "7"),
+        ]))
+        .expect("valid");
+        assert!(!c.events.pipeline);
+        assert_eq!(c.events.retention_days, 7);
+        for (name, value) in [
+            ("GRAFT_EVENT_PIPELINE", "sometimes"),
+            ("GRAFT_RELAY_BATCH", "0"),
+            ("GRAFT_EVENT_RETENTION_DAYS", "0"),
         ] {
             let err = Config::from_lookup(env(&[
                 ("GRAFT_DATABASE_URL", "postgres://x"),
