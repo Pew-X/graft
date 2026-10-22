@@ -124,6 +124,19 @@ impl Problem {
         )
     }
 
+    /// 403: the manage key was not accepted. The same answer for a wrong key, a missing key, a
+    /// publication that does not exist and one that has no key, so the refusal says nothing about
+    /// which of those it was.
+    #[must_use]
+    pub fn manage_key_refused() -> Self {
+        Self::base(
+            "urn:graft:problem:manage-key-refused",
+            "Manage key not accepted",
+            403,
+            "the manage key was not accepted for this publication",
+        )
+    }
+
     /// 409: the stage is hidden, so nothing can be built on it.
     #[must_use]
     pub fn parent_unavailable() -> Self {

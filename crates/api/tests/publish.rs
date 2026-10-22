@@ -328,7 +328,8 @@ async fn unknown_closed_or_hidden_parents_are_refused_with_their_own_problem() {
     )
     .await;
 
-    sqlx::query("UPDATE publications SET fork_permitted = false")
+    sqlx::query("UPDATE publications SET fork_permitted = false WHERE id = $1")
+        .bind(&parent)
         .execute(h.db.store.pool())
         .await
         .expect("revoke");
@@ -341,10 +342,13 @@ async fn unknown_closed_or_hidden_parents_are_refused_with_their_own_problem() {
     )
     .await;
 
-    sqlx::query("UPDATE publications SET fork_permitted = true, hidden_reason = 'withdrawn'")
-        .execute(h.db.store.pool())
-        .await
-        .expect("hide");
+    sqlx::query(
+        "UPDATE publications SET fork_permitted = true, hidden_reason = 'withdrawn' WHERE id = $1",
+    )
+    .bind(&parent)
+    .execute(h.db.store.pool())
+    .await
+    .expect("hide");
     refused(
         &h,
         body(&parent, 0, 1000, 1, 1, 4),
@@ -413,7 +417,9 @@ async fn a_replay_still_answers_after_the_cap_filled_and_forking_was_closed() {
     let parent = source(&h).await;
     let req = body(&parent, 0, 24_000, 1, 1, 1);
     let (_, _, first) = h.post("/v1/publications", &req).await;
-    sqlx::query("UPDATE publications SET fork_permitted = false")
+    // Close the parent only: closing the flip too would change what its replay reports.
+    sqlx::query("UPDATE publications SET fork_permitted = false WHERE id = $1")
+        .bind(&parent)
         .execute(h.db.store.pool())
         .await
         .expect("close");

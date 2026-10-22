@@ -1,6 +1,7 @@
 //! The HTTP surface: routing, request ids, security headers, CORS, health, readiness and metrics.
 
 use crate::config::Config;
+use crate::maker;
 use crate::metrics::Metrics;
 use crate::problem::Problem;
 use crate::publish;
@@ -9,7 +10,7 @@ use axum::extract::{MatchedPath, Request, State};
 use axum::http::{HeaderName, HeaderValue, Method, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use graft_domain::limits::Limits;
 use graft_render_host::Render;
@@ -110,6 +111,16 @@ pub fn router(state: AppState, config: &Config) -> Router {
         .route("/openapi.json", get(routes::openapi))
         .route("/v1/chains/{id}", get(routes::get_chain))
         .route("/v1/publications/{id}", get(routes::get_publication))
+        .route(
+            "/v1/publications/{id}/fork-permission",
+            put(maker::set_fork_permission)
+                .layer(axum::extract::DefaultBodyLimit::max(maker::MAX_BODY_BYTES)),
+        )
+        .route(
+            "/v1/publications/{id}/withdraw",
+            post(maker::withdraw)
+                .layer(axum::extract::DefaultBodyLimit::max(maker::MAX_BODY_BYTES)),
+        )
         .route(
             "/v1/publications",
             post(publish::publish_flip).layer(axum::extract::DefaultBodyLimit::max(

@@ -25,7 +25,19 @@ export async function fetchChain(
   throw new Error(error?.detail ?? `the chain could not be read (${response.status})`);
 }
 
-/** What a reader sees for each entry of a chain: the title, or a marker for a missing parent. */
+/**
+ * What a reader sees for each entry of a chain: the title, the title marked as no longer here for a
+ * hidden stage (its credit stays), or a marker for a parent that could not be read.
+ */
 export function entryLabels(chain: Chain): string[] {
-  return chain.stages.map((entry) => (entry.state === "available" ? entry.title : "unavailable"));
+  return chain.stages.map((entry) => {
+    switch (entry.state) {
+      case "available":
+        return entry.title;
+      case "no_longer_here":
+        return `${entry.title} (no longer here)`;
+      case "unavailable":
+        return "unavailable";
+    }
+  });
 }

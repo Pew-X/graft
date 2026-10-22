@@ -2,12 +2,12 @@
 //! is generated from the committed copy, and CI fails when the two drift.
 
 use crate::problem::Problem;
-use crate::publish;
 use crate::routes;
 use crate::views::{
     AudioView, ChainView, CutView, DetailsView, EntryView, LineView, RendererView, SpeedView,
     StageView,
 };
+use crate::{maker, publish};
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]
@@ -17,7 +17,13 @@ use utoipa::OpenApi;
         description = "Read a chain of stages, source first. Errors are RFC 9457 problem details.",
         version = "0.0.0"
     ),
-    paths(routes::get_chain, routes::get_publication, publish::publish_flip),
+    paths(
+        routes::get_chain,
+        routes::get_publication,
+        publish::publish_flip,
+        maker::set_fork_permission,
+        maker::withdraw
+    ),
     components(schemas(
         Problem,
         ChainView,

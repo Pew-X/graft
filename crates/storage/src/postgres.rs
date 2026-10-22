@@ -112,7 +112,7 @@ pub struct Store {
 
 const STAGE_COLUMNS: &str = "p.id AS pub_id, c.id AS content_id, p.title, p.author, \
     (extract(epoch from p.created_at) * 1000)::bigint AS created_ms, \
-    p.licence, p.work_title, p.work_author, p.work_url, \
+    p.licence, p.work_title, p.work_author, p.work_url, p.fork_permitted, p.hidden_reason, \
     c.kind, c.parent_publication_id, c.source_blob, c.cut_start, c.cut_end, c.p, c.q, c.method, \
     c.renderer_name, c.renderer_version, c.renderer_sha256, c.output_blob, \
     (SELECT count(*) FROM content_records k JOIN publications kp ON kp.content_id = k.id \
@@ -437,6 +437,17 @@ fn stage_from_row(row: &PgRow) -> Result<StoredStage, StoreError> {
         author: row.try_get("author").map_err(db)?,
         created_at_ms: row.try_get("created_ms").map_err(db)?,
         evidence,
+        fork_permitted: row.try_get("fork_permitted").map_err(db)?,
+        hidden: match row
+            .try_get::<Option<String>, _>("hidden_reason")
+            .map_err(db)?
+        {
+            None => None,
+            Some(text) => Some(
+                graft_domain::chain::HideReason::parse(&text)
+                    .ok_or_else(|| StoreError::Corrupt(format!("unknown hide reason {text}")))?,
+            ),
+        },
         flipped_count: u32::try_from(row.try_get::<i64, _>("flipped").map_err(db)?)
             .map_err(|_| StoreError::Corrupt("negative count".into()))?,
     })

@@ -6,7 +6,7 @@ use crate::views::{self, AudioView, ChainView, EntryView};
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::response::{IntoResponse, Response};
-use graft_domain::chain::{Entry, StoredStage};
+use graft_domain::chain::{Availability, Chain, Entry, StoredStage, availability};
 use graft_domain::ids::PublicationId;
 use graft_storage::StoreError;
 
@@ -53,16 +53,29 @@ pub async fn get_chain(
         .await
         .map_err(|e: StoreError| internal("reading a chain", &e))?
         .ok_or_else(not_found)?;
+    let entries = entry_views(&state, &chain).await?;
+    Ok(Json(views::chain_view(&chain, entries)))
+}
+
+/// One view per entry of the chain. A hidden stage gets no audio URL: new requests for its audio
+/// are refused by never issuing one.
+async fn entry_views(state: &AppState, chain: &Chain) -> Result<Vec<EntryView>, Problem> {
     let mut views = Vec::with_capacity(chain.entries.len());
-    for entry in &chain.entries {
-        views.push(match entry {
-            Entry::Present(stage) => {
-                Some(views::stage_view(stage, audio_for(&state, stage).await?))
+    for (entry, available) in chain.entries.iter().zip(availability(chain)) {
+        views.push(match (entry, available) {
+            (Entry::Present(stage), Some(Availability::Available)) => EntryView::Available(
+                Box::new(views::stage_view(stage, audio_for(state, stage).await?)),
+            ),
+            (Entry::Present(stage), Some(Availability::NoLongerHere(reason))) => {
+                EntryView::NoLongerHere(Box::new(views::removed_view(stage, reason)))
             }
-            Entry::Unavailable(_) => None,
+            (Entry::Present(stage), None) => EntryView::Unavailable {
+                id: stage.id.to_string(),
+            },
+            (Entry::Unavailable(id), _) => EntryView::Unavailable { id: id.to_string() },
         });
     }
-    Ok(Json(views::chain_view(&chain, views)))
+    Ok(views)
 }
 
 /// One publication.
@@ -80,14 +93,16 @@ pub async fn get_publication(
     Path(id): Path<String>,
 ) -> Result<Json<EntryView>, Problem> {
     let id = PublicationId::parse(&id).map_err(|_| not_found())?;
-    let stage = state
+    // Read through the chain, so whether the stage may be heard is decided by the same rule and
+    // the same snapshot as everywhere else.
+    let chain = state
         .store
-        .publication(&id)
+        .chain(&id, state.limits.max_chain_depth)
         .await
         .map_err(|e| internal("reading a publication", &e))?
         .ok_or_else(not_found)?;
-    let view = views::stage_view(&stage, audio_for(&state, &stage).await?);
-    Ok(Json(EntryView::Available(Box::new(view))))
+    let mut entries = entry_views(&state, &chain).await?;
+    entries.pop().map(Json).ok_or_else(not_found)
 }
 
 /// The OpenAPI document for the public API.

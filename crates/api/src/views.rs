@@ -1,7 +1,7 @@
 //! The read model: what the API says about a stage and a chain. Names, titles and notes are plain
 //! text as typed; every line says whether it is declared, computed or unknown.
 
-use graft_domain::chain::{Chain, Entry, StoredStage, Truncation, credit_lines};
+use graft_domain::chain::{Chain, HideReason, StoredStage, Truncation, credit_lines};
 use graft_domain::honesty::Honesty;
 use graft_domain::record::Kind;
 use serde::Serialize;
@@ -92,6 +92,8 @@ pub struct StageView {
     pub flipped_count: u32,
     /// Id of the parent publication, absent for a source.
     pub parent_id: Option<String>,
+    /// Whether the maker allows new flips of this stage.
+    pub fork_permitted: bool,
     /// Credit lines, each with its honesty state.
     pub lines: Vec<LineView>,
     /// The exact facts.
@@ -100,12 +102,36 @@ pub struct StageView {
     pub audio: AudioView,
 }
 
+/// A stage that is hidden: its credit stays, its audio is not served, and the chain around it is
+/// not shortened.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+pub struct RemovedView {
+    /// Public id of the publication.
+    pub id: String,
+    /// "source" or "flip".
+    pub kind: String,
+    /// Why it is hidden: "withdrawn" or "rights".
+    pub reason: String,
+    /// Title as typed.
+    pub title: String,
+    /// Maker's name as typed.
+    pub author: String,
+    /// Creation time, milliseconds since the Unix epoch.
+    pub created_at_ms: i64,
+    /// Id of the parent publication, absent for a source.
+    pub parent_id: Option<String>,
+    /// Credit lines, each with its honesty state.
+    pub lines: Vec<LineView>,
+}
+
 /// A position in a chain.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum EntryView {
-    /// A stage that was read.
+    /// A stage that was read and may be heard.
     Available(Box<StageView>),
+    /// A hidden stage: "no longer here". Its credit stays; its audio is not served.
+    NoLongerHere(Box<RemovedView>),
     /// A parent the chain names but could not be read. The chain is never silently shortened.
     Unavailable {
         /// The id the child names as its parent.
@@ -142,6 +168,7 @@ pub fn stage_view(stage: &StoredStage, audio: AudioView) -> StageView {
         created_at_ms: stage.created_at_ms,
         flipped_count: stage.flipped_count,
         parent_id: r.parent().map(ToString::to_string),
+        fork_permitted: stage.fork_permitted,
         lines: credit_lines(stage)
             .into_iter()
             .map(|l| LineView {
@@ -173,21 +200,36 @@ pub fn stage_view(stage: &StoredStage, audio: AudioView) -> StageView {
     }
 }
 
-/// Wrap the entries of a chain once their audio URLs are known, in the same order.
+/// The view of a hidden stage: credits and identity, no audio and no exact facts.
 #[must_use]
-pub fn chain_view(chain: &Chain, views: Vec<Option<StageView>>) -> ChainView {
-    let stages = chain
-        .entries
-        .iter()
-        .zip(views)
-        .map(|(entry, view)| match (entry, view) {
-            (Entry::Present(_), Some(v)) => EntryView::Available(Box::new(v)),
-            (Entry::Unavailable(id), _) => EntryView::Unavailable { id: id.to_string() },
-            (Entry::Present(s), None) => EntryView::Unavailable {
-                id: s.id.to_string(),
-            },
-        })
-        .collect();
+pub fn removed_view(stage: &StoredStage, reason: HideReason) -> RemovedView {
+    let r = &stage.record;
+    RemovedView {
+        id: stage.id.to_string(),
+        kind: match r.kind() {
+            Kind::Source => "source",
+            Kind::Flip => "flip",
+        }
+        .to_owned(),
+        reason: reason.as_str().to_owned(),
+        title: stage.title.clone(),
+        author: stage.author.clone(),
+        created_at_ms: stage.created_at_ms,
+        parent_id: r.parent().map(ToString::to_string),
+        lines: credit_lines(stage)
+            .into_iter()
+            .map(|l| LineView {
+                role: l.role.to_owned(),
+                value: l.value,
+                honesty: honesty(l.honesty),
+            })
+            .collect(),
+    }
+}
+
+/// Assemble the chain response from one view per entry, in order.
+#[must_use]
+pub fn chain_view(chain: &Chain, stages: Vec<EntryView>) -> ChainView {
     ChainView {
         stages,
         truncated: chain.truncated.map(|t| match t {

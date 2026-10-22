@@ -40,6 +40,72 @@ pub struct StoredStage {
     pub evidence: Option<SourceEvidence>,
     /// How many publications name this one as their parent.
     pub flipped_count: u32,
+    /// Whether the maker allows new flips of this stage.
+    pub fork_permitted: bool,
+    /// Set when the stage is hidden, and why.
+    pub hidden: Option<HideReason>,
+}
+
+/// Why a stage is hidden.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HideReason {
+    /// The maker withdrew it, or the operator hid it for a reason that does not touch other
+    /// people's work. Stages built on it stay playable.
+    Withdrawn,
+    /// A rights concern. Stages built on it are held (their credits show, their audio is not
+    /// served) while the hide stands.
+    Rights,
+}
+
+impl HideReason {
+    /// The name used in the database and on the wire.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Withdrawn => "withdrawn",
+            Self::Rights => "rights",
+        }
+    }
+
+    /// Parse the stored name.
+    #[must_use]
+    pub fn parse(text: &str) -> Option<Self> {
+        match text {
+            "withdrawn" => Some(Self::Withdrawn),
+            "rights" => Some(Self::Rights),
+            _ => None,
+        }
+    }
+}
+
+/// Whether a stage's audio may be served, decided from the chain as one snapshot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Availability {
+    /// Credits and audio are served.
+    Available,
+    /// The stage itself is hidden: its credit stays, its audio is not served.
+    NoLongerHere(HideReason),
+}
+
+/// The availability of every present entry of `chain`, in order; `None` for an unavailable
+/// parent (nothing was read, so there is nothing to decide).
+///
+/// Today a stage is unavailable exactly when it is hidden itself. The rule for stages built on a
+/// stage hidden for rights is added with moderation; it is decided here, once, so that the read
+/// path and the reference model it is tested against cannot drift.
+#[must_use]
+pub fn availability(chain: &Chain) -> Vec<Option<Availability>> {
+    chain
+        .entries
+        .iter()
+        .map(|entry| match entry {
+            Entry::Present(stage) => Some(match stage.hidden {
+                Some(reason) => Availability::NoLongerHere(reason),
+                None => Availability::Available,
+            }),
+            Entry::Unavailable(_) => None,
+        })
+        .collect()
 }
 
 /// What a chain position holds.
@@ -196,6 +262,8 @@ mod tests {
                 url: None,
             }),
             flipped_count: 0,
+            fork_permitted: true,
+            hidden: None,
         }
     }
 
@@ -225,6 +293,8 @@ mod tests {
             created_at_ms: 0,
             evidence: None,
             flipped_count: 0,
+            fork_permitted: true,
+            hidden: None,
         }
     }
 
@@ -295,6 +365,44 @@ mod tests {
         let chain = assemble(&id(3), rows, 3).expect("leaf present");
         assert_eq!(chain.entries.len(), 3);
         assert_eq!(chain.truncated, None);
+    }
+
+    #[test]
+    fn a_hidden_stage_is_no_longer_here_and_the_chain_keeps_its_length() {
+        let mut hidden = flip(2, 1);
+        hidden.hidden = Some(HideReason::Withdrawn);
+        let chain =
+            assemble(&id(3), vec![source(1), hidden, flip(3, 2)], 12).expect("leaf present");
+        assert_eq!(
+            chain.entries.len(),
+            3,
+            "a hidden stage never shortens the chain"
+        );
+        assert_eq!(
+            availability(&chain),
+            vec![
+                Some(Availability::Available),
+                Some(Availability::NoLongerHere(HideReason::Withdrawn)),
+                Some(Availability::Available),
+            ]
+        );
+    }
+
+    #[test]
+    fn an_unreadable_parent_has_no_availability_to_decide() {
+        let chain = assemble(&id(3), vec![flip(3, 2)], 12).expect("leaf present");
+        assert_eq!(
+            availability(&chain),
+            vec![None, Some(Availability::Available)]
+        );
+    }
+
+    #[test]
+    fn hide_reasons_round_trip_through_their_stored_names() {
+        for reason in [HideReason::Withdrawn, HideReason::Rights] {
+            assert_eq!(HideReason::parse(reason.as_str()), Some(reason));
+        }
+        assert_eq!(HideReason::parse("other"), None);
     }
 
     #[test]

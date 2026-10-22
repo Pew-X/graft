@@ -55,6 +55,43 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/publications/{id}/fork-permission": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Close or reopen a stage to new flips. Existing flips and rolls are untouched. */
+    put: operations["set_fork_permission"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/publications/{id}/withdraw": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Withdraw a publication. It stays in every chain as "no longer here" with its credit; its audio
+     *     is no longer served; stages built on it stay playable. Only the operator can undo it.
+     */
+    post: operations["withdraw"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -122,12 +159,21 @@ export interface components {
           /** @enum {string} */
           state: "available";
         })
+      | (components["schemas"]["RemovedView"] & {
+          /** @enum {string} */
+          state: "no_longer_here";
+        })
       | {
           /** @description The id the child names as its parent. */
           id: string;
           /** @enum {string} */
           state: "unavailable";
         };
+    /** @description Close or reopen a stage to new flips. */
+    ForkPermissionRequest: {
+      /** @description True to allow new flips of this stage, false to close it. Existing flips are untouched. */
+      permitted: boolean;
+    };
     /** @description One line of a credit block. */
     LineView: {
       /** @description "declared" (a person said it, as typed), "computed" (the system produced it) or "unknown". */
@@ -136,6 +182,13 @@ export interface components {
       role: string;
       /** @description The value, as text. */
       value: string;
+    };
+    /** @description The state of a stage after a maker action. */
+    MakerState: {
+      /** @description Whether new flips of this stage are allowed. */
+      fork_permitted: boolean;
+      /** @description Whether the stage is hidden (withdrawn). */
+      withdrawn: boolean;
     };
     /** @description A problem-details document. */
     Problem: {
@@ -196,6 +249,31 @@ export interface components {
       preview_matches?: boolean | null;
       /** @description The new publication, as one entry of a chain. */
       publication: components["schemas"]["EntryView"];
+    };
+    /**
+     * @description A stage that is hidden: its credit stays, its audio is not served, and the chain around it is
+     *     not shortened.
+     */
+    RemovedView: {
+      /** @description Maker's name as typed. */
+      author: string;
+      /**
+       * Format: int64
+       * @description Creation time, milliseconds since the Unix epoch.
+       */
+      created_at_ms: number;
+      /** @description Public id of the publication. */
+      id: string;
+      /** @description "source" or "flip". */
+      kind: string;
+      /** @description Credit lines, each with its honesty state. */
+      lines: components["schemas"]["LineView"][];
+      /** @description Id of the parent publication, absent for a source. */
+      parent_id?: string | null;
+      /** @description Why it is hidden: "withdrawn" or "rights". */
+      reason: string;
+      /** @description Title as typed. */
+      title: string;
     };
     /** @description Which renderer produced the audio. */
     RendererView: {
@@ -258,6 +336,8 @@ export interface components {
        * @description How many publications were flipped from this one, counted from publications data.
        */
       flipped_count: number;
+      /** @description Whether the maker allows new flips of this stage. */
+      fork_permitted: boolean;
       /** @description Public id of the publication. */
       id: string;
       /** @description "source" or "flip". */
@@ -420,6 +500,98 @@ export interface operations {
       };
       /** @description No such publication */
       404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  set_fork_permission: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The manage key shown once when the publication was created */
+        "x-graft-manage-key": string;
+      };
+      path: {
+        /** @description Public id of the publication */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ForkPermissionRequest"];
+      };
+    };
+    responses: {
+      /** @description The stage after the change; repeating the request changes nothing */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MakerState"];
+        };
+      };
+      /** @description The manage key was not accepted (the same answer for every reason) */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Busy; send the same request again */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  withdraw: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The manage key shown once when the publication was created */
+        "x-graft-manage-key": string;
+      };
+      path: {
+        /** @description Public id of the publication */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The stage after the change; repeating the request changes nothing */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MakerState"];
+        };
+      };
+      /** @description The manage key was not accepted (the same answer for every reason) */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Busy; send the same request again */
+      503: {
         headers: {
           [name: string]: unknown;
         };

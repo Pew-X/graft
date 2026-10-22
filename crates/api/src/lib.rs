@@ -2,6 +2,7 @@
 
 pub mod config;
 pub mod http;
+pub mod maker;
 pub mod metrics;
 pub mod openapi;
 pub mod problem;

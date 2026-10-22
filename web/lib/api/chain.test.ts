@@ -10,6 +10,7 @@ const stage = (title: string): Chain["stages"][number] => ({
   author: "a maker",
   created_at_ms: 0,
   flipped_count: 0,
+  fork_permitted: true,
   lines: [],
   details: {
     record_id: "",
@@ -26,6 +27,26 @@ test("a missing parent reads as unavailable and the chain is not shortened", () 
     stages: [{ state: "unavailable", id: "bbbbbbbbbbbb" }, stage("slower")],
   };
   assert.deepEqual(entryLabels(chain), ["unavailable", "slower"]);
+});
+
+test("a hidden stage keeps its credit and is marked as no longer here", () => {
+  const chain: Chain = {
+    stages: [
+      stage("a door"),
+      {
+        state: "no_longer_here",
+        id: "cccccccccccc",
+        kind: "flip",
+        reason: "withdrawn",
+        title: "slower",
+        author: "jo",
+        created_at_ms: 0,
+        lines: [],
+      },
+      stage("slower still"),
+    ],
+  };
+  assert.deepEqual(entryLabels(chain), ["a door", "slower (no longer here)", "slower still"]);
 });
 
 test("a 404 from the service is a missing chain, not an error", async () => {
