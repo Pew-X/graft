@@ -299,3 +299,229 @@ async fn more_concurrent_forks_than_pool_connections_all_succeed_without_deadloc
     );
     db.drop_db().await;
 }
+
+// Events: a server event commits with the write it describes or not at all.
+
+async fn kinds(db: &TestDb) -> Vec<(String, Option<String>)> {
+    sqlx::query_as("SELECT kind, detail FROM events ORDER BY seq")
+        .fetch_all(db.store.pool())
+        .await
+        .expect("events")
+}
+
+#[tokio::test]
+async fn each_created_publication_yields_exactly_one_event_naming_its_kind() {
+    let (db, parent) = with_parent().await;
+    assert_eq!(
+        kinds(&db).await,
+        vec![("publication_created".into(), Some("source".into()))],
+        "the seeded source is a created publication"
+    );
+    let f = flip(&parent, "k1", 24_000, 2, 10);
+    db.store.create_flip(&f).await.expect("create");
+    // A replay writes nothing, so it adds no event.
+    db.store.create_flip(&f).await.expect("replay");
+    // Nor does a key conflict.
+    db.store
+        .create_flip(&flip(&parent, "k1", 20_000, 3, 10))
+        .await
+        .expect("conflict");
+    // Nor does creating the same source again.
+    db.store.create_publication(&parent).await.expect("again");
+    assert_eq!(
+        kinds(&db).await,
+        vec![
+            ("publication_created".into(), Some("source".into())),
+            ("publication_created".into(), Some("flip".into())),
+        ]
+    );
+    let about: Vec<Option<String>> =
+        sqlx::query_scalar("SELECT publication_id FROM events ORDER BY seq")
+            .fetch_all(db.store.pool())
+            .await
+            .expect("ids");
+    assert_eq!(
+        about,
+        vec![
+            Some(parent.id.to_string()),
+            Some(f.publication.id.to_string())
+        ]
+    );
+    db.drop_db().await;
+}
+
+#[tokio::test]
+async fn a_flip_refused_by_any_rule_leaves_no_event() {
+    let (db, parent) = with_parent().await;
+    db.store
+        .create_flip(&flip(&parent, "k1", 24_000, 2, 1))
+        .await
+        .expect("create");
+    let before = kinds(&db).await.len();
+    // The per-stage cap of 1 is reached.
+    let refused = db
+        .store
+        .create_flip(&flip(&parent, "k2", 24_000, 3, 1))
+        .await
+        .expect("call");
+    assert!(matches!(refused, FlipOutcome::Refused(_)), "{refused:?}");
+    // Forking closed.
+    sqlx::query("UPDATE publications SET fork_permitted = false WHERE id = $1")
+        .bind(parent.id.as_str())
+        .execute(db.store.pool())
+        .await
+        .expect("close");
+    assert!(matches!(
+        db.store
+            .create_flip(&flip(&parent, "k3", 24_000, 4, 10))
+            .await
+            .expect("call"),
+        FlipOutcome::Refused(_)
+    ));
+    // Hidden.
+    sqlx::query(
+        "UPDATE publications SET fork_permitted = true, hidden_reason = 'rights' WHERE id = $1",
+    )
+    .bind(parent.id.as_str())
+    .execute(db.store.pool())
+    .await
+    .expect("hide");
+    assert!(matches!(
+        db.store
+            .create_flip(&flip(&parent, "k4", 24_000, 5, 10))
+            .await
+            .expect("call"),
+        FlipOutcome::Refused(_)
+    ));
+    assert_eq!(
+        kinds(&db).await.len(),
+        before,
+        "no refused flip left an event"
+    );
+    db.drop_db().await;
+}
+
+/// Ends the transaction by terminating its backend, after both rows are written and before the commit.
+struct KillBeforeCommit(sqlx::PgPool);
+
+impl Gate for KillBeforeCommit {
+    fn reached(&self, point: &'static str) -> BoxFuture<'_, ()> {
+        Box::pin(async move {
+            if point == points::BEFORE_COMMIT {
+                sqlx::query(
+                    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity \
+                     WHERE datname = current_database() AND pid <> pg_backend_pid() \
+                       AND state = 'idle in transaction'",
+                )
+                .execute(&self.0)
+                .await
+                .expect("terminate");
+            }
+        })
+    }
+}
+
+#[tokio::test]
+async fn a_transaction_that_dies_after_the_inserts_leaves_neither_the_publication_nor_the_event() {
+    let (db, parent) = with_parent().await;
+    let store = db
+        .store
+        .clone()
+        .with_gate(Arc::new(KillBeforeCommit(db.store.pool().clone())));
+    let mut f = flip(&parent, "k1", 24_000, 2, 10);
+    f.serialization_retries = 0;
+    let result = store.create_flip(&f).await;
+    assert!(result.is_err(), "the commit cannot succeed: {result:?}");
+    assert_eq!(
+        count(&db, "publications").await,
+        1,
+        "only the seeded source"
+    );
+    assert_eq!(count(&db, "content_records").await, 1);
+    assert_eq!(kinds(&db).await.len(), 1, "and only its event");
+    db.drop_db().await;
+}
+
+#[tokio::test]
+async fn a_report_yields_exactly_one_event_with_its_category_and_never_its_note() {
+    use graft_storage::ReportCategory;
+    let (db, parent) = with_parent().await;
+    let filed = db
+        .store
+        .create_report(&parent.id, ReportCategory::Rights, Some("a private note"))
+        .await
+        .expect("report");
+    assert!(filed);
+    let unknown = db
+        .store
+        .create_report(
+            &PublicationId::seeded("no-such"),
+            ReportCategory::Spam,
+            None,
+        )
+        .await
+        .expect("report");
+    assert!(!unknown, "a report of nothing is refused");
+    assert_eq!(
+        kinds(&db).await,
+        vec![
+            ("publication_created".into(), Some("source".into())),
+            ("report_filed".into(), Some("rights".into())),
+        ]
+    );
+    let row: String =
+        sqlx::query_scalar("SELECT t::text FROM events t WHERE kind = 'report_filed'")
+            .fetch_one(db.store.pool())
+            .await
+            .expect("row");
+    assert!(!row.contains("private note"), "{row}");
+    db.drop_db().await;
+}
+
+/// The ledger can only hold what the design allows: nothing that identifies a visitor.
+#[tokio::test]
+async fn the_ledger_has_no_column_that_could_hold_an_address_agent_or_email_and_server_events_have_no_session()
+ {
+    let (db, parent) = with_parent().await;
+    db.store
+        .create_flip(&flip(&parent, "k1", 24_000, 2, 10))
+        .await
+        .expect("create");
+    let columns: Vec<String> = sqlx::query_scalar(
+        "SELECT column_name::text FROM information_schema.columns \
+         WHERE table_name = 'events' ORDER BY ordinal_position",
+    )
+    .fetch_all(db.store.pool())
+    .await
+    .expect("columns");
+    assert_eq!(
+        columns,
+        [
+            "seq",
+            "event_id",
+            "kind",
+            "origin",
+            "session_id",
+            "occurred_at",
+            "publication_id",
+            "detail",
+            "relay_state",
+            "sent_at"
+        ]
+    );
+    let with_session: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM events WHERE origin = 'server' AND session_id IS NOT NULL",
+    )
+    .fetch_one(db.store.pool())
+    .await
+    .expect("count");
+    assert_eq!(with_session, 0);
+    // The database itself refuses a server event that claims a session.
+    let refused = sqlx::query(
+        "INSERT INTO events (kind, origin, session_id) VALUES ('report_filed', 'server', 'abcdefgh')",
+    )
+    .execute(db.store.pool())
+    .await;
+    assert!(refused.is_err());
+    db.drop_db().await;
+}

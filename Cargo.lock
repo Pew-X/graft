@@ -968,6 +968,11 @@ name = "graft-events"
 version = "0.0.0"
 dependencies = [
  "graft-domain",
+ "graft-storage",
+ "sqlx",
+ "thiserror",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

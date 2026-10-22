@@ -1,6 +1,6 @@
 [package]
 name = "graft-events"
-description = "Outbox writer, relay, consumer and rollups behind an event-sink trait."
+description = "Relay, retention, consumer and rollups behind an event-sink trait."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,6 +8,15 @@ publish.workspace = true
 
 [dependencies]
 graft-domain.workspace = true
+graft-storage.workspace = true
+tokio = { version = "1", features = ["time", "sync"] }
+thiserror = "2"
+tracing = "0.1"
+
+[dev-dependencies]
+graft-storage = { workspace = true, features = ["test-support"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "postgres"] }
 
 [lints]
 workspace = true

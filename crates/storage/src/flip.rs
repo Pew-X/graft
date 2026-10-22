@@ -174,6 +174,8 @@ impl Store {
             tx.rollback().await.map_err(db)?;
             return outcome;
         }
+        // The event commits with the publication or not at all.
+        crate::events::append(&mut tx, &created_event(new)).await?;
         self.gate.reached(points::BEFORE_COMMIT).await;
         tx.commit().await.map_err(db)?;
         // Read on the same connection, still under the lock: asking the pool for another
@@ -183,6 +185,20 @@ impl Store {
         })?;
         Ok(FlipOutcome::Created(Box::new(stage)))
     }
+}
+
+/// The event that records a publication, written in the transaction that creates it.
+pub(crate) fn created_event(new: &NewPublication) -> crate::events::NewEvent {
+    let kind = if new.record.parent().is_some() {
+        "flip"
+    } else {
+        "source"
+    };
+    crate::events::NewEvent::server(
+        crate::events::EventKind::PublicationCreated,
+        new.id.as_str(),
+        kind,
+    )
 }
 
 async fn replay(

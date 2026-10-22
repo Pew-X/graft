@@ -194,6 +194,7 @@ impl Store {
         insert_record(&mut tx, &new.record).await?;
         let inserted = insert_publication(&mut tx, new).await?;
         if inserted {
+            crate::events::append(&mut tx, &crate::flip::created_event(new)).await?;
             tx.commit().await.map_err(db)?;
             let stage = self.publication(&new.id).await?.ok_or_else(|| {
                 StoreError::Corrupt("a publication vanished right after it was written".into())

@@ -1,6 +1,7 @@
 //! Postgres and blob store access behind traits.
 
 pub mod blob;
+pub mod events;
 pub mod flip;
 pub mod gate;
 pub mod guardrails;
@@ -14,6 +15,7 @@ pub mod s3;
 pub mod testing;
 
 pub use blob::{BlobError, BlobInfo, BlobStore, FsBlobStore, MemoryBlobStore};
+pub use events::{Backlog, Claimed, EventKind, NewEvent, Origin, StoredEvent};
 pub use flip::{FlipOutcome, NewFlip, Refusal};
 pub use gate::{Gate, NoGate};
 pub use guardrails::PublishToken;

@@ -3,6 +3,8 @@
 //! names the guarantee it protects.
 
 mod common;
+#[path = "publish/events.rs"]
+mod events;
 #[path = "publish/guardrails.rs"]
 mod guardrails;
 

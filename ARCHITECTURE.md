@@ -12,7 +12,7 @@ One deployable Rust service plus a Next.js UI, built as a Cargo workspace. The a
 | `graft-render` | nothing at all | the integer renderer and its C-ABI wrapper, compiled to the canonical `.wasm` |
 | `graft-storage` | domain | Postgres store (migrations, idempotent writes, flip creation under the stage lock, maker and operator flag changes, reports, the chain read), the blob store trait with an in-memory, a directory-backed and an S3-compatible implementation, and the orphan cleanup. `Store` is a concrete type on purpose: the test seam is a real Postgres, so a trait would never have a second implementation. The blob store and the event sink are traits because they do have fakes |
 | `graft-render-host` | domain | runs the canonical `.wasm` under wasmtime |
-| `graft-events` | domain | the event-sink trait and a no-op sink; the ledger, relay, consumer and rollups arrive with their tickets |
+| `graft-events` | domain, storage | the event-sink trait, the Postgres-only sink and a recording sink, the relay that delivers claimed ledger rows to a sink, and the retention job; the consumer and rollups arrive with their ticket. The ledger's SQL stays in `graft-storage` so that a server event commits in the same transaction as its write |
 | `graft-vectors` | render, render-host | the renderer vector table: loader, generators, and the native, wasmtime and render-host harnesses (test support; nothing ships it) |
 | `graft-host-check` | render-host, vectors | throwaway check service for the first deployment (see "Check on the target host"); removed by the deploy pipeline ticket |
 | `graft-api` | domain, storage, render-host, events | HTTP layer: reads, publishing, maker actions, reports and the operator routes; the OpenAPI document; configuration; the seed script and the cleanup command. Rate limits arrive with the abuse-guardrail ticket |
@@ -427,6 +427,24 @@ Written by ticket 21. The code is in `web/lib/playback/`: a pure state machine (
 
 **Not tested here, by design.** Real iOS Safari: whether the context resumes on the first tap, and the behaviour with the silent switch on (Web Audio is muted by it on iOS). Phone performance. Headphones unplugged on a real device (the code pauses on the `devicechange` event and when the context is suspended or interrupted; only a device can show that those events fire in practice). These are manual checks for the builder's listening and cold-phone test, recorded as such.
 
-## Events, security
+## Events and the outbox
 
-_Not written yet. Tickets 13 onwards; consolidated by ticket 37._
+Written by ticket 13. The consumer, rollups and the admin read path are the next section's business (ticket 14); the client ingest endpoint is ticket 15.
+
+**The table is the source of truth; any queue is transport.** Every event is a row in one append-only `events` table with an origin (`server` or `client`) and a relay state (`unsent` or `sent`). A queue, if one is deployed, only carries copies of rows that already exist; a rebuild replays the table, never the queue. The sink the relay delivers to is a trait, so the deployed queue and the Postgres-only sink (the batch goes straight to the consumer in the same process, the default for tests and local runs) are interchangeable and the consumer is the same either way.
+
+**Five events, nothing else.** `publication_created` (detail `source` or `flip`) and `report_filed` (detail: the category, never the note) are server events; `roll_opened`, `stage_played` and `flip_started` are client events (ticket 15). A row holds an event id, a kind, a time, the publication or stage it is about and a short qualifier. It holds no address, no user agent and no email, and the schema has no column that could: a test lists the columns. A server event never carries a session id, and the database refuses one that does.
+
+**Server events are transactional.** The row is inserted in the same transaction as the write it describes, in the publish transaction (flips and sources, including the seed path, so a seeded source counts as a created publication, which it is) and in the report transaction. A publish refused by any rule, a replay and a key conflict write no event; a transaction that dies after its inserts leaves neither the publication nor the event (a test ends the backend between the inserts and the commit and finds neither). There is no write without its event and no event without its write. Client events are the exception by design: they are best-effort counts, and only server events can never diverge from their write.
+
+**The relay claims; it does not keep a cursor.** A relay reads unsent rows with `FOR UPDATE SKIP LOCKED` inside a transaction, hands the batch to the sink, and marks the rows sent in the same transaction when the sink acknowledges. It never remembers "the last id delivered": commit order is not id order, so a transaction that took a lower id can commit after a higher one was delivered, and a cursor would skip that row for good (a test holds such a transaction open, delivers the higher row, commits the lower one and finds it delivered on the next pass). Two relays over one backlog skip each other's rows and deliver every row (a test runs two over 200 rows with a slow sink and finds each delivered once).
+
+**Delivery is at least once.** The claim lasts as long as the transaction. If the sink refuses or the process dies between the claim and the acknowledgement, the rows are released still unsent and are delivered again (a test aborts a relay while its sink holds the batch and finds the same rows delivered by the next one). A sink must therefore treat a repeated event id as a repeat; the consumer in ticket 14 dedupes on it.
+
+**Retention.** Raw events are kept 30 days. The retention job deletes only events that were sent and are older than the window, and skips any row a relay is working on, so it can run alongside the relay and can never discard an event that was not delivered (tests: an old unsent event survives; a purge racing a relay loses and duplicates nothing).
+
+**What is not wired yet.** The relay is a library with tests; the service starts it when the consumer exists (ticket 14), so no row is marked sent to nowhere in the meantime.
+
+## Security
+
+_Not written yet. Tickets 17 onwards; consolidated by ticket 37._
