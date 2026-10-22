@@ -1,7 +1,7 @@
 //! Replays the table against a host and reports every check.
 
 use crate::canon;
-use crate::host::{Host, Outcome};
+use crate::host::{Host, Outcome, PointerCase};
 use crate::table::{Scenario, Table, Vector};
 use sha2::{Digest, Sha256};
 
@@ -50,6 +50,7 @@ fn describe(outcome: &Outcome) -> String {
         }
         Outcome::Status { code, .. } => format!("status {code}"),
         Outcome::Trap(why) => format!("trap ({why})"),
+        Outcome::HarnessError(why) => format!("harness error ({why})"),
     }
 }
 
@@ -124,21 +125,52 @@ fn run_scenario(table: &Table, scenario: &Scenario, host: &mut dyn Host) -> Chec
                 },
             )
         }
-        Scenario::Trap {
+        Scenario::Pointers {
             in_len,
             p,
             q,
             method,
+            cases,
             ..
-        } => match host.render_with_wild_output_pointer(*in_len, *p, *q, *method) {
-            None => Check::new(
+        } => {
+            let mut wrong = Vec::new();
+            let mut defined = true;
+            for c in cases {
+                let Some(case) = PointerCase::parse(&c.case) else {
+                    wrong.push(format!("{}: unknown case", c.case));
+                    continue;
+                };
+                match host.render_with_pointer_case(case, *in_len, *p, *q, *method) {
+                    None => defined = false,
+                    Some(outcome) => {
+                        let got = match &outcome {
+                            Outcome::Trap(_) => "trap".to_string(),
+                            Outcome::Status { code, .. } => format!("status {code}"),
+                            Outcome::HarnessError(why) => format!("harness error ({why})"),
+                        };
+                        if got != c.expect {
+                            wrong.push(format!("{}: expected {}, got {got}", c.case, c.expect));
+                        }
+                    }
+                }
+            }
+            if !defined {
+                return Check::new(
+                    name,
+                    "not defined on this host".into(),
+                    "not defined on this host".into(),
+                );
+            }
+            Check::new(
                 name,
-                "not defined on this host".into(),
-                "not defined on this host".into(),
-            ),
-            Some(Outcome::Trap(_)) => Check::new(name, "trap".into(), "trap".into()),
-            Some(other) => Check::new(name, "trap".into(), describe(&other)),
-        },
+                "every pointer case as expected".into(),
+                if wrong.is_empty() {
+                    "every pointer case as expected".into()
+                } else {
+                    wrong.join("; ")
+                },
+            )
+        }
     }
 }
 

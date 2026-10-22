@@ -3,8 +3,8 @@
 //! This is a test harness. The service's own host crate (`graft-render-host`) adds limits,
 //! interruption and typed errors; here the point is to run the table against the artefact's bytes.
 
-use crate::host::{Host, Outcome};
-use wasmtime::{Config, Engine, Instance, Memory, Module, Store, TypedFunc};
+use crate::host::{Host, Outcome, PointerCase};
+use wasmtime::{Config, Engine, Instance, Memory, Module, Store, Trap, TypedFunc};
 
 /// Why the artefact could not be loaded.
 #[derive(Debug)]
@@ -84,7 +84,8 @@ impl Host for WasmtimeHost {
     fn render(&mut self, input: &[i16], p: u32, q: u32, method: u32, out_cap: u32) -> Outcome {
         let mut run = || -> Result<Outcome, String> {
             let in_len = u32::try_from(input.len()).map_err(|e| e.to_string())?;
-            let (in_bytes, out_bytes) = (in_len * 2, out_cap * 2);
+            let in_bytes = in_len.checked_mul(2).ok_or("input too long")?;
+            let out_bytes = out_cap.checked_mul(2).ok_or("output capacity too large")?;
             let in_ptr = self
                 .alloc
                 .call(&mut self.store, in_bytes)
@@ -125,38 +126,68 @@ impl Host for WasmtimeHost {
                 .map_err(|e| e.to_string())?;
             Ok(Outcome::Status { code, out })
         };
-        run().unwrap_or_else(Outcome::Trap)
+        run().unwrap_or_else(Outcome::HarnessError)
     }
 
-    fn render_with_wild_output_pointer(
+    fn render_with_pointer_case(
         &mut self,
+        case: PointerCase,
         in_len: u32,
         p: u32,
         q: u32,
         method: u32,
     ) -> Option<Outcome> {
-        let mut run = || -> Result<Outcome, String> {
-            let n = self
+        let setup = |host: &mut Self| -> Result<(u32, u32, u32), String> {
+            let n = host
                 .out_len
-                .call(&mut self.store, (in_len, p, q))
+                .call(&mut host.store, (in_len, p, q))
                 .map_err(|e| e.to_string())?;
-            let cap = u32::try_from(n).map_err(|e| e.to_string())?;
-            let in_ptr = self
+            let cap = u32::try_from(n)
+                .ok()
+                .filter(|c| *c > 0 && in_len >= 2)
+                .ok_or("bad case setup")?;
+            let in_bytes = in_len.checked_mul(2).ok_or("in_len overflows")?;
+            let out_bytes = cap.checked_mul(2).ok_or("cap overflows")?;
+            let in_ptr = host
                 .alloc
-                .call(&mut self.store, in_len * 2)
+                .call(&mut host.store, in_bytes)
                 .map_err(|e| e.to_string())?;
-            let wild = u32::try_from(self.memory.data_size(&self.store) + 65_536)
+            let out_ptr = host
+                .alloc
+                .call(&mut host.store, out_bytes)
                 .map_err(|e| e.to_string())?;
-            let code = self
-                .render
-                .call(&mut self.store, (in_ptr, in_len, p, q, method, wild, cap))
-                .map_err(|e| e.to_string())?;
-            Ok(Outcome::Status {
+            if in_ptr == 0 || out_ptr == 0 {
+                return Err("graft_alloc failed".into());
+            }
+            Ok((cap, in_ptr, out_ptr))
+        };
+        let (cap, in_ptr, out_ptr) = match setup(self) {
+            Ok(v) => v,
+            Err(e) => return Some(Outcome::HarnessError(e)),
+        };
+        let wild = u32::try_from(self.memory.data_size(&self.store) + 65_536).unwrap_or(u32::MAX);
+        let (in_ptr, out_ptr) = match case {
+            PointerCase::NullInput => (0, out_ptr),
+            PointerCase::OddInput => (in_ptr + 1, out_ptr),
+            PointerCase::OddOutput => (in_ptr, out_ptr + 1),
+            PointerCase::Overlap => (in_ptr, in_ptr + 2),
+            PointerCase::WrapsAddressSpace => (0xFFFF_FFF0, out_ptr),
+            PointerCase::WildOutput => (in_ptr, wild),
+        };
+        let result = self.render.call(
+            &mut self.store,
+            (in_ptr, in_len, p, q, method, out_ptr, cap),
+        );
+        Some(match result {
+            Ok(code) => Outcome::Status {
                 code,
                 out: Vec::new(),
-            })
-        };
-        Some(run().unwrap_or_else(Outcome::Trap))
+            },
+            Err(e) => match e.downcast_ref::<Trap>() {
+                Some(Trap::MemoryOutOfBounds) => Outcome::Trap(Trap::MemoryOutOfBounds.to_string()),
+                _ => Outcome::HarnessError(e.to_string()),
+            },
+        })
     }
 
     fn memory_pages(&mut self) -> Option<u64> {

@@ -144,8 +144,8 @@ pub enum Scenario {
         /// The small vector rendered again afterwards.
         then: String,
     },
-    /// Hand the renderer an output pointer outside memory.
-    Trap {
+    /// Hand the renderer wrong pointers, one case at a time.
+    Pointers {
         /// Scenario name.
         name: String,
         /// Input frames.
@@ -156,7 +156,18 @@ pub enum Scenario {
         q: u32,
         /// Method id.
         method: u32,
+        /// The cases and what each must produce.
+        cases: Vec<PointerExpect>,
     },
+}
+
+/// One pointer mistake and its expected outcome: `"status -1"` or `"trap"`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct PointerExpect {
+    /// Case name (see `PointerCase::parse`).
+    pub case: String,
+    /// Expected outcome.
+    pub expect: String,
 }
 
 impl Scenario {
@@ -164,7 +175,9 @@ impl Scenario {
     #[must_use]
     pub fn name(&self) -> &str {
         match self {
-            Self::Repeat { name, .. } | Self::Growth { name, .. } | Self::Trap { name, .. } => name,
+            Self::Repeat { name, .. } | Self::Growth { name, .. } | Self::Pointers { name, .. } => {
+                name
+            }
         }
     }
 }

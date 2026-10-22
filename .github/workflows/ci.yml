@@ -82,11 +82,15 @@ jobs:
       - name: Hash matches the pin for this renderer version, pins are append-only
         env:
           BASE: ${{ github.base_ref }}
+          BEFORE: ${{ github.event.before }}
         run: |
+          art=target/wasm32-unknown-unknown/wasm/graft_render.wasm
           if [ -n "$BASE" ]; then
-            node scripts/check-wasm-pin.mjs target/wasm32-unknown-unknown/wasm/graft_render.wasm --base "origin/$BASE"
+            node scripts/check-wasm-pin.mjs "$art" --base "origin/$BASE"
+          elif [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            node scripts/check-wasm-pin.mjs "$art" --base "$BEFORE"
           else
-            node scripts/check-wasm-pin.mjs target/wasm32-unknown-unknown/wasm/graft_render.wasm
+            node scripts/check-wasm-pin.mjs "$art"
           fi
       - name: Vectors on native and wasmtime, module shape
         run: cargo test -p graft-vectors

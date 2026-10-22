@@ -58,7 +58,7 @@ exports:  memory, graft_version() -> u32,
 imports:  none
 ```
 
-Only 32-bit integers cross the boundary and the caller owns both buffers. Return values are frames written, or a negative status: `-1` for bad parameters, input over the ceiling or an unknown method, `-2` for an output buffer that is too small. Checks run in that order: parameters and ceiling, then method, then capacity. A trap means the renderer failed.
+Only 32-bit integers cross the boundary and the caller owns both buffers. Return values are frames written, or a negative status: `-1` for bad parameters, input over the ceiling, an unknown method, or a pointer mistake the module can detect (null, odd-aligned, wrapping the address space, or overlapping buffers), `-2` for an output buffer that is too small. Checks run in that order: parameters and ceiling, then method, then capacity. A trap means the renderer failed.
 
 Output frame `k` reads input position `k*p/q` exactly:
 
@@ -71,13 +71,13 @@ Limits: `p` and `q` in `1..=2^20` with `p/q` in `[1/4, 4]`, at most `2^21` input
 
 ### What the vectors are, and where their expected values come from
 
-`fixtures/vectors/vectors.json` holds each vector as a generator specification (not bytes), parameters, and the expected status, length and SHA-256. Three independent sources set the expected values, so the table does not restate the implementation:
+`fixtures/vectors/vectors.json` holds each vector as a generator specification (not bytes), parameters, and the expected status, length and SHA-256. Three sources set the expected values, so the table does not restate the implementation. The reference and the Rust code are two implementations written from the same contract text, which is a cross-check of the code against the text and not an independent source of the contract itself:
 
 - `scripts/vectors/reference.py`, a reference written from the contract text with unbounded integers and exact fractions (the Hermite weights are the cubic polynomials evaluated as fractions and floored, not the shifted integer expressions the Rust code uses). `scripts/vectors/generate.py` writes the table from it, and CI fails if the committed table differs.
-- The 14 hashes recorded by the original spike, identical on six hosts; the generator refuses to write a table in which the reference disagrees with any of them.
-- Outputs worked out by hand for the one-, two- and three-frame cases.
+- The 14 hashes recorded by the original spike. The spike's notes (kept outside this repository) record them as identical on wasmtime, native, Node, Chrome, WebKit and wazero; the repository itself only holds the hash strings, and the generator refuses to write a table in which the reference disagrees with any of them.
+- Outputs worked out by hand for the one-, two- and three-frame cases. The downmix expectations are computed by a one-line reference rule and add little beyond pinning the rounding convention.
 
-The table also holds the error codes and their order, the exact limits, `out_len` queries, the canonicalisation cases, and three multi-call scenarios in one instance (200 repeats, repeated 2^21-frame renders, and a trap on an output pointer outside memory, which only WebAssembly hosts run because the same call natively would be undefined).
+The table also holds the error codes and their order, the exact limits, `out_len` queries, the canonicalisation cases, and three multi-call scenarios in one instance: 200 repeats; repeated 2^21-frame renders; and wrong pointers (null, odd, overlapping, wrapping, which return `-1`, and an output pointer beyond linear memory, which traps with an out-of-bounds memory access). Only WebAssembly hosts run the pointer cases, because natively there are no raw pointers; the native harness calls the safe entry points and never touches the C-ABI module, so only the wasmtime run exercises it.
 
 ### Identity and the pin
 
@@ -85,14 +85,14 @@ The renderer identity recorded in a content record is `{name, version, wasm_sha2
 
 ### Reproducible build
 
-`scripts/build-wasm.sh` builds with the `wasm` profile (LTO, one codegen unit, abort on panic, symbols stripped) and remaps source, toolchain and registry paths, so the bytes do not depend on the checkout directory. `scripts/check-reproducible.sh` builds from two copies at different depths and compares hashes; CI runs it. The pin was created on macOS arm64 and is checked on Linux x86_64 in CI, so the same bytes come out on both.
+`scripts/build-wasm.sh` builds with the `wasm` profile (LTO, one codegen unit, abort on panic, symbols stripped) and remaps source, toolchain and registry paths, so the bytes do not depend on the checkout directory, and the script clears ambient cargo and rustc settings that could change them. `scripts/check-reproducible.sh` builds from two copies at different depths with different `CARGO_HOME` directories and compares hashes; CI runs it. The pin was created on macOS arm64 and CI compares the Linux x86_64 build with it on every run, so a difference between the two operating systems fails the build.
 
 ### Honest consequences
 
 - Hermite with no anti-alias filter aliases when speeding up. That is accepted as the varispeed character and pinned by the method name; a prefilter would be a new method id.
 - The browser's own playback-rate varispeed is implementation-defined and is not what is stored. Preview uses this artefact for that reason.
 - After a trap, the module's internal frame pointer is not restored. A host must discard the instance after a trap rather than reuse it (the render host, ticket 03, uses a fresh instance per render).
-- `unsafe` appears in one place: the module that turns the host's integer addresses into slices, after every parameter has been validated.
+- `unsafe` appears in one place: the module that turns the host's integer addresses into slices, after every parameter and every checkable pointer property has been validated. Whether an address lies inside linear memory cannot be checked without an import, so such a pointer traps.
 
 ### One-day exit checkpoint (ticket 02)
 

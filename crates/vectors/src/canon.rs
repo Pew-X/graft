@@ -10,7 +10,8 @@ pub fn f32_to_s16(x: f32) -> i16 {
     if x.is_nan() {
         return 0;
     }
-    // Exact in f64: an f32 scaled by a power of two plus one half needs well under 53 bits.
+    // The scaling is exact in f64; adding one half can round only for magnitudes far below the
+    // floor boundary, where the floored result is the same.
     let v = (f64::from(x) * 32768.0 + 0.5).floor();
     v.clamp(-32768.0, 32767.0) as i16
 }

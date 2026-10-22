@@ -101,3 +101,14 @@ fn large_renders_really_grow_the_instance_memory() {
         "memory stayed at {before} pages after a 2^21 frame render"
     );
 }
+
+#[test]
+fn table_belongs_to_the_renderer_version_being_built() {
+    let t = table();
+    assert_eq!(t.renderer.name, graft_render::NAME);
+    assert_eq!(
+        t.renderer.version,
+        graft_render::VERSION,
+        "regenerate the table for a new version"
+    );
+}

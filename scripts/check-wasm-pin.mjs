@@ -57,9 +57,16 @@ function main(argv) {
   let basePins;
   if (baseRef) {
     try {
+      execFileSync("git", ["rev-parse", "--verify", "--quiet", `${baseRef}^{commit}`], { stdio: "ignore" });
+    } catch {
+      console.error(`renderer pin: base ref ${baseRef} does not resolve; fetch it (fetch-depth: 0) or fix the name`);
+      return 1;
+    }
+    try {
+      execFileSync("git", ["cat-file", "-e", `${baseRef}:fixtures/renderer/PINS`], { stdio: "ignore" });
       basePins = parsePins(execFileSync("git", ["show", `${baseRef}:fixtures/renderer/PINS`], { encoding: "utf8" }));
     } catch {
-      basePins = undefined; // the base has no pin file yet
+      basePins = undefined; // the base is valid but has no pin file yet
     }
   }
   const problems = checkPins({

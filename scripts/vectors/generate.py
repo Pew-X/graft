@@ -10,6 +10,8 @@ against outputs worked out by hand, so a wrong reference cannot silently define 
 
 import json
 import sys
+
+sys.dont_write_bytecode = True
 from pathlib import Path
 
 import reference as ref
@@ -119,8 +121,16 @@ SCENARIOS = [
      "kind": "repeat", "vector": "up3/2-cr", "times": 200},
     {"name": "growth-then-repeat", "doc": "eight 2^21-frame renders in one instance, then a small vector still matches",
      "kind": "growth", "big": "big-cr", "times": 8, "then": "up3/2-cr"},
-    {"name": "trap-output-out-of-bounds", "doc": "an output pointer past the end of memory traps; the host must report failure, not a wrong result. WebAssembly hosts only: the same call natively would be undefined",
-     "kind": "trap", "wasm_only": True, "in_len": 1000, "p": 1, "q": 1, "method": 1},
+    {"name": "bad-pointers", "doc": "wrong pointers: the module refuses what it can check (status -1) and an output pointer beyond linear memory traps. WebAssembly hosts only: natively there are no raw pointers",
+     "kind": "pointers", "wasm_only": True, "in_len": 1000, "p": 1, "q": 1, "method": 1,
+     "cases": [
+         {"case": "null-input", "expect": "status -1"},
+         {"case": "odd-input", "expect": "status -1"},
+         {"case": "odd-output", "expect": "status -1"},
+         {"case": "overlap", "expect": "status -1"},
+         {"case": "wraps-address-space", "expect": "status -1"},
+         {"case": "wild-output", "expect": "trap"},
+     ]},
 ]
 
 

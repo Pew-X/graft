@@ -9,14 +9,36 @@
 //! The host hands over linear-memory addresses as integers. Turning an address into a slice is the one
 //! thing safe Rust cannot express. Every `unsafe` block below does only that, after [`crate::plan`] has
 //! validated every parameter, so lengths come from validated frame counts and never from the caller's
-//! raw numbers. The contract with the host is: pointers come from [`graft_alloc`] (8-byte aligned,
-//! inside linear memory) and the two buffers do not overlap. A pointer outside linear memory traps on
-//! first access, which the vector table pins as the "renderer failed" path.
+//! raw numbers. Pointers are then checked as far as the module can check them: non-null, 2-byte
+//! aligned, not wrapping the 32-bit address space, and the two buffers disjoint; any violation returns
+//! [`STATUS_PARAM`](crate::STATUS_PARAM). The module cannot know the size of linear memory without an
+//! import, so a pointer outside it traps on first access, which the vector table pins as the "renderer
+//! failed" path. Pointers from [`graft_alloc`] always pass these checks.
 
 use crate::{STATUS_PARAM, VERSION, out_len, plan, render_into};
 use std::alloc::{Layout, alloc, dealloc};
 
 const ALIGN: usize = 8;
+
+/// True when both buffers are non-null, 2-byte aligned, do not wrap the address space and do not
+/// overlap. `in_len` and `frames` are frame counts, at least 1.
+fn ranges_ok(in_ptr: u32, in_len: u32, out_ptr: u32, frames: usize) -> bool {
+    let Some(in_end) = in_len.checked_mul(2).and_then(|b| in_ptr.checked_add(b)) else {
+        return false;
+    };
+    let Some(out_end) = u32::try_from(frames)
+        .ok()
+        .and_then(|f| f.checked_mul(2))
+        .and_then(|b| out_ptr.checked_add(b))
+    else {
+        return false;
+    };
+    in_ptr != 0
+        && out_ptr != 0
+        && in_ptr % 2 == 0
+        && out_ptr % 2 == 0
+        && (in_end <= out_ptr || out_end <= in_ptr)
+}
 
 /// Renderer version, the same number recorded in a content record.
 #[unsafe(no_mangle)]
@@ -72,8 +94,13 @@ pub extern "C" fn graft_render(
         Ok(n) => n,
         Err(status) => return status,
     };
-    // SAFETY: `plan` accepted, so `in_len >= 1` and `frames >= 1`; the host guarantees the two ranges
-    // are live, aligned and disjoint buffers from `graft_alloc` (module documentation).
+    if !ranges_ok(in_ptr, in_len, out_ptr, frames) {
+        return STATUS_PARAM;
+    }
+    // SAFETY: `plan` accepted, so both lengths are at least 1; `ranges_ok` established that both
+    // pointers are non-null and 2-byte aligned, that neither range wraps the address space, and that
+    // the ranges are disjoint. That the ranges lie inside linear memory is the host's contract; if not,
+    // the first access traps.
     let (src, dst) = unsafe {
         (
             std::slice::from_raw_parts(in_ptr as usize as *const i16, in_len as usize),
