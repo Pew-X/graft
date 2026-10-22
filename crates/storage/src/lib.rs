@@ -5,5 +5,5 @@ pub mod postgres;
 #[cfg(feature = "test-support")]
 pub mod testing;
 
-pub use blob::{BlobError, BlobStore, MemoryBlobStore};
+pub use blob::{BlobError, BlobStore, FsBlobStore, MemoryBlobStore};
 pub use postgres::{NewPublication, Outcome, Store, StoreError};

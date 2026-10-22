@@ -31,7 +31,9 @@ getrandom = "0.3"
 thiserror = "2"
 
 [dev-dependencies]
+graft-storage = { workspace = true, features = ["test-support"] }
 http-body-util = "0.1"
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "postgres"] }
 
 [lints]
 workspace = true

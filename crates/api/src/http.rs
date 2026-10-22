@@ -3,12 +3,15 @@
 use crate::config::Config;
 use crate::metrics::Metrics;
 use crate::problem::Problem;
+use crate::routes;
 use axum::extract::{MatchedPath, Request, State};
 use axum::http::{HeaderName, HeaderValue, Method, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
+use graft_domain::limits::Limits;
+use graft_storage::{BlobStore, Store};
 use serde_json::json;
 use std::future::Future;
 use std::pin::Pin;
@@ -33,6 +36,38 @@ pub struct AppState {
     pub readiness: Arc<dyn Readiness>,
     /// Request metrics.
     pub metrics: Arc<Metrics>,
+    /// The database.
+    pub store: Store,
+    /// Audio storage.
+    pub blobs: Arc<dyn BlobStore>,
+    /// Caps and text limits.
+    pub limits: Limits,
+    /// How long issued blob URLs stay valid.
+    pub blob_url_ttl: std::time::Duration,
+}
+
+impl AppState {
+    /// State wired to the real database check.
+    #[must_use]
+    pub fn new(config: &Config, store: Store, blobs: Arc<dyn BlobStore>) -> Self {
+        Self {
+            readiness: Arc::new(StoreReadiness(store.clone())),
+            metrics: Arc::new(Metrics::default()),
+            store,
+            blobs,
+            limits: config.limits.clone(),
+            blob_url_ttl: std::time::Duration::from_secs(config.blob_url_ttl_secs),
+        }
+    }
+}
+
+/// Readiness backed by the database.
+pub struct StoreReadiness(pub Store);
+
+impl Readiness for StoreReadiness {
+    fn check(&self) -> BoxFuture<'_, Result<(), String>> {
+        Box::pin(async move { self.0.ping().await.map_err(|e| e.to_string()) })
+    }
 }
 
 /// Build the router with all middleware.
@@ -41,6 +76,9 @@ pub fn router(state: AppState, config: &Config) -> Router {
         .route("/health", get(health))
         .route("/ready", get(ready))
         .route("/metrics", get(metrics))
+        .route("/openapi.json", get(routes::openapi))
+        .route("/v1/chains/{id}", get(routes::get_chain))
+        .route("/v1/publications/{id}", get(routes::get_publication))
         .fallback(|| async { Problem::not_found("there is nothing at this address") })
         .method_not_allowed_fallback(|| async { Problem::method_not_allowed() })
         .layer(middleware::from_fn_with_state(state.clone(), observe))
@@ -177,17 +215,16 @@ mod tests {
     }
 
     fn app(readiness: Arc<dyn Readiness>) -> (Router, Arc<Metrics>) {
-        let metrics = Arc::new(Metrics::default());
-        (
-            router(
-                AppState {
-                    readiness,
-                    metrics: metrics.clone(),
-                },
-                &config(),
-            ),
-            metrics,
-        )
+        let cfg = config();
+        let store = Store::connect_lazy("postgres://u:p@127.0.0.1:1/none", 1).expect("lazy store");
+        let mut state = AppState::new(
+            &cfg,
+            store,
+            Arc::new(graft_storage::MemoryBlobStore::default()),
+        );
+        state.readiness = readiness;
+        let metrics = state.metrics.clone();
+        (router(state, &cfg), metrics)
     }
 
     async fn call(

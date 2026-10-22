@@ -90,6 +90,16 @@ impl Store {
         Ok(Self { pool })
     }
 
+    /// A store that connects on first use, so building it never touches the network.
+    pub fn connect_lazy(url: &str, max_connections: u32) -> Result<Self, StoreError> {
+        let pool = PgPoolOptions::new()
+            .max_connections(max_connections)
+            .acquire_timeout(std::time::Duration::from_secs(3))
+            .connect_lazy(url)
+            .map_err(db)?;
+        Ok(Self { pool })
+    }
+
     /// Wrap an existing pool.
     #[must_use]
     pub fn from_pool(pool: PgPool) -> Self {
