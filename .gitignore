@@ -22,3 +22,7 @@ __pycache__/
 # Vector tooling build output
 tools/vectors/dist/
 tools/vectors/test-results/
+
+# Browser test build output
+web/e2e/dist/
+web/test-results/
