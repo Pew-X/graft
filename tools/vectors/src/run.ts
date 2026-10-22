@@ -30,7 +30,9 @@ function expectedOf(v: Vector): string {
     : `status ${v.expect.status}`;
 }
 
-export async function runTable(table: Table, host: Host): Promise<Check[]> {
+/** `only` limits the run to one group: "vectors", "out_len", "canon" or a scenario's name (for diagnosis). */
+export async function runTable(table: Table, host: Host, only?: string): Promise<Check[]> {
+  const want = (group: string): boolean => only === undefined || only === group;
   const checks: Check[] = [];
   const add = (name: string, expected: string, actual: string) =>
     checks.push({ host: host.name, name, passed: expected === actual, expected, actual });
@@ -41,7 +43,7 @@ export async function runTable(table: Table, host: Host): Promise<Check[]> {
   };
   const call = (v: Vector, input: Int16Array) => host.render(input, v.p, v.q, v.method, v.out_cap);
 
-  for (const v of table.vectors) {
+  for (const v of want("vectors") ? table.vectors : []) {
     const outcome = call(v, generate(v.input));
     add(`vector ${v.name}`, expectedOf(v), await describe(outcome));
     if (v.expect.samples && outcome.kind === "status") {
@@ -52,20 +54,20 @@ export async function runTable(table: Table, host: Host): Promise<Check[]> {
       );
     }
   }
-  for (const c of table.out_len) {
+  for (const c of want("out_len") ? table.out_len : []) {
     add(
       `out_len(${c.in_len}, ${c.p}, ${c.q})`,
       String(c.expect),
       String(host.outLen(c.in_len, c.p, c.q)),
     );
   }
-  for (const c of table.canonicalisation.f32_to_s16.cases) {
+  for (const c of want("canon") ? table.canonicalisation.f32_to_s16.cases : []) {
     add(`f32_to_s16 ${c.name}`, String(c.expect), String(f32BitsToS16(c.bits)));
   }
-  for (const c of table.canonicalisation.downmix.cases) {
+  for (const c of want("canon") ? table.canonicalisation.downmix.cases : []) {
     add(`downmix(${c.left}, ${c.right})`, String(c.expect), String(downmix(c.left, c.right)));
   }
-  for (const s of table.scenarios) {
+  for (const s of table.scenarios.filter((sc) => want(sc.name))) {
     const name = `scenario ${s.name}`;
     if (s.kind === "repeat") {
       const v = vector(s.vector);

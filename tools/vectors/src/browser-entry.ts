@@ -12,10 +12,17 @@ export interface PageResult {
   outputs: Record<string, string>;
 }
 
-async function runAll(table: Table, wasm: number[], parityVectors: string[]): Promise<PageResult> {
+async function runAll(
+  table: Table,
+  wasm: number[],
+  parityVectors: string[],
+  only?: { host: "wasm" | "port"; group: string },
+): Promise<PageResult> {
   const bytes = Uint8Array.from(wasm);
   const wasmHost = await WasmHost.load("wasm-in-browser", bytes);
-  const checks = [...(await runTable(table, wasmHost)), ...(await runTable(table, new PortHost()))];
+  const checks = only
+    ? await runTable(table, only.host === "wasm" ? wasmHost : new PortHost(), only.group)
+    : [...(await runTable(table, wasmHost)), ...(await runTable(table, new PortHost()))];
   const outputs: Record<string, string> = {};
   for (const name of parityVectors) {
     const v = table.vectors.find((x) => x.name === name);
