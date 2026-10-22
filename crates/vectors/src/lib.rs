@@ -10,6 +10,7 @@ pub mod cli;
 pub mod host;
 pub mod hosted;
 pub mod input;
+pub mod measure;
 pub mod native;
 pub mod run;
 pub mod table;

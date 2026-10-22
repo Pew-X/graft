@@ -120,7 +120,7 @@ Hostile modules written by hand (an endless loop, an `unreachable`, a memory-gro
 
 ### Measurements
 
-Measured by `crates/render-host/examples/measure.rs`, run by the `renderer` CI job on a GitHub-hosted `ubuntu-24.04` runner (the job summary keeps the output). Method: load once, one warm-up render per case, then 15 timed renders; the table shows the median and the slowest. Fuel and linear memory are the host's own accounting; the process peak is read from `/proc/self/status`. The input is the LCG noise used by the vectors, Hermite method.
+Measured by `crates/vectors/src/bin/render-measure.rs`, run by the `renderer` CI job on a GitHub-hosted `ubuntu-24.04` runner (the job summary keeps the output). Method: load once, one warm-up render per case, then 15 timed renders; the table shows the median and the slowest. Fuel and linear memory are the host's own accounting; the process peak is read from `/proc/self/status`. The input is the LCG noise used by the vectors, Hermite method.
 
 Cold start on the runner: load, compile and pin check 35.7 ms; first render 0.11 ms.
 
@@ -164,3 +164,9 @@ Not checked:
 ## Data model, concurrency, events, operations, security
 
 _Not written yet. Tickets 05 onwards; consolidated by ticket 37 write it._
+
+### Check on the target host (ticket 03b)
+
+`Dockerfile`, `fly.toml` and the `graft-fly-check` crate are a throwaway check for the first deployment, removed by the deploy pipeline ticket. At start-up the service loads the artefact through the render host (so the pin is checked), replays the whole vector table, runs the five worst-case renders, and records the result once. It serves only `GET /health` (200 when every check passed, 503 otherwise) and `GET /results` (the recorded document: renderer identity, region and app name from the platform, CPU count and memory, cold-start time, the checks and any failures, the measurements, peak resident memory). It reads a request only as far as its first line, answers anything but `GET` with 405, and never passes anything from the network to the renderer.
+
+The `check image (container)` CI job builds the image and runs it at the target size (512 MB, one CPU), reads `/results` and fails on any vector failure, so the container itself is checked on Linux x86_64 before it is deployed. That is not the same machine as a Fly VM: the numbers on Fly, and whether 512 MB is enough there, are recorded after the builder deploys it (the checklist is at the top of `fly.toml`).

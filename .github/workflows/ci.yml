@@ -97,7 +97,7 @@ jobs:
         run: cargo test -p graft-vectors -p graft-render-host
       - name: Measure the render host on the worst-case renders
         run: |
-          cargo run --release -q -p graft-render-host --example measure -- \
+          cargo run --release -q -p graft-vectors --bin render-measure -- \
             target/wasm32-unknown-unknown/wasm/graft_render.wasm | tee measure.txt
           { echo '### Render host measurements'; echo '```'; cat measure.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
@@ -179,6 +179,30 @@ jobs:
           pnpm lint
           pnpm audit --audit-level high
           pnpm test
+
+  fly-check-image:
+    name: check image (container)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build the check image
+        run: docker build -t graft-fly-check .
+      - name: Run it at the target size (512 MB, one CPU) and read its own results
+        run: |
+          docker run -d --name check --memory 512m --cpus 1 -p 8080:8080 graft-fly-check
+          for i in $(seq 1 60); do
+            curl -fsS localhost:8080/health >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS localhost:8080/health
+          curl -fsS localhost:8080/results | tee results.json
+          python3 -c "import json; d=json.load(open('results.json')); assert d['checks']['failed']==0, d['checks']['failures']; print('vectors passed in the container:', d['checks']['passed'], 'of', d['checks']['total'])"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST --data 'x' localhost:8080/results)" = 405
+          { echo '### Check image results (512 MB, 1 CPU container)'; echo '```json'; cat results.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Container log
+        if: always()
+        run: docker logs check || true
 
   supply-chain:
     name: supply chain

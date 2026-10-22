@@ -1,0 +1,15 @@
+[package]
+name = "graft-fly-check"
+description = "Throwaway check service for the first deployment: replays the vector table inside the target host and serves only health and read-only results. Removed by the deploy pipeline ticket."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+graft-render-host.workspace = true
+graft-vectors.workspace = true
+serde_json = "1"
+
+[lints]
+workspace = true

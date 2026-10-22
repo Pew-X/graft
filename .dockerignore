@@ -1,0 +1,12 @@
+target
+.git
+.github
+.claude
+.scratch
+vault
+web
+tools
+node_modules
+*.md
+!README.md
+!ARCHITECTURE.md
