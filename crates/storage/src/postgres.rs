@@ -107,11 +107,43 @@ pub enum Outcome {
     KeyConflict,
 }
 
+/// Counters the store keeps for the metrics. They count events, never anything about a visitor.
+#[derive(Debug, Default)]
+pub struct StoreStats {
+    retries: std::sync::atomic::AtomicU64,
+    exhausted: std::sync::atomic::AtomicU64,
+}
+
+impl StoreStats {
+    /// Times a publish transaction conflicted with concurrent work and was tried again.
+    #[must_use]
+    pub fn serialization_retries(&self) -> u64 {
+        self.retries.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Times the retries ran out and the caller was told to send the request again.
+    #[must_use]
+    pub fn retries_exhausted(&self) -> u64 {
+        self.exhausted.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub(crate) fn retried(&self) {
+        self.retries
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub(crate) fn gave_up(&self) {
+        self.exhausted
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
 /// The Postgres store.
 #[derive(Clone)]
 pub struct Store {
     pub(crate) pool: PgPool,
     pub(crate) gate: std::sync::Arc<dyn crate::gate::Gate>,
+    pub(crate) stats: std::sync::Arc<StoreStats>,
 }
 
 const STAGE_COLUMNS: &str = "p.id AS pub_id, c.id AS content_id, p.title, p.author, \
@@ -151,7 +183,14 @@ impl Store {
         Self {
             pool,
             gate: std::sync::Arc::new(crate::gate::NoGate),
+            stats: std::sync::Arc::new(StoreStats::default()),
         }
+    }
+
+    /// The store's counters.
+    #[must_use]
+    pub fn stats(&self) -> &StoreStats {
+        &self.stats
     }
 
     /// Replace the gate that test code uses to hold transactions at named points.

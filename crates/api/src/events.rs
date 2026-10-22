@@ -137,6 +137,16 @@ pub async fn get_rollups(
 pub async fn metrics_text(state: &AppState) -> String {
     let now = now_ms(state);
     let mut out = String::new();
+    out.push_str("# TYPE graft_serialization_retries_total counter\n");
+    out.push_str(&format!(
+        "graft_serialization_retries_total {}\n",
+        state.store.stats().serialization_retries()
+    ));
+    out.push_str("# TYPE graft_serialization_retries_exhausted_total counter\n");
+    out.push_str(&format!(
+        "graft_serialization_retries_exhausted_total {}\n",
+        state.store.stats().retries_exhausted()
+    ));
     out.push_str("# TYPE graft_events_applied_total counter\n");
     out.push_str(&format!(
         "graft_events_applied_total {}\n",

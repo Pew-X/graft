@@ -236,6 +236,10 @@ Written by ticket 05; later tickets add rows. Every value is read from the envir
 | `GRAFT_GLOBAL_PUBLISH_PER_HOUR`, `GRAFT_GLOBAL_PUBLISH_BURST` | 120, 30 | the global publish cap: tokens refilled per hour, and the most admitted in one burst |
 | `GRAFT_STORAGE_LIMIT_BYTES` | 8,000,000,000 | what the host allows for audio; the admission threshold is this minus the overshoot bound |
 | `GRAFT_STORAGE_REFRESH_SECS` | 60 | how often the stored total is read again |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | unset | base address of an OTLP/HTTP collector; unset means no spans are exported |
+| `GRAFT_TRACE_SAMPLE` | 0.1 | the share of traces exported, 0 to 1 |
+| `GRAFT_ERROR_TRACKER_DSN` | unset | a Sentry-compatible tracker address; a secret, never logged; unset means no reports are sent |
+| `GRAFT_ENVIRONMENT` | `development` | the environment name error reports carry |
 | `GRAFT_INGEST_PER_IP`, `GRAFT_INGEST_WINDOW_SECS` | 30, 60 | client event batches one address may send within the window |
 | `GRAFT_INGEST_SESSION_EVENTS`, `GRAFT_INGEST_SESSION_WINDOW_SECS` | 300, 3600 | events one session id may send within the window |
 | `GRAFT_INGEST_MAX_BATCH` | 20 | most events in one client batch |
@@ -259,7 +263,34 @@ Written by ticket 05; ticket 16 deepens it.
 - `GET /health` answers without touching the database; `GET /ready` pings it and returns 503 problem details when it fails, without echoing the connection string (tested against a closed pool).
 - `GET /metrics` serves the Prometheus text format: a request counter by method, route pattern and status, and a latency histogram by route pattern, so label cardinality stays bounded.
 - Every response carries `content-security-policy: default-src 'none'; frame-ancestors 'none'`, `x-content-type-options: nosniff`, `referrer-policy: no-referrer` and `cache-control: no-store`. CORS allows nothing unless origins are configured.
-- Tests run through the public HTTP API against a real Postgres 16 (a fresh database per test; a service container in CI), with an in-memory blob store and a no-op event sink. Queries are runtime queries, so building needs no database and no offline query data.
+- Tests run through the public HTTP API against a real Postgres 16 (a fresh database per test; a service container in CI), with an in-memory blob store. Queries are runtime queries, so building needs no database and no offline query data.
+
+## Observability and operations
+
+Written by ticket 16, deepening "Operational baseline".
+
+**Traces.** The service's spans are `tracing` spans: `request` (with the request id and, when spans are exported, the trace id, so a log line leads to its trace and back), `publish` (flip or source), `render` (the input size and the duration in microseconds, never audio), `blob.put`, `db.create_flip` with its `db.transaction`, `event.insert`, and `relay.batch`. A serialization conflict and its retry are events on the `db.create_flip` span. Two places would lose the parent by default and are handled: the database work runs in its own task (so a dropped request cannot abandon a transaction), which is instrumented with the publish span by hand, and the render runs on a blocking thread, so its span is made in the async code and the future is instrumented, not the closure. When `OTEL_EXPORTER_OTLP_ENDPOINT` is set the spans are exported over OTLP/HTTP, sampled by `GRAFT_TRACE_SAMPLE` (a trace that arrives sampled stays sampled); with it unset no exporter exists and nothing is sent. A test runs one publish through the real export pipeline into an in-process exporter and asserts the tree (render, blob write and transaction under publish under request; the event insert under the transaction), the size and duration on the render span, one trace for the lot, and the trace id beside the request id in the log line. **Deviation to confirm:** the ticket asked for a local collector container; an in-process exporter exercises the same SDK and layers without a new CI service, but no real collector has been run against the OTLP exporter yet, so that last hop is untested until the service is first deployed.
+
+**Error tracking.** When `GRAFT_ERROR_TRACKER_DSN` is set, a request that ends in a 500 and a panic are reported to a Sentry-compatible tracker. The client is built with no default integrations (the contexts integration reports the operating system and host), no request integration (so no headers, cookies or bodies), no breadcrumbs, no user, no host name, no session replay and no performance data, and every string that is left passes through a scrubber that removes the secrets the process holds, any long hexadecimal run (a manage key), addresses of both families, and credentials in URLs. The 500 report is one event naming the request id and the route; the cause is in the log line with the same request id, which is where it is read. A busy or refused request is not an error and is not reported. The panic path (a catch layer that answers 500 and logs only that a handler panicked, plus the SDK's panic integration) is configured but has no test of its own. Server errors are logged without personal data whether or not a tracker is configured. A test sends a request carrying a manage key, an operator secret, an address, a forwarding header and a user agent into a service whose database has gone, then sends a message that contains the secrets, an address and a connection string through the same client, and searches the tracker's payload as the SDK serialised it, and every log line, for any of them.
+
+**Metrics** (Prometheus text at `/metrics`, labels from fixed sets only; a test checks no id, key or visitor text is ever a label): requests and latency by route; `graft_publish_outcomes_total{kind,outcome}` (created, replay, or the refusal's stable name); `graft_refusals_total{reason}` (the guardrails); `graft_render_duration_seconds` and `graft_render_failures_total`; `graft_preview_mismatch_total`; `graft_serialization_retries_total` and `graft_serialization_retries_exhausted_total`; `graft_publishing_open`; `graft_relay_backlog`, `graft_relay_oldest_unsent_age_seconds`, `graft_consumer_lag_seconds`, `graft_events_applied_total`, `graft_events_duplicates_total`. A scripted scenario shows the publish counters adding up to the requests made, the render count matching the renders done, and the gauge following the switch.
+
+**Proposed alert rules and service-level wording.** These are proposals with the reasoning stated, written as example rules; no paging system is stood up and nothing here claims one is. Thresholds are starting values to tune against the load test.
+
+| Alert | Example condition | Why this threshold |
+|---|---|---|
+| Server errors | `increase(graft_http_requests_total{status="500"}[5m]) > 5` | a handful in five minutes is noise; more is a fault |
+| Readiness failing | `/ready` answers 503 for 2 minutes | the database is unreachable; a restart will not fix it, so look at the database |
+| Retries exhausted | `increase(graft_serialization_retries_exhausted_total[10m]) > 0` | the retry budget is sized so that this should not happen at the expected load |
+| Consumer lag | `graft_consumer_lag_seconds > 300` for 10 minutes | rollups are minutes behind; the relay or consumer is stuck |
+| Relay backlog | `graft_relay_backlog > 1000` | events are piling up undelivered |
+| Dead-letter depth | any message in the dead-letter queue | applies once the queue leg (ticket 18) exists; until then there is no queue |
+| Render failures | `increase(graft_render_failures_total[10m]) > 0` | a render failing is a renderer or artefact fault, not a visitor's |
+| Publishing closed | `graft_publishing_open == 0` for longer than planned | the kill switch is a deliberate act; this reminds the operator it is still on |
+
+Wording for the service-level target, to be confirmed against measurements: "publishing and reading answer correctly for at least 99% of requests over a rolling 30 days, measured by requests that did not end in a 500 or a failed readiness check." It is a target for a one-person experiment, not a commitment to anyone.
+
+**Known limits, not hidden.** After the first rebuild of the rollups their table's constraint and index names drift from the migration's, so no later migration may name them. `/metrics` runs the ledger's lag query on every scrape, which is fine for one scraper at this scale. A request that finds the stored total stale waits for the blob store's listing to refresh it.
 
 ## Publishing a flip
 

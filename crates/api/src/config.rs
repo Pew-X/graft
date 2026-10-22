@@ -63,6 +63,66 @@ pub struct Config {
     pub guardrails: Guardrails,
     /// The event pipeline: whether this process runs the relay and consumer, and its pacing.
     pub events: EventSettings,
+    /// Traces and error tracking; both off unless an address is given.
+    pub observability: Observability,
+}
+
+/// Where traces and error reports go. Both are off by default.
+#[derive(Clone, PartialEq)]
+pub struct Observability {
+    /// The OTLP/HTTP base address (`OTEL_EXPORTER_OTLP_ENDPOINT`); unset means nothing is exported.
+    pub otlp_endpoint: Option<String>,
+    /// The share of traces exported, 0 to 1 (`GRAFT_TRACE_SAMPLE`).
+    pub trace_sample: f64,
+    /// The error tracker's DSN (`GRAFT_ERROR_TRACKER_DSN`). A secret: never logged.
+    pub error_tracker_dsn: Option<String>,
+    /// The environment name reports carry (`GRAFT_ENVIRONMENT`).
+    pub environment: String,
+}
+
+impl std::fmt::Debug for Observability {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Observability")
+            .field("otlp_endpoint", &self.otlp_endpoint)
+            .field("trace_sample", &self.trace_sample)
+            .field(
+                "error_tracker_dsn",
+                &self.error_tracker_dsn.as_ref().map(|_| "redacted"),
+            )
+            .field("environment", &self.environment)
+            .finish()
+    }
+}
+
+fn observability(lookup: &impl Fn(&str) -> Option<String>) -> Result<Observability, ConfigError> {
+    let mut trace_sample = 0.1_f64;
+    if let Some(text) = lookup("GRAFT_TRACE_SAMPLE") {
+        trace_sample = text.trim().parse().map_err(|_| ConfigError::Invalid {
+            name: "GRAFT_TRACE_SAMPLE",
+            reason: format!("{text:?} is not a number"),
+        })?;
+        if !(0.0..=1.0).contains(&trace_sample) {
+            return Err(ConfigError::Invalid {
+                name: "GRAFT_TRACE_SAMPLE",
+                reason: "must be between 0 and 1".to_owned(),
+            });
+        }
+    }
+    let otlp_endpoint = lookup("OTEL_EXPORTER_OTLP_ENDPOINT").filter(|e| !e.trim().is_empty());
+    if let Some(e) = &otlp_endpoint
+        && !(e.starts_with("http://") || e.starts_with("https://"))
+    {
+        return Err(ConfigError::Invalid {
+            name: "OTEL_EXPORTER_OTLP_ENDPOINT",
+            reason: "must start with http:// or https://".to_owned(),
+        });
+    }
+    Ok(Observability {
+        otlp_endpoint,
+        trace_sample,
+        error_tracker_dsn: lookup("GRAFT_ERROR_TRACKER_DSN").filter(|d| !d.trim().is_empty()),
+        environment: lookup("GRAFT_ENVIRONMENT").unwrap_or_else(|| "development".to_owned()),
+    })
 }
 
 /// How this process runs the event pipeline (ARCHITECTURE.md, "Events and the outbox").
@@ -534,6 +594,7 @@ impl Config {
         validate(&limits, blob_url_ttl_secs)?;
         let guardrails = guardrails(&lookup, &limits)?;
         let events = event_settings(&lookup)?;
+        let observability = observability(&lookup)?;
         if max_forks_per_stage_per_hour == 0 {
             return Err(ConfigError::Invalid {
                 name: "GRAFT_MAX_FORKS_PER_STAGE_PER_HOUR",
@@ -568,6 +629,7 @@ impl Config {
             orphan_grace_secs,
             guardrails,
             events,
+            observability,
         })
     }
 }

@@ -141,11 +141,23 @@ pub async fn publish_source(
     State(state): State<AppState>,
     ApiJson(request): ApiJson<PublishSourceRequest>,
 ) -> Result<Response, Problem> {
+    use tracing::Instrument;
+    let result = publish_source_inner(&state, request)
+        .instrument(tracing::info_span!("publish", kind = "source"))
+        .await;
+    crate::publish::count_outcome(&state, "source", result.as_ref().map(Response::status));
+    result
+}
+
+async fn publish_source_inner(
+    state: &AppState,
+    request: PublishSourceRequest,
+) -> Result<Response, Problem> {
     let limits = &state.limits;
 
     // 1. Everything that needs no I/O, cheapest first, before any audio is decoded.
-    let title = clean("title", &request.title, limits.max_title_chars, &state)?;
-    let author = clean("author", &request.author, limits.max_author_chars, &state)?;
+    let title = clean("title", &request.title, limits.max_title_chars, state)?;
+    let author = clean("author", &request.author, limits.max_author_chars, state)?;
     check_retry_key(&request.retry_key)?;
     let basis = check_declaration(request.declaration.as_ref())?;
     let bytes = base64::engine::general_purpose::STANDARD
@@ -251,7 +263,7 @@ pub async fn publish_source(
         Outcome::Existing(stage) => (StatusCode::OK, stage, None),
         Outcome::KeyConflict => return Err(Problem::key_conflict()),
     };
-    let publication = match crate::routes::publication_view(&state, &stage.id).await {
+    let publication = match crate::routes::publication_view(state, &stage.id).await {
         Ok(Some(view)) => view,
         Ok(None) | Err(_) if status == StatusCode::CREATED => {
             tracing::error!(

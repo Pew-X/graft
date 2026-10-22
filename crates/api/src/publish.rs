@@ -135,8 +135,30 @@ pub async fn publish_flip(
     State(state): State<AppState>,
     ApiJson(request): ApiJson<PublishFlipRequest>,
 ) -> Result<Response, Problem> {
-    let (status, body) = publish_flip_as(&state, request, Identity::Visitor).await?;
+    use tracing::Instrument;
+    let result = publish_flip_as(&state, request, Identity::Visitor)
+        .instrument(tracing::info_span!("publish", kind = "flip"))
+        .await;
+    count_outcome(&state, "flip", result.as_ref().map(|(s, _)| *s));
+    let (status, body) = result?;
     Ok((status, Json(body)).into_response())
+}
+
+/// Count a publish by what became of it: created, replayed, or the stable name of its refusal.
+pub(crate) fn count_outcome<E: std::borrow::Borrow<Problem>>(
+    state: &AppState,
+    kind: &'static str,
+    result: Result<StatusCode, E>,
+) {
+    let outcome = match result {
+        Ok(StatusCode::CREATED) => "created",
+        Ok(_) => "replay",
+        Err(problem) => problem
+            .borrow()
+            .kind
+            .trim_start_matches("urn:graft:problem:"),
+    };
+    state.metrics.publish_outcome(kind, outcome);
 }
 
 /// Who a publication is for, which decides how it is identified.
@@ -293,18 +315,37 @@ pub(crate) async fn publish_flip_as(
     .map_err(|_| Problem::retry_later())?
     .map_err(|e| internal("waiting to render", &e))?;
     let renderer = state.renderer.clone();
-    let rendered =
+    // The render runs on a blocking thread, which does not carry the request's span: the span is
+    // made here, with the size of the input and no audio, and the future is instrumented, not the
+    // closure.
+    let render_span = tracing::info_span!(
+        "render",
+        input_frames = samples.len(),
+        duration_us = tracing::field::Empty
+    );
+    let render_started = std::time::Instant::now();
+    let render_result = {
+        use tracing::Instrument;
         tokio::task::spawn_blocking(move || renderer.render(&samples, ratio, Method::Hermite))
+            .instrument(render_span.clone())
             .await
-            .map_err(|e| internal("rendering", &e))?
-            .map_err(|e| match e {
-                RenderError::InvalidParameters => Problem::invalid(
-                    "speed",
-                    "rejected",
-                    "the renderer does not accept this cut and speed",
-                ),
-                other => internal("rendering", &other),
-            })?;
+    };
+    let render_elapsed = render_started.elapsed();
+    render_span.record("duration_us", render_elapsed.as_micros() as u64);
+    state.metrics.observe_render(
+        render_elapsed.as_secs_f64(),
+        matches!(render_result, Ok(Ok(_))),
+    );
+    let rendered = render_result
+        .map_err(|e| internal("rendering", &e))?
+        .map_err(|e| match e {
+            RenderError::InvalidParameters => Problem::invalid(
+                "speed",
+                "rejected",
+                "the renderer does not accept this cut and speed",
+            ),
+            other => internal("rendering", &other),
+        })?;
     let output_bytes: Vec<u8> = rendered.iter().flat_map(|s| s.to_le_bytes()).collect();
     let output_hash = Sha256Hash::of(&output_bytes);
     let preview_matches = preview.map(|p| p == output_hash);
@@ -316,11 +357,15 @@ pub(crate) async fn publish_flip_as(
     }
     // Kept to write the blob once more after the commit (see below).
     let output_for_repair = output_bytes.clone();
-    let stored = state
-        .blobs
-        .put_if_absent(output_bytes)
-        .await
-        .map_err(|e| internal("storing the audio", &e))?;
+    let stored = {
+        use tracing::Instrument;
+        state
+            .blobs
+            .put_if_absent(output_bytes)
+            .instrument(tracing::info_span!("blob.put"))
+            .await
+            .map_err(|e| internal("storing the audio", &e))?
+    };
     if stored != output_hash {
         return Err(internal(
             "storing the audio",

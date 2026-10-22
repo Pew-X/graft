@@ -34,6 +34,13 @@ impl Relay {
     /// Claim and deliver one batch. Returns how many events were delivered; 0 when there was
     /// nothing to claim or the sink refused (the rows stay unsent and the next pass retries them).
     pub async fn run_once(&self) -> Result<usize, RelayError> {
+        use tracing::Instrument;
+        self.run_once_inner()
+            .instrument(tracing::info_span!("relay.batch"))
+            .await
+    }
+
+    async fn run_once_inner(&self) -> Result<usize, RelayError> {
         let sink = self.sink.clone();
         let claimed = self
             .store

@@ -202,6 +202,16 @@ pub fn router(state: AppState, config: &Config) -> Router {
         )
         .fallback(|| async { Problem::not_found("there is nothing at this address") })
         .method_not_allowed_fallback(|| async { Problem::method_not_allowed() })
+        .layer(tower_http::catch_panic::CatchPanicLayer::custom(
+            |_panic: Box<dyn std::any::Any + Send + 'static>| {
+                // Only that it happened: the payload of a panic can hold anything.
+                tracing::error!(
+                    target: crate::observability::REPORT_TARGET,
+                    "a request handler panicked"
+                );
+                Problem::internal().into_response()
+            },
+        ))
         .layer(middleware::from_fn_with_state(state.clone(), observe))
         .layer(cors(config))
         .with_state(state)
@@ -364,7 +374,18 @@ async fn observe(State(state): State<AppState>, request: Request, next: Next) ->
         .extensions()
         .get::<MatchedPath>()
         .map_or_else(|| "unmatched".to_owned(), |p| p.as_str().to_owned());
-    let span = tracing::info_span!("request", %request_id, %method, route = %route);
+    let span = tracing::info_span!(
+        "request",
+        %request_id,
+        %method,
+        route = %route,
+        trace_id = tracing::field::Empty
+    );
+    // Next to the request id, the trace id, when spans are being exported, so a log line leads to
+    // its trace and back.
+    if let Some(trace) = crate::observability::trace_id(&span) {
+        span.record("trace_id", trace.as_str());
+    }
     let started = Instant::now();
     let mut response = next.run(request).instrument(span.clone()).await;
     let status = response.status();
@@ -377,7 +398,19 @@ async fn observe(State(state): State<AppState>, request: Request, next: Next) ->
             status = status.as_u16(),
             elapsed_ms = elapsed * 1000.0,
             "request finished"
-        )
+        );
+        // The one event that becomes an error report: which request, which route, nothing from
+        // inside it. A busy or refused request is not an error; a 500 is.
+        if status == StatusCode::INTERNAL_SERVER_ERROR {
+            // The ids are in the message itself, so the report names the request whichever
+            // fields the tracker keeps.
+            tracing::error!(
+                target: crate::observability::REPORT_TARGET,
+                request_id = %request_id,
+                route = %route,
+                "a request ended in a server error (request {request_id}, route {route})"
+            );
+        }
     });
     let headers = response.headers_mut();
     if let Ok(v) = HeaderValue::from_str(&request_id) {

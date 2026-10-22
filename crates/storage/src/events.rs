@@ -146,6 +146,7 @@ pub struct StoredEvent {
 
 /// Write one event on `conn`, which is the connection of the transaction it belongs to. Returns
 /// whether it was written: an event id already in the ledger is not written twice.
+#[tracing::instrument(name = "event.insert", skip_all, fields(kind = event.kind.as_str()))]
 pub(crate) async fn append(conn: &mut PgConnection, event: &NewEvent) -> Result<bool, StoreError> {
     let result = sqlx::query(
         "INSERT INTO events (event_id, kind, origin, session_id, occurred_at, publication_id, detail) \

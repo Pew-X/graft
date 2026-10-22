@@ -28,6 +28,9 @@ pub struct Metrics {
     preview_mismatches: std::sync::atomic::AtomicU64,
     refusals: Mutex<BTreeMap<&'static str, u64>>,
     publishing_open: std::sync::atomic::AtomicBool,
+    publish_outcomes: Mutex<BTreeMap<(&'static str, &'static str), u64>>,
+    render: Mutex<Histogram>,
+    render_failures: std::sync::atomic::AtomicU64,
 }
 
 impl Metrics {
@@ -69,6 +72,32 @@ impl Metrics {
         }
     }
 
+    /// Count one publish by what became of it. `kind` is `flip` or `source`; `outcome` is one of a
+    /// fixed set (`created`, `replay`, or the stable name of the refusal), never anything taken from
+    /// a request.
+    pub fn publish_outcome(&self, kind: &'static str, outcome: &'static str) {
+        if let Ok(mut outcomes) = self.publish_outcomes.lock() {
+            *outcomes.entry((kind, outcome)).or_default() += 1;
+        }
+    }
+
+    /// Record one render: how long it took and whether it produced audio.
+    pub fn observe_render(&self, seconds: f64, ok: bool) {
+        if !ok {
+            self.render_failures
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+        if let Ok(mut h) = self.render.lock() {
+            h.count += 1;
+            h.sum += seconds;
+            for (i, le) in BUCKETS.iter().enumerate() {
+                if seconds <= *le {
+                    h.buckets[i] += 1;
+                }
+            }
+        }
+    }
+
     /// Record whether publishing is open, for the kill switch gauge.
     pub fn set_publishing_open(&self, open: bool) {
         self.publishing_open
@@ -103,6 +132,38 @@ impl Metrics {
                     .load(std::sync::atomic::Ordering::Relaxed)
             )
         ));
+        out.push_str("# TYPE graft_publish_outcomes_total counter\n");
+        if let Ok(outcomes) = self.publish_outcomes.lock() {
+            for ((kind, outcome), n) in outcomes.iter() {
+                out.push_str(&format!(
+                    "graft_publish_outcomes_total{{kind=\"{kind}\",outcome=\"{outcome}\"}} {n}\n"
+                ));
+            }
+        }
+        out.push_str("# TYPE graft_render_failures_total counter\n");
+        out.push_str(&format!(
+            "graft_render_failures_total {}\n",
+            self.render_failures
+                .load(std::sync::atomic::Ordering::Relaxed)
+        ));
+        out.push_str("# TYPE graft_render_duration_seconds histogram\n");
+        if let Ok(h) = self.render.lock() {
+            for (i, le) in BUCKETS.iter().enumerate() {
+                out.push_str(&format!(
+                    "graft_render_duration_seconds_bucket{{le=\"{le}\"}} {}\n",
+                    h.buckets[i]
+                ));
+            }
+            out.push_str(&format!(
+                "graft_render_duration_seconds_bucket{{le=\"+Inf\"}} {}\n",
+                h.count
+            ));
+            out.push_str(&format!("graft_render_duration_seconds_sum {}\n", h.sum));
+            out.push_str(&format!(
+                "graft_render_duration_seconds_count {}\n",
+                h.count
+            ));
+        }
         out.push_str("# TYPE graft_http_requests_total counter\n");
         for ((method, route, status), n) in &inner.requests {
             out.push_str(&format!(

@@ -27,6 +27,7 @@ use graft_domain::chain::StoredStage;
 use graft_domain::ids::PublicationId;
 use sqlx::{Connection, PgConnection, Row};
 use std::time::Duration;
+use tracing::Instrument;
 
 /// A flip to create.
 #[derive(Debug, Clone)]
@@ -78,7 +79,10 @@ impl Store {
     pub async fn create_flip(&self, flip: &NewFlip) -> Result<FlipOutcome, StoreError> {
         let store = self.clone();
         let flip = flip.clone();
-        tokio::spawn(async move { store.create_flip_with_retries(&flip).await })
+        // A spawned task does not inherit the request's span, so it is carried over by hand: the
+        // spans below stay children of the publish they belong to.
+        let span = tracing::info_span!("db.create_flip");
+        tokio::spawn(async move { store.create_flip_with_retries(&flip).await }.instrument(span))
             .await
             .map_err(|_| StoreError::Db("the write task failed".into()))?
     }
@@ -89,10 +93,21 @@ impl Store {
             match self.try_create_flip(flip).await {
                 Err(StoreError::Serialization) if attempt < flip.serialization_retries => {
                     attempt += 1;
+                    self.stats.retried();
+                    tracing::info!(
+                        attempt,
+                        "a publish transaction conflicted and is tried again"
+                    );
                     // A short, growing pause so retrying work does not all collide again.
                     tokio::time::sleep(Duration::from_millis(5 * u64::from(attempt))).await;
                 }
-                Err(StoreError::Serialization) => return Err(StoreError::RetryExhausted),
+                Err(StoreError::Serialization) => {
+                    self.stats.gave_up();
+                    tracing::warn!(
+                        "a publish transaction kept conflicting; the caller is told to retry"
+                    );
+                    return Err(StoreError::RetryExhausted);
+                }
                 other => return other,
             }
         }
@@ -104,7 +119,10 @@ impl Store {
         };
         let mut locked = Locked::acquire(&self.pool, parent, flip.lock_wait).await?;
         self.gate.reached(points::LOCKED).await;
-        let outcome = self.flip_in_transaction(locked.connection()?, flip).await;
+        let outcome = self
+            .flip_in_transaction(locked.connection()?, flip)
+            .instrument(tracing::info_span!("db.transaction"))
+            .await;
         locked.release(parent).await;
         outcome
     }

@@ -8,13 +8,9 @@ use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt()
-        .json()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
-        )
-        .init();
     let config = Config::from_env()?;
+    // Held for the life of the process: dropping it flushes whatever is still to be exported.
+    let _observability = graft_api::observability::init(&config)?;
     let store = Store::connect(&config.database_url, 10).await?;
     store.migrate().await?;
     let blobs = graft_api::blobs::build_blob_store(&config)?;
