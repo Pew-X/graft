@@ -1,0 +1,431 @@
+{
+  "components": {
+    "schemas": {
+      "AudioView": {
+        "description": "A short-lived URL for a stage's audio: canonical 48 kHz mono signed 16-bit little-endian PCM.",
+        "properties": {
+          "expires_in_secs": {
+            "description": "Seconds the URL stays valid.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "url": {
+            "description": "Where to fetch the audio from. Not stable: ask again after it expires.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "expires_in_secs"
+        ],
+        "type": "object"
+      },
+      "ChainView": {
+        "description": "A chain, source first.",
+        "properties": {
+          "stages": {
+            "description": "The stages, oldest first.",
+            "items": {
+              "$ref": "#/components/schemas/EntryView"
+            },
+            "type": "array"
+          },
+          "truncated": {
+            "description": "Set to \"depth_cap\" when the walk stopped before reaching a source.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "stages"
+        ],
+        "type": "object"
+      },
+      "CutView": {
+        "description": "A frame range of 48 kHz audio, half-open.",
+        "properties": {
+          "end": {
+            "description": "First frame not included.",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "start": {
+            "description": "First frame included.",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "type": "object"
+      },
+      "DetailsView": {
+        "description": "The exact facts, one level down from the credit lines.",
+        "properties": {
+          "cut": {
+            "$ref": "#/components/schemas/CutView",
+            "description": "The cut, computed."
+          },
+          "output_blob": {
+            "description": "SHA-256 of this stage's audio.",
+            "type": "string"
+          },
+          "record_id": {
+            "description": "The content record id: SHA-256 of its canonical bytes. It proves which bytes, nothing more.",
+            "type": "string"
+          },
+          "renderer": {
+            "$ref": "#/components/schemas/RendererView",
+            "description": "The renderer."
+          },
+          "source_blob": {
+            "description": "SHA-256 of the audio the cut was taken from.",
+            "type": "string"
+          },
+          "speed": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SpeedView",
+                "description": "The speed, absent for a source."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "record_id",
+          "source_blob",
+          "output_blob",
+          "cut",
+          "renderer"
+        ],
+        "type": "object"
+      },
+      "EntryView": {
+        "description": "A position in a chain.",
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StageView",
+                "description": "A stage that was read."
+              },
+              {
+                "properties": {
+                  "state": {
+                    "enum": [
+                      "available"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "state"
+                ],
+                "type": "object"
+              }
+            ],
+            "description": "A stage that was read."
+          },
+          {
+            "description": "A parent the chain names but could not be read. The chain is never silently shortened.",
+            "properties": {
+              "id": {
+                "description": "The id the child names as its parent.",
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "unavailable"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "state"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "LineView": {
+        "description": "One line of a credit block.",
+        "properties": {
+          "honesty": {
+            "description": "\"declared\" (a person said it, as typed), \"computed\" (the system produced it) or \"unknown\".",
+            "type": "string"
+          },
+          "role": {
+            "description": "Role word: \"source\", \"flip\", \"flipped by\", \"cut\", \"speed\", \"licence\", \"renderer\", \"rights\".",
+            "type": "string"
+          },
+          "value": {
+            "description": "The value, as text.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "value",
+          "honesty"
+        ],
+        "type": "object"
+      },
+      "Problem": {
+        "description": "A problem-details document.",
+        "properties": {
+          "detail": {
+            "description": "What went wrong this time, for a person.",
+            "type": "string"
+          },
+          "status": {
+            "description": "The HTTP status.",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": {
+            "description": "A short summary of the kind.",
+            "type": "string"
+          },
+          "type": {
+            "description": "A URI naming the kind of problem; stable, so clients can switch on it.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail"
+        ],
+        "type": "object"
+      },
+      "RendererView": {
+        "description": "Which renderer produced the audio.",
+        "properties": {
+          "name": {
+            "description": "Renderer name.",
+            "type": "string"
+          },
+          "version": {
+            "description": "Renderer version.",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "wasm_sha256": {
+            "description": "SHA-256 of the `.wasm`, lowercase hex.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version",
+          "wasm_sha256"
+        ],
+        "type": "object"
+      },
+      "SpeedView": {
+        "description": "The exact speed fraction and the method that applied it.",
+        "properties": {
+          "method": {
+            "description": "Interpolation method id (1 is cubic Hermite).",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "p": {
+            "description": "Numerator.",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "q": {
+            "description": "Denominator.",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "p",
+          "q",
+          "method"
+        ],
+        "type": "object"
+      },
+      "StageView": {
+        "description": "One stage that could be read. Its availability is the `state` of the entry that holds it.",
+        "properties": {
+          "audio": {
+            "$ref": "#/components/schemas/AudioView",
+            "description": "Where to hear it."
+          },
+          "author": {
+            "description": "Maker's name as typed. Plain text, never a handle.",
+            "type": "string"
+          },
+          "created_at_ms": {
+            "description": "Creation time, milliseconds since the Unix epoch.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "details": {
+            "$ref": "#/components/schemas/DetailsView",
+            "description": "The exact facts."
+          },
+          "flipped_count": {
+            "description": "How many publications were flipped from this one, counted from publications data.",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "id": {
+            "description": "Public id of the publication.",
+            "type": "string"
+          },
+          "kind": {
+            "description": "\"source\" or \"flip\".",
+            "type": "string"
+          },
+          "lines": {
+            "description": "Credit lines, each with its honesty state.",
+            "items": {
+              "$ref": "#/components/schemas/LineView"
+            },
+            "type": "array"
+          },
+          "parent_id": {
+            "description": "Id of the parent publication, absent for a source.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "description": "Title as typed.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "author",
+          "created_at_ms",
+          "flipped_count",
+          "lines",
+          "details",
+          "audio"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Read a chain of stages, source first. Errors are RFC 9457 problem details.",
+    "license": {
+      "name": ""
+    },
+    "title": "graft API",
+    "version": "0.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/v1/chains/{id}": {
+      "get": {
+        "operationId": "get_chain",
+        "parameters": [
+          {
+            "description": "Public id of the last stage of the chain",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChainView"
+                }
+              }
+            },
+            "description": "The chain, source first"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No such publication"
+          }
+        },
+        "summary": "The chain ending at a publication, source first.",
+        "tags": [
+          "routes"
+        ]
+      }
+    },
+    "/v1/publications/{id}": {
+      "get": {
+        "operationId": "get_publication",
+        "parameters": [
+          {
+            "description": "Public id of the publication",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntryView"
+                }
+              }
+            },
+            "description": "The publication, as one entry of a chain"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No such publication"
+          }
+        },
+        "summary": "One publication.",
+        "tags": [
+          "routes"
+        ]
+      }
+    }
+  }
+}

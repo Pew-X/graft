@@ -18,11 +18,20 @@ Needs the pinned Rust toolchain (installed from `rust-toolchain.toml` by rustup)
 
 ```sh
 sh scripts/build-wasm.sh                 # the canonical renderer artefact
-cargo test --workspace                   # includes the vector table on every Rust host
+docker run -d --name graft-dev-pg -e POSTGRES_PASSWORD=graft -p 127.0.0.1:55432:5432 postgres:16
+cargo test --workspace --all-features   # vectors on every Rust host, plus the tests that need Postgres
 cd web && pnpm install && pnpm dev       # the UI shell (a blank page for now)
 ```
 
-The service itself arrives with the backend tickets; there is nothing to call yet.
+The tests that need Postgres create a private database each on the server named by `GRAFT_TEST_DATABASE_URL` (default: the container above) and remove it afterwards.
+
+To run the service against that container:
+
+```sh
+GRAFT_DATABASE_URL=postgres://postgres:graft@127.0.0.1:55432/postgres cargo run -p graft-api
+```
+
+It serves `GET /v1/chains/{id}`, `GET /v1/publications/{id}`, `/openapi.json`, `/health`, `/ready` and `/metrics`. Publishing arrives with the next tickets. `graft-seed` creates a source (a root publication) from a canonical audio file; running it twice with the same key changes nothing.
 
 ## Vectors replay tool
 
