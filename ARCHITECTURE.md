@@ -10,7 +10,7 @@ One deployable Rust service plus a Next.js UI, built as a Cargo workspace. The a
 |---|---|---|
 | `graft-domain` | nothing in the workspace | content record, publication, ancestry rules, honesty states, limits |
 | `graft-render` | nothing at all | the integer renderer and its C-ABI wrapper, compiled to the canonical `.wasm` |
-| `graft-storage` | domain | Postgres store (migrations, idempotent writes, the chain read) and the blob store trait with an in-memory and a directory-backed implementation |
+| `graft-storage` | domain | Postgres store (migrations, idempotent writes, flip creation, the chain read) and the blob store trait with an in-memory and a directory-backed implementation. `Store` is a concrete type on purpose: the test seam is a real Postgres, so a trait would never have a second implementation. The blob store and the event sink are traits because they do have fakes |
 | `graft-render-host` | domain | runs the canonical `.wasm` under wasmtime |
 | `graft-events` | domain | the event-sink trait and a no-op sink; the ledger, relay, consumer and rollups arrive with their tickets |
 | `graft-vectors` | render, render-host | the renderer vector table: loader, generators, and the native, wasmtime and render-host harnesses (test support; nothing ships it) |
@@ -192,6 +192,8 @@ Written by ticket 05.
 
 **What is not here yet.** The manage key and fork permission (ticket 08), hiding and held descendants (ticket 09), the render and publish path (ticket 06), the real object-store client and signed URLs (ticket 11), and the events ledger (ticket 13). The columns for the first two exist in the schema; no route reads or writes them yet, and a test checks that responses never contain the manage-key hash.
 
+**Migrations.** Plain, numbered SQL files in `crates/storage/migrations`, applied by sqlx at start-up and by every test against a fresh database. They are forward-only by policy: a down migration is rarely safe to run against data that has changed since, so a change that must be undone is a new migration. Changes follow expand then contract: add the new shape, ship code that uses it, remove the old shape in a later migration. Constraints belong in the schema (the checks that refuse a source with a parent, a negative cut, a hash of the wrong length), so the database refuses invalid rows even if the application would not.
+
 ## Configuration
 
 Written by ticket 05; later tickets add rows. Every value is read from the environment at start-up; only the database URL is required, and it is a secret that is never logged or echoed in an error.
@@ -209,6 +211,10 @@ Written by ticket 05; later tickets add rows. Every value is read from the envir
 | `GRAFT_MAX_TITLE_CHARS` / `GRAFT_MAX_AUTHOR_CHARS` | 60 / 32 | public text limits |
 | `GRAFT_BLOB_URL_TTL_SECS` | 300 | lifetime of an issued blob URL |
 | `GRAFT_BLOB_DIR` | unset | local directory for audio (optional; see below) |
+| `GRAFT_RENDERER_WASM` | none (required by the service) | path to the canonical renderer artefact; loading checks it against the pinned hash for the version it reports |
+| `GRAFT_MAX_FORKS_PER_STAGE_PER_HOUR` | 20 | most flips of one stage within an hour; beyond it flips are refused with 429 |
+| `GRAFT_SERIALIZATION_RETRIES` | 5 | retries of a publish transaction that conflicted with concurrent work |
+| `GRAFT_DENY_WORDS` | empty | extra words refused in titles and names, beyond the built-in list |
 
 `GRAFT_BLOB_DIR` (optional) names a directory that holds audio for local runs, shared by the service and the seed script; without it the service keeps audio in memory. The seed script also reads `GRAFT_RENDERER_WASM` (the artefact, checked against the pins).
 
@@ -216,7 +222,7 @@ Written by ticket 05; later tickets add rows. Every value is read from the envir
 
 Written by ticket 05.
 
-The service generates its OpenAPI 3.1 document from the handlers' annotations (utoipa). The document is committed as `openapi/openapi.json`; CI regenerates it and fails on any difference. The typed TypeScript client types (`web/lib/api/schema.d.ts`) are generated from the committed document with openapi-typescript, CI regenerates them and fails on a difference, and the web build typechecks real uses of the client (`web/lib/api/chain.ts`), so renaming or removing a response field fails the UI build. This was shown once on purpose: renaming `title` in the Rust view changed the OpenAPI document (the drift check fails) and, after regenerating, the client no longer typechecked (`Property 'title' does not exist`); the change was then reverted. Errors are RFC 9457 problem details (`application/problem+json`) with a stable `type` URN. An id that is malformed and an id that does not exist get the same 404 body.
+The service generates its OpenAPI 3.1 document from the handlers' annotations (utoipa). The document is committed as `openapi/openapi.json`; CI regenerates it and fails on any difference. The typed TypeScript client types (`web/lib/api/schema.d.ts`) are generated from the committed document with openapi-typescript, CI regenerates them and fails on a difference, and the web build typechecks real uses of the client (`web/lib/api/chain.ts`), so renaming or removing a response field fails the UI build. This was shown twice on purpose. Locally: renaming `title` in the Rust view changed the OpenAPI document (the drift check fails) and, after regenerating, the client no longer typechecked (`Property 'title' does not exist`). In CI (scratch pull request, closed unmerged, run 39789486924): with both generated files regenerated consistently, the drift steps passed and `pnpm typecheck` was the only failing step in the `web` job, which shows the UI depends on the field and not just that a file changed. Errors are RFC 9457 problem details (`application/problem+json`) with a stable `type` URN. An id that is malformed and an id that does not exist get the same 404 body.
 
 ## Operational baseline
 
@@ -228,6 +234,45 @@ Written by ticket 05; ticket 16 deepens it.
 - Every response carries `content-security-policy: default-src 'none'; frame-ancestors 'none'`, `x-content-type-options: nosniff`, `referrer-policy: no-referrer` and `cache-control: no-store`. CORS allows nothing unless origins are configured.
 - Tests run through the public HTTP API against a real Postgres 16 (a fresh database per test; a service container in CI), with an in-memory blob store and a no-op event sink. Queries are runtime queries, so building needs no database and no offline query data.
 
-## Concurrency, events, security
+## Publishing a flip
 
-_Not written yet. Tickets 06 onwards; consolidated by ticket 37._
+Written by ticket 06.
+
+`POST /v1/publications` accepts the parent publication's id, a cut (half-open frame range), the speed as an exact fraction `p/q`, a title, a name as typed, a client-chosen retry key and, optionally, the hash of the audio the client's preview rendered. No audio travels: the server renders it. The order of the steps is the design.
+
+1. **No I/O.** Titles and names are cleaned by `graft_domain::text` (below); the retry key and preview hash are checked for shape; the cut and speed are checked against the limits (cut at least 480 and at most 480,000 frames, speed between 1/4 and 4 with `p` and `q` at most 2^20). Each refusal is a 422 problem naming the field and the rule.
+2. **The parent.** It must exist, and the chain must have room for one more stage (depth cap 12).
+3. **Render, outside any transaction.** The parent's audio is read from the blob store (a stored blob that does not hash to its name is an error, never served), the output length is asked of the renderer and checked against the 480-frame minimum and the 960,000-frame maximum, and the cut is rendered by the canonical `.wasm` under wasmtime on a blocking thread. A render never holds a database lock. The result is written with put-if-absent.
+4. **The transaction.** See below.
+
+**The server's render is the only canonical one.** The client's preview hash is a cross-check: on a mismatch the server's audio is stored, the response says `preview_matches: false`, and `graft_preview_mismatch_total` is incremented. Nothing silently picks the client's audio. The test compares the stored output with a render computed by the independent Python reference from ticket 02, not by the Rust code under test.
+
+**The response.** 201 with the publication, the manage key and the list of fields whose text was adjusted; 200 with the same publication and no key when the same request is repeated. The manage key is 32 random bytes as 64 hex characters. It is shown in the response that creates the publication and never again: only its SHA-256 is stored, and tests check that no later response and no read contains it, and that the database holds the hash and not the key.
+
+**Public text.** Titles and names pass through one pure function: whitespace is normalised; control, invisible, bidirectional-override and private-use characters are refused; links and `@handles` are removed and the response lists the adjusted fields; letters and digits of any script and a short list of punctuation are allowed; a word that mixes Latin letters with Cyrillic or Greek ones is refused, because it can imitate another word; the length is counted in characters after removal; and a short deny-list of impersonation words (`admin`, `administrator`, `moderator`, `riffle`, extendable by configuration) is refused. A property test checks that anything accepted is short, plain, single-spaced and free of links and handles, and that cleaning it again changes nothing. Limits: zero-width joiners are refused, which can affect some Indic conjuncts, and combining marks are allowed by script block rather than by Unicode category because the standard library has no category lookup.
+
+**Problems.** Refusals are RFC 9457 problem details with a stable `type`; field-level ones add `field` and `rule`. Unknown parent 404, closed parent 403, hidden parent or depth cap or key conflict 409, field rules 422, fork cap 429 (with `Retry-After`), oversized body 413, and 503 with `Retry-After` when conflicts persist. A refusal decided before the render writes nothing. A refusal decided inside the transaction (permission, hidden state, cap) happens after the render and the audio write, so it can leave one audio blob behind; no publication and no record is written, and the orphan blob is removed by the cleanup job of the blob ticket.
+
+## Concurrency and idempotency
+
+Written by ticket 06; ticket 07 completes it with the race and property tests.
+
+**Why concurrent forks mostly do not conflict.** Parents are immutable and children only insert, so forks of one stage do not contend on the parent's row. What can still go wrong is every rule that looks across children: the per-stage fork cap, the parent's permission and hidden state, and the retry key.
+
+**The transaction.** Those rules are enforced in one `SERIALIZABLE` transaction (`Store::create_flip`), which keeps the answer correct whatever the interleaving. Inside it: an idempotent replay is answered first (so a retry after the parent closed forking, or after the cap filled, still returns what was created); then the parent's flags and the number of publications naming it as parent in the last hour; then the record (insert, conflict on its hash does nothing) and the publication (conflict on the retry key does nothing). Same key and same record returns the existing publication; the same key with a different record is a conflict and writes nothing.
+
+**What measurement changed.** The design called for a transaction-scoped advisory lock keyed on the parent so that forks of one stage queue instead of aborting each other. Taken inside a `SERIALIZABLE` transaction that lock does not do that: the transaction's snapshot is taken at its first statement, before the wait for the lock ends, so every waiter reads stale data and is aborted. Measured with a counting test hook, 24 concurrent forks of one stage took 65 transaction attempts (41 retries). The lock is therefore a session-level advisory lock taken on the connection before the transaction begins, so the snapshot is taken after every earlier fork has committed. Re-measured: 48 concurrent forks over a pool of 16 connections took 48 attempts and no retries, in three runs. Three consequences are part of the design and each has a test or a note:
+
+- Everything in the critical section uses that one connection. A holder that asked the pool for a second connection while waiters held the rest would deadlock; the test runs more forks than the pool has connections under a time limit.
+- The write runs in its own task, so a client that disconnects cannot abandon a transaction half way or leave a lock held; the lock is always released afterwards, and a connection that fails to release it is closed instead of returned to the pool. A wait for the lock gives up after 10 seconds.
+- Serialization failures are still possible (a concurrent hide, a replayed key). They are retried a bounded number of times (default 5) with a short growing pause, and surfaced as a 503 `retry-later` problem when they persist. The client repeats the same request with the same retry key; nothing was written, so no duplicate can result.
+
+**Test seam.** The store calls a `Gate` at named points (`locked`, `checked`, `before_commit`). Production uses a gate that never waits; tests install one that counts or holds transactions, so an interleaving that is rare in practice can be forced rather than hoped for.
+
+**Idempotency is two mechanisms.** Request idempotency (the retry key, above) and blob idempotency (put-if-absent by content hash, so the same bytes are stored once) are separate and tested separately.
+
+**Limits of the claim.** The property that concurrent forks cannot lose each other is true by construction for immutable parents; what the tests add is evidence for the retry, cap and idempotency paths.
+
+## Events, security
+
+_Not written yet. Tickets 13 onwards; consolidated by ticket 37._
