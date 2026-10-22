@@ -274,6 +274,8 @@ pub async fn publish_flip(
             "the client's preview hash differed from the server render; the server's audio is stored"
         );
     }
+    // Kept to write the blob once more after the commit (see below).
+    let output_for_repair = output_bytes.clone();
     let stored = state
         .blobs
         .put_if_absent(output_bytes)
@@ -328,7 +330,16 @@ pub async fn publish_flip(
         .map(|(name, _)| name.to_owned())
         .collect();
     let (status, stage, key) = match outcome {
-        FlipOutcome::Created(stage) => (StatusCode::CREATED, stage, Some(manage_key)),
+        FlipOutcome::Created(stage) => {
+            // The orphan cleanup cannot be made atomic with this transaction, so the last line of
+            // defence is here: write the audio again now that the record that names it is
+            // committed. If the blob was removed in the instant between the first write and the
+            // commit, this restores it; if it is present (nearly always) this is one cheap check.
+            if let Err(e) = state.blobs.put_if_absent(output_for_repair).await {
+                tracing::error!(error = %e, "re-checking the audio after commit failed");
+            }
+            (StatusCode::CREATED, stage, Some(manage_key))
+        }
         FlipOutcome::Existing(stage) => (StatusCode::OK, stage, None),
         FlipOutcome::KeyConflict => return Err(Problem::key_conflict()),
         FlipOutcome::Refused(why) => return Err(refusal(why)),

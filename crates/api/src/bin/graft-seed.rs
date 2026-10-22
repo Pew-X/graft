@@ -1,5 +1,6 @@
 //! Seeds one source: `graft-seed --audio FILE --key KEY --title T --author A --licence L [--work-title T]
-//! [--work-author A] [--url U]`. Reads GRAFT_DATABASE_URL, GRAFT_BLOB_DIR and GRAFT_RENDERER_WASM.
+//! [--work-author A] [--url U]`. Reads GRAFT_DATABASE_URL, GRAFT_RENDERER_WASM and a blob store
+//! (GRAFT_BLOB_DIR, or the GRAFT_BLOB_S3_* settings).
 //! Running it again with the same key and audio changes nothing.
 #![allow(clippy::print_stdout)]
 
@@ -9,7 +10,7 @@ use graft_domain::chain::SourceEvidence;
 use graft_domain::hash::Sha256Hash;
 use graft_domain::record::RendererIdentity;
 use graft_render_host::{Limits as HostLimits, Render, RenderHost};
-use graft_storage::{FsBlobStore, Outcome, Store};
+use graft_storage::{Outcome, Store};
 use std::collections::HashMap;
 
 fn args() -> Result<HashMap<String, String>, String> {
@@ -36,7 +37,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::from_env()?;
     let wasm_path =
         std::env::var("GRAFT_RENDERER_WASM").map_err(|_| "GRAFT_RENDERER_WASM is required")?;
-    let blob_dir = std::env::var("GRAFT_BLOB_DIR").map_err(|_| "GRAFT_BLOB_DIR is required")?;
+    if config.s3.is_none() && config.blob_dir.is_none() {
+        return Err("configure GRAFT_BLOB_DIR or the GRAFT_BLOB_S3_* settings: seeding into memory would keep nothing".into());
+    }
     let host = RenderHost::load(&std::fs::read(wasm_path)?, HostLimits::default())?;
     let id = host.identity();
     let renderer = RendererIdentity {
@@ -46,7 +49,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let store = Store::connect(&config.database_url, 2).await?;
     store.migrate().await?;
-    let blobs = FsBlobStore::open(blob_dir)?;
+    let blobs = graft_api::blobs::build_blob_store(&config)?;
     let source = SeedSource {
         key: need("key")?,
         title: need("title")?,
@@ -60,7 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         audio: std::fs::read(need("audio")?)?,
         renderer,
     };
-    let outcome = seed_source(&store, &blobs, &config.limits, source).await?;
+    let outcome = seed_source(&store, blobs.as_ref(), &config.limits, source).await?;
     match outcome {
         Outcome::Created(s) => println!("created {}", s.id),
         Outcome::Existing(s) => println!("already there {}", s.id),

@@ -3,7 +3,7 @@
 use graft_api::config::Config;
 use graft_api::http::{AppState, router};
 use graft_render_host::{Limits as HostLimits, RenderHost};
-use graft_storage::{BlobStore, FsBlobStore, MemoryBlobStore, Store};
+use graft_storage::Store;
 use std::sync::Arc;
 
 #[tokio::main]
@@ -17,17 +17,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::from_env()?;
     let store = Store::connect(&config.database_url, 10).await?;
     store.migrate().await?;
-    // The object-store client arrives with the blob ticket. Until then a directory (shared with
-    // graft-seed) holds audio when GRAFT_BLOB_DIR is set, and memory otherwise.
-    let blobs: Arc<dyn BlobStore> = match std::env::var("GRAFT_BLOB_DIR") {
-        Ok(dir) => Arc::new(FsBlobStore::open(dir)?),
-        Err(_) => {
-            tracing::warn!(
-                "GRAFT_BLOB_DIR is not set: audio is kept in memory and its URLs cannot be fetched"
-            );
-            Arc::new(MemoryBlobStore::default())
-        }
-    };
+    let blobs = graft_api::blobs::build_blob_store(&config)?;
     let wasm_path = config
         .renderer_wasm
         .clone()

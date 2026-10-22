@@ -21,8 +21,9 @@ pub enum ConfigError {
     },
 }
 
-/// Everything the service reads at start-up.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Everything the service reads at start-up. `Debug` is written by hand and redacts every secret,
+/// so printing a config (in a log line, a panic message or a test failure) can never leak one.
+#[derive(Clone)]
 pub struct Config {
     /// Address to listen on.
     pub bind: SocketAddr,
@@ -47,6 +48,29 @@ pub struct Config {
     /// The operator secret for the admin routes. A secret: never logged. When unset, the admin
     /// routes refuse every request.
     pub admin_secret: Option<String>,
+    /// A directory for audio, for local runs. Used when no S3 bucket is configured.
+    pub blob_dir: Option<std::path::PathBuf>,
+    /// The S3-compatible bucket for audio, when configured. Its credentials are secrets.
+    pub s3: Option<graft_storage::S3Config>,
+    /// A blob older than this is refreshed when it is written again, in seconds.
+    pub blob_refresh_secs: u64,
+    /// The orphan cleanup leaves blobs younger than this alone, in seconds.
+    pub orphan_grace_secs: u64,
+}
+
+impl std::fmt::Debug for Config {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Config")
+            .field("bind", &self.bind)
+            .field("database_url", &"redacted")
+            .field(
+                "admin_secret",
+                &self.admin_secret.as_ref().map(|_| "redacted"),
+            )
+            .field("s3", &self.s3)
+            .field("limits", &self.limits)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Config {
@@ -110,6 +134,42 @@ impl Config {
             "GRAFT_MAX_FORKS_PER_STAGE_PER_HOUR",
             &mut max_forks_per_stage_per_hour,
         )?;
+        let mut blob_refresh_secs: u64 = 600;
+        number(&lookup, "GRAFT_BLOB_REFRESH_SECS", &mut blob_refresh_secs)?;
+        let mut orphan_grace_secs: u64 = 3600;
+        number(&lookup, "GRAFT_ORPHAN_GRACE_SECS", &mut orphan_grace_secs)?;
+        if blob_refresh_secs == 0 {
+            return Err(ConfigError::Invalid {
+                name: "GRAFT_BLOB_REFRESH_SECS",
+                reason: "must be at least 1".to_owned(),
+            });
+        }
+        // The grace period must outlast a blob's refresh threshold by a wide margin, or the cleanup
+        // could take a blob that a publish refreshed just in time.
+        if orphan_grace_secs < blob_refresh_secs.saturating_mul(2) {
+            return Err(ConfigError::Invalid {
+                name: "GRAFT_ORPHAN_GRACE_SECS",
+                reason: "must be at least twice GRAFT_BLOB_REFRESH_SECS".to_owned(),
+            });
+        }
+        let s3 = match lookup("GRAFT_BLOB_S3_BUCKET") {
+            None => None,
+            Some(bucket) => {
+                let mut c = graft_storage::S3Config::new(
+                    lookup("GRAFT_BLOB_S3_ENDPOINT"),
+                    bucket,
+                    lookup("GRAFT_BLOB_S3_REGION").unwrap_or_else(|| "us-east-1".to_owned()),
+                    lookup("GRAFT_BLOB_S3_ACCESS_KEY_ID")
+                        .ok_or(ConfigError::Missing("GRAFT_BLOB_S3_ACCESS_KEY_ID"))?,
+                    lookup("GRAFT_BLOB_S3_SECRET_ACCESS_KEY")
+                        .ok_or(ConfigError::Missing("GRAFT_BLOB_S3_SECRET_ACCESS_KEY"))?,
+                );
+                c.allow_http = lookup("GRAFT_BLOB_S3_ALLOW_HTTP").is_some_and(|v| v == "true");
+                c.prefix = lookup("GRAFT_BLOB_S3_PREFIX");
+                c.refresh_after = std::time::Duration::from_secs(blob_refresh_secs);
+                Some(c)
+            }
+        };
         let admin_secret = lookup("GRAFT_ADMIN_SECRET");
         if admin_secret
             .as_ref()
@@ -165,6 +225,10 @@ impl Config {
             renderer_wasm: lookup("GRAFT_RENDERER_WASM").map(std::path::PathBuf::from),
             extra_deny_words,
             admin_secret,
+            blob_dir: lookup("GRAFT_BLOB_DIR").map(std::path::PathBuf::from),
+            s3,
+            blob_refresh_secs,
+            orphan_grace_secs,
         })
     }
 }
@@ -252,8 +316,8 @@ mod tests {
     #[test]
     fn a_missing_database_url_is_named_in_the_error() {
         assert_eq!(
-            Config::from_lookup(env(&[])),
-            Err(ConfigError::Missing("GRAFT_DATABASE_URL"))
+            Config::from_lookup(env(&[])).expect_err("a database URL is required"),
+            ConfigError::Missing("GRAFT_DATABASE_URL")
         );
     }
 
@@ -292,6 +356,65 @@ mod tests {
             assert!(
                 matches!(result, Err(ConfigError::Invalid { .. })),
                 "{name}={value} should be refused, got {result:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn printing_a_config_never_shows_a_secret() {
+        let c = Config::from_lookup(env(&[
+            (
+                "GRAFT_DATABASE_URL",
+                "postgres://user:db-password-123@host/db",
+            ),
+            ("GRAFT_ADMIN_SECRET", "an-operator-secret-0123456789"),
+            ("GRAFT_BLOB_S3_BUCKET", "audio"),
+            ("GRAFT_BLOB_S3_ACCESS_KEY_ID", "AKIAEXAMPLEKEYID"),
+            ("GRAFT_BLOB_S3_SECRET_ACCESS_KEY", "s3-secret-value-abcdef"),
+        ]))
+        .expect("valid");
+        let printed = format!("{c:?} {:#?}", c);
+        for secret in [
+            "db-password-123",
+            "an-operator-secret",
+            "AKIAEXAMPLEKEYID",
+            "s3-secret-value",
+        ] {
+            assert!(!printed.contains(secret), "{secret} leaked: {printed}");
+        }
+    }
+
+    #[test]
+    fn s3_settings_need_credentials_and_the_grace_period_must_outlast_the_refresh_threshold() {
+        let base = [
+            ("GRAFT_DATABASE_URL", "postgres://x"),
+            ("GRAFT_BLOB_S3_BUCKET", "audio"),
+        ];
+        let missing = Config::from_lookup(env(&base)).expect_err("credentials are required");
+        assert_eq!(missing, ConfigError::Missing("GRAFT_BLOB_S3_ACCESS_KEY_ID"));
+        let ok = Config::from_lookup(env(&[
+            ("GRAFT_DATABASE_URL", "postgres://x"),
+            ("GRAFT_BLOB_S3_BUCKET", "audio"),
+            ("GRAFT_BLOB_S3_ACCESS_KEY_ID", "k"),
+            ("GRAFT_BLOB_S3_SECRET_ACCESS_KEY", "s"),
+            (
+                "GRAFT_BLOB_S3_ENDPOINT",
+                "https://account.r2.cloudflarestorage.com",
+            ),
+            ("GRAFT_BLOB_S3_REGION", "auto"),
+        ]))
+        .expect("valid");
+        assert!(ok.s3.is_some() && ok.blob_dir.is_none());
+        for (refresh, grace) in [("600", "1199"), ("0", "3600")] {
+            let err = Config::from_lookup(env(&[
+                ("GRAFT_DATABASE_URL", "postgres://x"),
+                ("GRAFT_BLOB_REFRESH_SECS", refresh),
+                ("GRAFT_ORPHAN_GRACE_SECS", grace),
+            ]))
+            .expect_err("too short");
+            assert!(
+                matches!(err, ConfigError::Invalid { .. }),
+                "{refresh}/{grace}: {err:?}"
             );
         }
     }
