@@ -33,6 +33,10 @@ GRAFT_DATABASE_URL=postgres://postgres:graft@127.0.0.1:55432/postgres cargo run 
 
 It serves `GET /v1/chains/{id}`, `GET /v1/publications/{id}`, `/openapi.json`, `/health`, `/ready` and `/metrics`. Publishing arrives with the next tickets. `graft-seed` creates a source (a root publication) from a canonical audio file; running it twice with the same key changes nothing.
 
+## Concurrency
+
+Forks of one stage cannot lose each other, and a retried request is handled once. The evidence is in the tests, not in an argument: `crates/api/tests/races.rs` sends 40 simultaneous forks at one stage over a pool of 16 database connections, through the real router, Postgres and renderer, and checks that all are published and counted exactly once; `crates/storage/tests/races.rs` forces conflicts, a busy lock and a panic on purpose. ARCHITECTURE.md ("Concurrency and idempotency") states the guarantees and what the tests do not show. No claim is made about scale.
+
 ## Vectors replay tool
 
 `vectors-replay` runs the renderer vector table against any artefact and exits non-zero on any difference, naming the vector with the expected and actual hash.

@@ -820,6 +820,7 @@ name = "graft-domain"
 version = "0.0.0"
 dependencies = [
  "proptest",
+ "serde_json",
  "sha2 0.10.9",
  "thiserror",
 ]
@@ -860,6 +861,7 @@ name = "graft-storage"
 version = "0.0.0"
 dependencies = [
  "graft-domain",
+ "proptest",
  "sqlx",
  "thiserror",
  "tokio",
