@@ -151,6 +151,8 @@ What is checked, where, and what is not. Everything here compares the output has
 - Preview parity: for five vectors the artefact's output bytes in each browser are compared, byte for byte, with the output of the native renderer.
 - The pointer scenario runs on every host that has raw pointers (wasmtime, the render host through its own checks, the artefact in Node and in each browser). The native harness and the TypeScript port are exempt by declaration, and the harness fails a host that claims raw pointers but does not run the cases.
 - macOS runs after merges rather than on every pull request because macOS minutes cost ten times Linux minutes on private repositories.
+- Chromium runs in its full headless mode. In the stripped-down headless-shell variant, the tab crashed ("Target crashed") on the Linux x86_64 runner when the artefact trapped on a deliberate out-of-bounds write (the `wild-output` pointer case); the same case passes in Node's V8 on Linux, in Firefox and WebKit on Linux, and in both Chromium variants on macOS. It was observed in CI, narrowed to that one case, and not investigated further.
+- Run time: the Linux job (`cross-host vectors (ubuntu-24.04)`) runs for about 4 minutes in Playwright's container image, which carries the browsers' system libraries; installing them on the bare runner needed about 9 minutes. The macOS job has not run yet at the time of writing.
 
 Not checked:
 
