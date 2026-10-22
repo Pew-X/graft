@@ -1,3 +1,5 @@
-//! Domain model: content records, publications, ancestry rules, honesty states and limits.
-//!
-//! This crate is the centre of the dependency graph and depends on nothing in the workspace.
+//! Domain model.
+pub fn   first(v: &[u8]) -> u8 {
+    let x: Option<u8> = v.first().copied();
+    x.unwrap()
+}
