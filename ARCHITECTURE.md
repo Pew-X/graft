@@ -136,7 +136,28 @@ Process peak resident memory over the whole run: about 29 MB. What this sizes: a
 
 ## Determinism evidence
 
-_Not written yet. Ticket 04 writes it._
+What is checked, where, and what is not. Everything here compares the output hash of every vector in `fixtures/vectors/vectors.json` (and, for five vectors, the output bytes) with the table; a difference on any host fails the build and names the vector and the host.
+
+| host | what runs | linux x86_64 | macOS arm64 |
+|---|---|---|---|
+| native Rust (`graft-render` safe entry points) | table | every pull request | after merges to dev, staging, main, and on demand |
+| wasmtime (`graft-vectors` harness) | artefact, table, pointer and trap scenarios | every pull request | after merges and on demand |
+| render host (`graft-render-host`, the service's code path) | artefact, table | every pull request | after merges and on demand |
+| Node (V8) | artefact and the TypeScript port | every pull request | after merges and on demand |
+| Chromium, Firefox, WebKit (Playwright) | artefact, instantiated with an empty import object, and the TypeScript port; table, scenarios including the trap path | every pull request | after merges and on demand |
+
+- The artefact itself is built twice from different directories and compared, and its hash is compared with the pin (see "Determinism contract"); the macOS-built pin is compared with the Linux build on every pull request.
+- The TypeScript port lives in `tools/vectors` as test support. It is not imported by `web/` and is not part of any bundle. It also runs the ingest canonicalisation cases, because TypeScript is where that rule runs in production.
+- Preview parity: for five vectors the artefact's output bytes in each browser are compared, byte for byte, with the output of the native renderer.
+- The pointer scenario runs on every host that has raw pointers (wasmtime, the render host through its own checks, the artefact in Node and in each browser). The native harness and the TypeScript port are exempt by declaration, and the harness fails a host that claims raw pointers but does not run the cases.
+- macOS runs after merges rather than on every pull request because macOS minutes cost ten times Linux minutes on private repositories.
+
+Not checked:
+
+- Real Safari. Playwright's WebKit is a proxy for it; a manual check on a real device is recorded by the builder, not by CI.
+- Other CPU architectures than x86_64 and arm64, a second Rust patch version, mobile browsers, and Windows.
+- Input canonicalisation across browsers' audio decoders: only the rule applied to given floats is checked, not what a decoder produces from a compressed file.
+- Anything about listening quality; the vectors check bytes, not sound.
 
 ## Data model, concurrency, events, operations, security
 
