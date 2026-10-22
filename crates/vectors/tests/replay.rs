@@ -143,12 +143,44 @@ fn render_host_gives_identical_bytes_for_render_a_b_a_and_across_threads() {
     );
     assert_ne!(a, b);
     std::thread::scope(|s| {
-        let runs: Vec<_> = (0..8)
-            .map(|_| s.spawn(|| host.render(&a_in, Ratio { p: 3, q: 2 }, Method::Hermite)))
+        let runs: Vec<_> = (0..12)
+            .map(|_| {
+                s.spawn(|| {
+                    (0..5)
+                        .map(|_| host.render(&a_in, Ratio { p: 3, q: 2 }, Method::Hermite))
+                        .collect::<Vec<_>>()
+                })
+            })
             .collect();
         for run in runs {
-            assert_eq!(run.join().expect("thread").as_ref(), Ok(&a));
+            for result in run.join().expect("thread") {
+                assert_eq!(result.as_ref(), Ok(&a));
+            }
         }
     });
     assert_eq!(host.identity().version, graft_render::VERSION);
+}
+
+#[test]
+fn the_most_expensive_accepted_render_is_interrupted_when_its_fuel_budget_is_too_small() {
+    // 480,000 frames at 1/4 speed is the costliest render the renderer accepts (about 4.1e8 fuel).
+    use graft_render_host::{Limits, Method, Ratio, Render, RenderError, RenderHost};
+    let host = RenderHost::load(
+        &artefact(),
+        Limits {
+            max_fuel: 100_000_000,
+            ..Limits::default()
+        },
+    )
+    .expect("loads");
+    let t = table();
+    let v = t.vector("cut-cap-quarter").expect("vector");
+    let started = std::time::Instant::now();
+    let result = host.render(
+        &v.input.generate(),
+        Ratio { p: v.p, q: v.q },
+        Method::Hermite,
+    );
+    assert_eq!(result, Err(RenderError::Interrupted));
+    assert!(started.elapsed() < std::time::Duration::from_secs(5));
 }

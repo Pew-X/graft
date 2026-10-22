@@ -1,22 +1,25 @@
-#![allow(clippy::expect_used, clippy::panic)] // test helpers fail loudly
-
 //! The host never trusts the module. Each test loads a small hand-written module that misbehaves in
 //! one way and checks the host reports a typed error and stays usable.
 //! (The real renderer's behaviour through the host is covered in `graft-vectors`.)
 
-use graft_render_host::{
-    ArtefactError, Limits, Method, Pins, Ratio, Render, RenderError, RenderHost,
-};
-use sha2::{Digest, Sha256};
+#![allow(clippy::expect_used, clippy::panic)] // test helpers fail loudly
+
+use crate::host::sha256_hex as sha_hex;
+use crate::{ArtefactError, Limits, Method, Pins, Ratio, Render, RenderError, RenderHost};
 use std::time::{Duration, Instant};
 
 /// A module with the renderer's export surface and a bump allocator. `render_body` is the body of
 /// `graft_render` (params: in_ptr in_len p q method out_ptr out_cap).
 fn module(version: i32, render_body: &str) -> Vec<u8> {
+    module_with(version, "", render_body)
+}
+
+fn module_with(version: i32, declarations: &str, render_body: &str) -> Vec<u8> {
     wat::parse_str(format!(
         r#"(module
           (memory (export "memory") 2)
           (global $bump (mut i32) (i32.const 1024))
+          {declarations}
           (func (export "graft_version") (result i32) (i32.const {version}))
           (func (export "graft_alloc") (param $n i32) (result i32)
             (local $p i32)
@@ -37,6 +40,24 @@ fn module(version: i32, render_body: &str) -> Vec<u8> {
 }
 
 const ECHO: &str = "(local.get 1)"; // reports in_len frames written; the frames are zeros
+
+/// Copies the input to the output, then adds a per-instance call counter to the first frame and
+/// increments it. A fresh instance always starts at zero, so the output equals the input exactly;
+/// if an instance or its globals were reused between renders, the first frame would drift.
+const COUNTING_COPY_DECL: &str = "(global $calls (mut i32) (i32.const 0))";
+const COUNTING_COPY: &str =
+    "(memory.copy (local.get 5) (local.get 0) (i32.mul (local.get 1) (i32.const 2)))
+   (i32.store16 (local.get 5)
+     (i32.add (i32.load16_s (local.get 5)) (global.get $calls)))
+   (global.set $calls (i32.add (global.get $calls) (i32.const 1)))
+   (local.get 1)";
+
+fn counting_copy_host() -> RenderHost {
+    host(
+        &module_with(77, COUNTING_COPY_DECL, COUNTING_COPY),
+        Limits::default(),
+    )
+}
 const ENDLESS: &str = "(loop $l (br $l)) (i32.const 0)";
 const TRAP_ON_METHOD_9: &str =
     "(if (i32.eq (local.get 4) (i32.const 9)) (then unreachable)) (local.get 1)";
@@ -47,7 +68,7 @@ fn host(wasm: &[u8], limits: Limits) -> RenderHost {
     RenderHost::load_unpinned(wasm, limits).expect("fixture loads")
 }
 
-const HALF: Ratio = Ratio { p: 1, q: 1 };
+const ONE: Ratio = Ratio { p: 1, q: 1 };
 
 #[test]
 fn a_runaway_render_is_interrupted_within_a_time_bound() {
@@ -59,7 +80,7 @@ fn a_runaway_render_is_interrupted_within_a_time_bound() {
         },
     );
     let started = Instant::now();
-    let result = h.render(&[1, 2, 3], HALF, Method::Hermite);
+    let result = h.render(&[1, 2, 3], ONE, Method::Hermite);
     assert_eq!(result, Err(RenderError::Interrupted));
     assert!(
         started.elapsed() < Duration::from_secs(5),
@@ -83,7 +104,7 @@ fn a_trap_is_a_typed_error_and_the_next_render_still_works() {
 fn a_negative_code_the_contract_does_not_define_is_an_internal_failure() {
     let h = host(&module(77, NEGATIVE_CODE), Limits::default());
     assert!(matches!(
-        h.render(&[1], HALF, Method::Linear),
+        h.render(&[1], ONE, Method::Linear),
         Err(RenderError::Internal(_))
     ));
 }
@@ -96,7 +117,7 @@ fn growing_past_the_memory_limit_is_a_typed_error() {
     };
     let h = host(&module(77, MEMORY_BOMB), limits);
     assert_eq!(
-        h.render(&[1, 2, 3], HALF, Method::Linear),
+        h.render(&[1, 2, 3], ONE, Method::Linear),
         Err(RenderError::MemoryLimit)
     );
 }
@@ -110,37 +131,39 @@ fn an_input_that_cannot_fit_the_memory_limit_is_refused_not_a_panic() {
     let h = host(&module(77, ECHO), limits);
     let big = vec![0i16; 4 << 20];
     assert_eq!(
-        h.render(&big, HALF, Method::Linear),
+        h.render(&big, ONE, Method::Linear),
         Err(RenderError::MemoryLimit)
     );
 }
 
 #[test]
 fn no_state_leaks_between_renders() {
-    let h = host(&module(77, ECHO), Limits::default());
-    let a = h.render(&[5; 100], HALF, Method::Linear);
-    let b = h.render(&[9; 10], HALF, Method::Hermite);
-    assert_eq!(a, h.render(&[5; 100], HALF, Method::Linear));
-    assert_eq!(b, h.render(&[9; 10], HALF, Method::Hermite));
+    let h = counting_copy_host();
+    let (a_in, b_in) = ([5i16; 100], [9i16; 10]);
+    // Every render sees a fresh instance, so the counter is always zero and the copy is exact.
+    for _ in 0..3 {
+        assert_eq!(h.render(&a_in, ONE, Method::Linear), Ok(a_in.to_vec()));
+        assert_eq!(h.render(&b_in, ONE, Method::Hermite), Ok(b_in.to_vec()));
+    }
 }
 
 #[test]
 fn many_threads_get_identical_results_from_one_shared_host() {
-    let h = host(&module(77, ECHO), Limits::default());
-    let expected = h.render(&[3; 500], HALF, Method::Hermite).expect("renders");
+    let h = counting_copy_host();
+    let input: Vec<i16> = (0..500).map(|i| i * 3).collect();
     std::thread::scope(|s| {
         let handles: Vec<_> = (0..16)
             .map(|_| {
                 s.spawn(|| {
                     (0..20)
-                        .map(|_| h.render(&[3; 500], HALF, Method::Hermite))
+                        .map(|_| h.render(&input, ONE, Method::Hermite))
                         .collect::<Vec<_>>()
                 })
             })
             .collect();
         for handle in handles {
             for result in handle.join().expect("thread") {
-                assert_eq!(result.as_ref(), Ok(&expected));
+                assert_eq!(result.as_ref(), Ok(&input));
             }
         }
     });
@@ -159,10 +182,10 @@ fn a_module_with_imports_is_refused() {
 #[test]
 fn a_module_missing_an_export_is_refused() {
     let wasm = wat::parse_str(r#"(module (memory (export "memory") 1))"#).expect("assembles");
-    assert!(matches!(
-        RenderHost::load_unpinned(&wasm, Limits::default()),
-        Err(ArtefactError::MissingExport(_))
-    ));
+    assert_eq!(
+        RenderHost::load_unpinned(&wasm, Limits::default()).err(),
+        Some(ArtefactError::MissingExport("graft_version"))
+    );
 }
 
 #[test]
@@ -171,13 +194,6 @@ fn bytes_that_are_not_a_module_are_refused() {
         RenderHost::load_unpinned(b"not wasm", Limits::default()),
         Err(ArtefactError::Invalid(_))
     ));
-}
-
-fn sha_hex(bytes: &[u8]) -> String {
-    Sha256::digest(bytes)
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect()
 }
 
 #[test]
@@ -221,5 +237,58 @@ fn the_committed_pins_parse() {
             .expect("committed pins parse")
             .get(1)
             .is_some()
+    );
+}
+
+#[test]
+fn modules_needing_simd_or_shared_memory_are_refused() {
+    // The engine is configured without SIMD and built without threads; a module that needs either
+    // must not load, whatever the artefact pin says.
+    let simd = module_with(77, "(global $v v128 (v128.const i32x4 0 0 0 0))", ECHO);
+    assert!(matches!(
+        RenderHost::load_unpinned(&simd, Limits::default()),
+        Err(ArtefactError::Invalid(_))
+    ));
+    let shared = wat::parse_str(r#"(module (memory (export "memory") 1 1 shared))"#);
+    // Assembling a shared memory without the threads proposal enabled in the text parser may itself
+    // fail; either way no loadable module comes out.
+    if let Ok(bytes) = shared {
+        assert!(matches!(
+            RenderHost::load_unpinned(&bytes, Limits::default()),
+            Err(ArtefactError::Invalid(_) | ArtefactError::MissingExport(_))
+        ));
+    }
+}
+
+#[test]
+fn the_counting_fixture_does_drift_when_an_instance_is_reused() {
+    // Without this, the isolation tests above could pass for a fixture that cannot show leaked state.
+    use wasmtime::{Engine, Instance, Module, Store};
+    let engine = Engine::default();
+    let module =
+        Module::new(&engine, module_with(77, COUNTING_COPY_DECL, COUNTING_COPY)).expect("compiles");
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[]).expect("instantiates");
+    let render = instance
+        .get_typed_func::<(u32, u32, u32, u32, u32, u32, u32), i32>(&mut store, "graft_render")
+        .expect("export");
+    let memory = instance.get_memory(&mut store, "memory").expect("memory");
+    // Input frames [5, 5] at byte 2048; output at byte 4096.
+    memory
+        .write(&mut store, 2048, &[5, 0, 5, 0])
+        .expect("write");
+    let first_frame = |store: &mut Store<()>| {
+        render
+            .call(&mut *store, (2048, 2, 1, 1, 1, 4096, 2))
+            .expect("render");
+        let mut bytes = [0u8; 2];
+        memory.read(&*store, 4096, &mut bytes).expect("read");
+        i16::from_le_bytes(bytes)
+    };
+    assert_eq!(first_frame(&mut store), 5);
+    assert_eq!(
+        first_frame(&mut store),
+        6,
+        "a reused instance carries its counter into the output"
     );
 }

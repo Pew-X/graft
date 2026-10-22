@@ -60,11 +60,12 @@ impl Default for Limits {
 pub struct RenderStats {
     /// Fuel consumed (roughly, WebAssembly instructions executed).
     pub fuel_used: u64,
-    /// Linear memory the instance held when the render finished, in bytes.
+    /// Linear memory the instance held when the render finished, in bytes. Memory only grows, so
+    /// this is also its peak.
     pub peak_memory_bytes: usize,
 }
 
-/// What the service needs from a renderer; fakes implement it in API tests.
+/// What the service needs from a renderer. API tests can substitute a fake for the real host.
 pub trait Render: Send + Sync {
     /// Renders `cut` at speed `ratio` with `method`.
     ///
@@ -128,7 +129,7 @@ fn engine_config() -> Config {
     config
 }
 
-fn sha256_hex(bytes: &[u8]) -> String {
+pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
     Sha256::digest(bytes)
         .iter()
         .map(|b| format!("{b:02x}"))
@@ -140,7 +141,7 @@ fn invalid<E: std::fmt::Display>(e: E) -> ArtefactError {
 }
 
 /// The artefact compiled once, ready to render. Every render gets a fresh store: nothing a render
-/// does to the module's memory or globals survives it, and a trapped instance is simply dropped.
+/// does to the module's memory or globals survives it, and a trapped instance is discarded.
 pub struct RenderHost {
     engine: Engine,
     pre: InstancePre<MemoryLimiter>,
@@ -187,12 +188,12 @@ impl RenderHost {
         Ok(host)
     }
 
-    /// Loads without checking the pins. For test fixtures only; the service uses [`Self::load`].
+    /// Loads without checking the pins. Crate-private: the hostile-module tests need it, and nothing
+    /// outside this crate can bypass the pin check.
     ///
     /// # Errors
     /// See [`ArtefactError`].
-    #[doc(hidden)]
-    pub fn load_unpinned(wasm: &[u8], limits: Limits) -> Result<Self, ArtefactError> {
+    pub(crate) fn load_unpinned(wasm: &[u8], limits: Limits) -> Result<Self, ArtefactError> {
         let engine = Engine::new(&engine_config()).map_err(invalid)?;
         let module = Module::new(&engine, wasm).map_err(invalid)?;
         let imports = module.imports().len();

@@ -24,7 +24,7 @@ impl Host for HostedRenderer {
     fn out_len(&mut self, in_len: u32, p: u32, q: u32) -> Result<i32, String> {
         match self.0.output_frames(in_len, Ratio { p, q }) {
             Ok(n) => i32::try_from(n).map_err(|e| e.to_string()),
-            Err(RenderError::InvalidParameters) => Ok(graft_render_status::PARAM),
+            Err(RenderError::InvalidParameters) => Ok(status::PARAM),
             Err(e) => Err(e.to_string()),
         }
     }
@@ -36,11 +36,11 @@ impl Host for HostedRenderer {
                 out,
             },
             Err(RenderError::InvalidParameters) => Outcome::Status {
-                code: graft_render_status::PARAM,
+                code: status::PARAM,
                 out: Vec::new(),
             },
             Err(RenderError::OutputTooSmall) => Outcome::Status {
-                code: graft_render_status::CAPACITY,
+                code: status::CAPACITY,
                 out: Vec::new(),
             },
             Err(RenderError::Trapped(why)) => Outcome::Trap(why),
@@ -50,7 +50,7 @@ impl Host for HostedRenderer {
 }
 
 /// The renderer's documented status codes, as the table writes them.
-mod graft_render_status {
+mod status {
     pub const PARAM: i32 = -1;
     pub const CAPACITY: i32 = -2;
 }

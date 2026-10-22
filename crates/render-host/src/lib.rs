@@ -9,6 +9,8 @@
 
 mod error;
 mod host;
+#[cfg(test)]
+mod hostile_tests;
 mod pins;
 
 pub use error::{ArtefactError, RenderError};
