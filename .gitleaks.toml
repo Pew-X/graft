@@ -1,0 +1,15 @@
+# Extends gitleaks' default rules. The allowlist names only throwaway values that are deliberately in
+# the repository: the credentials of a local test container (documented in README.md and used by CI)
+# and a fake operator secret that a test uses to prove secrets never reach the logs. Nothing else is
+# allowed; a real credential anywhere still fails the scan.
+title = "graft"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "throwaway credentials of the local and CI test object store, and a fake test secret"
+regexes = [
+  '''graftsecret12345''',
+  '''an-operator-secret-0123456789''',
+]
