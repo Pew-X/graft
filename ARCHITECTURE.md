@@ -210,7 +210,14 @@ Written by ticket 05; later tickets add rows. Every value is read from the envir
 | `GRAFT_MIN_FRAMES` | 480 | shortest cut and output (10 ms) |
 | `GRAFT_MAX_TITLE_CHARS` / `GRAFT_MAX_AUTHOR_CHARS` | 60 / 32 | public text limits |
 | `GRAFT_BLOB_URL_TTL_SECS` | 300 | lifetime of an issued blob URL |
-| `GRAFT_BLOB_DIR` | unset | local directory for audio (optional; see below) |
+| `GRAFT_BLOB_DIR` | unset | local directory for audio, for development (used when no bucket is configured) |
+| `GRAFT_BLOB_S3_BUCKET` | unset | the S3-compatible bucket for audio; setting it turns the S3 store on |
+| `GRAFT_BLOB_S3_ACCESS_KEY_ID`, `GRAFT_BLOB_S3_SECRET_ACCESS_KEY` | none (required with a bucket) | credentials; secrets, never logged or printed |
+| `GRAFT_BLOB_S3_ENDPOINT` | unset | endpoint for R2 or a test server; unset for Amazon S3 |
+| `GRAFT_BLOB_S3_REGION` | `us-east-1` | region (`auto` for R2) |
+| `GRAFT_BLOB_S3_PREFIX`, `GRAFT_BLOB_S3_ALLOW_HTTP` | unset, `false` | key prefix inside the bucket; plain HTTP for a local test server only |
+| `GRAFT_BLOB_REFRESH_SECS` | 600 | a blob older than this is refreshed when written again |
+| `GRAFT_ORPHAN_GRACE_SECS` | 3600 | the cleanup leaves younger blobs alone; at least twice the refresh threshold |
 | `GRAFT_RENDERER_WASM` | none (required by the service) | path to the canonical renderer artefact; loading checks it against the pinned hash for the version it reports |
 | `GRAFT_MAX_FORKS_PER_STAGE_PER_HOUR` | 20 | most flips of one stage within an hour; beyond it flips are refused with 429 |
 | `GRAFT_SERIALIZATION_RETRIES` | 5 | retries of a publish transaction that conflicted with concurrent work |
@@ -218,7 +225,7 @@ Written by ticket 05; later tickets add rows. Every value is read from the envir
 | `GRAFT_ADMIN_SECRET` | unset | the operator secret (at least 24 characters); when unset every admin request is refused |
 | `GRAFT_LOCK_WAIT_MS` | 10000 | how long a publish or a flag change waits for the lock on its stage before answering 503 |
 
-`GRAFT_BLOB_DIR` (optional) names a directory that holds audio for local runs, shared by the service and the seed script; without it the service keeps audio in memory. The seed script also reads `GRAFT_RENDERER_WASM` (the artefact, checked against the pins).
+Without a bucket or `GRAFT_BLOB_DIR` the service keeps audio in memory and says so in its log. The seed script refuses to seed into memory, and also reads `GRAFT_RENDERER_WASM` (the artefact, checked against the pins).
 
 ## Interface contract
 
@@ -267,6 +274,35 @@ graft has no accounts, so a maker controls their own publication with the **mana
 - **What the actions do.** Closing stops new flips only: existing flips, their audio and every roll that contains them are untouched, and the flag is visible in the read model (`fork_permitted`), not hidden. Reopening allows flips again. Withdrawing sets the hidden flag with the reason `withdrawn`. The maker cannot undo a withdrawal (only the operator can clear a hide, in the moderation ticket) and cannot weaken a hide the operator made for rights: withdrawing a stage hidden for rights leaves it hidden for rights. Closing, reopening and withdrawing are idempotent: repeating one returns the same state.
 - **The read model.** Each position in a chain is `available`, `no_longer_here` (with its reason) or `unavailable` (a parent that could not be read). A hidden stage keeps its credit lines, title and name but carries no audio URL and no exact facts, and no URL is issued for its audio anywhere; stages built on a withdrawn stage stay playable; the chain is never shortened (a test counts the stages before and after). Whether a stage may be heard is decided by one function in the domain crate (`availability`), used by every read, so the rule and the reference model it will be tested against cannot drift. A hash is an identifier and not access: a descendant's record still names the audio it was cut from, and that is fine because nothing issues a URL from a hash.
 - **Ordering against forks.** Closing, reopening and withdrawing acquire the same session lock on the stage as creating a flip (see "Concurrency and idempotency"). The test holds a fork between reading the stage's flags and writing, starts a revoke, and checks that the revoke waits, the fork that began first completes, and every fork after the revoke is refused.
+
+## Blobs
+
+Written by ticket 11.
+
+**Content addressing.** Audio is stored under the SHA-256 of its bytes, which is also the hash a content record holds. The store never trusts a name: every read hashes the bytes it found, and a blob that does not match its name is reported as damaged and never served (tested on the directory store and on S3, where a second client overwrites an object with other bytes). `put_verified` refuses bytes that do not hash to the hash they were offered under, and stores nothing.
+
+**Three implementations, one contract.** `BlobStore` has an in-memory fake (fast tests, with a clock the test can move), a directory store (local runs) and an S3-compatible client (Amazon S3, Cloudflare R2 or any server that speaks the protocol). A single contract suite runs against all three, so the fake cannot drift from the real client: identical bytes stored once, safe under concurrent identical writes, a mismatching hash refused, reads that round-trip, deletes that report whether the blob existed, listings and metadata reads that agree, and the refresh rule below. Running it against a real server found one real difference worth knowing: on S3 a metadata read reports the last-modified time to the whole second while a listing reports milliseconds, so the contract says they agree to within a second.
+
+**Dedupe and request idempotency are different mechanisms.** Blob dedupe is "the same bytes are stored once" (a property of the store, tested by the contract). Request idempotency is "the same publish request is handled once" (a property of the retry key, tested through the HTTP API). They are tested separately; two makers publishing an identical flip share one blob and have two publications.
+
+**Delivery.** Audio is never proxied through the API: a chain read carries a short-lived signed URL for each stage's audio, and the browser fetches the bytes from the object store. The reason is cost and capacity (a database host with an egress cap is a poor audio server, and the object store serves bytes better), and it keeps the API small. A URL is issued per publication and only after the availability check, never from a hash alone. The lifetime defaults to 300 seconds (`GRAFT_BLOB_URL_TTL_SECS`); the bucket is private. Tested against a real server: a fresh URL serves exactly the bytes with no credentials, the secret key is never part of a URL, a signature covers one object (the same signature with another object's name is refused), and an issued URL stops working after its lifetime.
+
+**What a takedown achieves.** New requests for the audio of a hidden or held stage get no URL. URLs already issued keep working until they expire (tested: after a withdrawal an issued URL still serves, and after its lifetime it does not), and copies already downloaded cannot be recalled. That is the whole claim.
+
+**Credentials.** They come from the environment (`GRAFT_BLOB_S3_*`), live only inside the client, and are redacted from every `Debug` print; errors name a class of failure ("access denied", "request failed"), never an endpoint, a key or a path. Tests check that a refused credential, an unreachable server and a printed configuration reveal neither the key id, the secret, nor the address.
+
+**Orphan cleanup.** A publish writes its audio before its database transaction, so a publish that fails afterwards leaves a blob nothing refers to. `graft-blob-cleanup` (run on a schedule; the deploy ticket wires that up) removes a blob only if it is older than the grace period (default one hour) and no content record names it as its source audio or its output. It is idempotent, and concurrent runs agree (tested: four at once remove each orphan exactly once).
+
+Object store and database cannot be changed atomically together, so the job cannot make a race impossible. It makes it unlikely and repairable, with four defences, in this order:
+
+1. A blob younger than the grace period is never touched; a publish finishes in seconds.
+2. Writing a blob again refreshes its time if it is old (`put_if_absent` guarantees the blob is recent when it returns), so an old leftover with the bytes a new publish needs looks young the moment someone needs it. The pair of tests that matters most: with the refresh, a cleanup running while a publish is held just before its commit leaves the blob alone; with the refresh disabled the same interleaving deletes the blob and the flip still commits a record naming audio that is gone. The hazard is real, and the refresh is what prevents it.
+3. Immediately before deleting, the job reads the blob's time again, so a blob refreshed after the listing is not deleted on stale information.
+4. After a flip commits, the publish path writes its audio once more. If the blob was removed in the instant between the first write and the commit, this restores it; otherwise it is one cheap check.
+
+What remains: a cleanup that listed a blob as old, found it unreferenced, re-read its time, and deleted it, all inside the few milliseconds between a publish's first write and its post-commit write, could still leave a record naming missing audio until the post-commit write restores it. The configuration refuses a grace period shorter than twice the refresh threshold. Because rendering is deterministic, missing output audio can always be regenerated from the content record (the parent's audio, the cut and the speed); a repair command is left for the operator runbook.
+
+**Test environment.** An S3-compatible server container runs in the Rust CI job and locally (see the README). MinIO, which the ticket names, no longer publishes container images, so the tests use `rustfs`, pinned by digest; it enforces credentials and signed-URL expiry, which is what the tests need. It is a service of the existing job rather than a job of its own because a separate job would build the whole workspace twice; revisit with the CI work. Each test works under its own random key prefix in one bucket.
 
 ## Moderation and held descendants
 

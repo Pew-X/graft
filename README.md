@@ -25,6 +25,17 @@ cd web && pnpm install && pnpm dev       # the UI shell (a blank page for now)
 
 The tests that need Postgres create a private database each on the server named by `GRAFT_TEST_DATABASE_URL` (default: the container above) and remove it afterwards.
 
+The blob tests need an S3-compatible server and a bucket. These are throwaway local credentials for a throwaway container:
+
+```sh
+docker run -d --name graft-dev-s3 -p 127.0.0.1:59000:9000 \
+  -e RUSTFS_ACCESS_KEY=graftaccess -e RUSTFS_SECRET_KEY=graftsecret12345 \
+  rustfs/rustfs@sha256:9ca9559533b537d10482fe923288b676ad08f92a7069d9a17327fbae3cab688b
+curl -X PUT --aws-sigv4 "aws:amz:us-east-1:s3" --user graftaccess:graftsecret12345 http://127.0.0.1:59000/graft-test
+```
+
+`GRAFT_TEST_S3_ENDPOINT` names a different server (default `http://127.0.0.1:59000`). To keep audio in the bucket when running the service, set `GRAFT_BLOB_S3_BUCKET`, the two credentials, `GRAFT_BLOB_S3_ENDPOINT` and `GRAFT_BLOB_S3_ALLOW_HTTP=true` (see ARCHITECTURE.md, "Configuration"). `graft-blob-cleanup` removes audio that no record uses any more.
+
 To run the service against that container:
 
 ```sh
