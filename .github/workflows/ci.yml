@@ -60,6 +60,37 @@ jobs:
       - name: Crate dependency direction
         run: node scripts/check-crate-graph.mjs
 
+  renderer:
+    name: renderer
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - name: Install the pinned toolchain
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: The committed vector table matches the independent reference
+        run: python3 scripts/vectors/generate.py --check
+      - name: Two builds from different directories are byte-identical
+        run: sh scripts/check-reproducible.sh
+      - name: Build the artefact
+        run: sh scripts/build-wasm.sh
+      - name: Hash matches the pin for this renderer version, pins are append-only
+        env:
+          BASE: ${{ github.base_ref }}
+        run: |
+          if [ -n "$BASE" ]; then
+            node scripts/check-wasm-pin.mjs target/wasm32-unknown-unknown/wasm/graft_render.wasm --base "origin/$BASE"
+          else
+            node scripts/check-wasm-pin.mjs target/wasm32-unknown-unknown/wasm/graft_render.wasm
+          fi
+      - name: Vectors on native and wasmtime, module shape
+        run: cargo test -p graft-vectors
+
   supply-chain:
     name: supply chain
     runs-on: ubuntu-24.04
