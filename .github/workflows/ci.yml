@@ -185,6 +185,15 @@ jobs:
           pnpm format:check
           pnpm audit --audit-level high
           pnpm test
+      # The playback engine in a real browser, in the container that already has Chromium: a stage
+      # plays through Web Audio and stops, measured at the output. The page and engine code live in web/.
+      - name: Playback engine in Chromium
+        working-directory: web
+        env:
+          HOME: /root
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec playwright test
 
   cross-host-macos:
     name: cross-host vectors (macos-15)
