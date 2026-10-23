@@ -14,7 +14,7 @@ const reportTo = publicApi ? `${publicApi}/v1/events` : undefined;
 export default function Home() {
   return (
     <main>
-      <HomeRoll blocks={blocks} reportTo={reportTo} />
+      <HomeRoll blocks={blocks} reportTo={reportTo} apiUrl={publicApi} />
     </main>
   );
 }

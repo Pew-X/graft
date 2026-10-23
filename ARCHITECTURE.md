@@ -552,6 +552,16 @@ Written by ticket 29. The publish step is the last, optional step of making: a t
 
 **Honesty about the preview.** The page sends its output hash as a cross-check. If the service reports a mismatch, the page says that what was stored is the service's render and the preview was not stored.
 
+## Manage, report and about
+
+Written by ticket 30. Three small screens that finish the responsibility story.
+
+**Manage** (`/manage/<id>`): the address holds only the public id. The maker types the manage key, or, if they chose to keep it when publishing, reads it from the browser's one `graft.manage-keys` entry. It is sent in the `X-Graft-Manage-Key` header with the action and held in nothing but the component's state; a test records every request and finds it in no address and in no storage or cookie. Closing a stage to flips stops new flips of that stage only (the browser test publishes a flip first and finds it untouched, then sees a new flip refused with the "closed" sentence in the publish step, then reopens and publishes). Withdrawing asks for a second tap, leaves the credit as "no longer here" in every chain and keeps the stages built on it playing (the test reads a chain with a withdrawn stage in the middle and finds its audio ready). Every way of being refused (a wrong key, a key for another publication) reads "that key was not accepted", because the service gives no more than that.
+
+**Report** (a native modal dialog on every stage that is here): five categories and an optional note of up to 500 characters; no account, name or contact detail is collected, and the request is sent with credentials omitted. Escape closes it and focus goes back to the control that opened it (tested). The service refusals the dialog meets are a rate limit, a publication that is gone and a note that breaks a rule; the kill switch does not apply to reports, so a switched-off door never stops anyone reporting.
+
+**About** (`/about`): what graft is and is not, declared, computed and unknown, privacy and the takedown path with its limits. Each sentence about what the system does names the tests that would fail if it stopped being true (`web/lib/about.ts`), and `web/lib/about.test.ts` fails if a named test does not exist or a sentence is added without an entry. The one sentence with no test is a limit: a copy someone already downloaded cannot be recalled. The independence line is in the footer of every page, including the not-found page.
+
 ## The chain route
 
 Written by ticket 27. A permanent link to any publication, `/p/<public id>`, opens that publication's chain in the roll and the record: the credits, the states and the audio come from the service, not from the static snapshot the home page uses. The code is in `web/app/p/[id]/`, `web/components/LiveRoll.tsx`, `web/lib/roll/live.ts` and `web/lib/roll/audio.ts`.

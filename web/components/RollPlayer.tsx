@@ -19,6 +19,7 @@ import type { Telemetry } from "../lib/telemetry/telemetry.ts";
 import type { Loader } from "../lib/roll/audio.ts";
 import type { Block } from "../lib/roll/view.ts";
 import { CreditBlock, EndBlock } from "./CreditBlock.tsx";
+import { ReportDialog } from "./ReportDialog.tsx";
 import { Disc, type Live } from "./Disc.tsx";
 import { Footer } from "./Footer.tsx";
 import { ThemeToggle } from "./ThemeToggle.tsx";
@@ -50,6 +51,7 @@ export function RollPlayer({
   truncated = false,
   reportTo,
   openMake,
+  apiUrl,
 }: {
   blocks: readonly Block[];
   load: Loader;
@@ -59,6 +61,8 @@ export function RollPlayer({
   reportTo?: string | undefined;
   /** Go to the make flow for a stage. Absent where the roll is shown without the site around it. */
   openMake?: ((id: string) => void) | undefined;
+  /** Where the service is, for reports. Without it there is nowhere to send one, so no report control is shown. */
+  apiUrl?: string | undefined;
 }) {
   const [load, setLoad] = useState<Load>("loading");
   const [attempt, setAttempt] = useState(0);
@@ -299,6 +303,14 @@ export function RollPlayer({
     },
     [blocks, lastId, openMake],
   );
+  const [reporting, setReporting] = useState<{ id: string; title: string } | null>(null);
+  const onReport = useCallback(
+    (index: number) => {
+      const block = blocks[index];
+      if (block) setReporting({ id: block.id, title: block.title });
+    },
+    [blocks],
+  );
   const register = useCallback((index: number, node: HTMLLIElement | null) => {
     nodes.current[index] = node;
   }, []);
@@ -375,6 +387,7 @@ export function RollPlayer({
                 disabled={disabled || !playable[block.index]}
                 onPlay={onPlay}
                 onFlip={onFlip}
+                onReport={apiUrl ? onReport : undefined}
                 register={register}
                 onFocusBlock={onFocusBlock}
               />
@@ -432,6 +445,9 @@ export function RollPlayer({
         </button>
       </div>
 
+      {apiUrl ? (
+        <ReportDialog target={reporting} apiUrl={apiUrl} onClose={() => setReporting(null)} />
+      ) : null}
       <Footer />
     </div>
   );

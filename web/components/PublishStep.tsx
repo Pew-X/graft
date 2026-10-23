@@ -154,6 +154,9 @@ export function PublishStep({
           <a className="pill" href={`/p/${outcome.id}`}>
             {copy.publish.done.open}
           </a>
+          <a className="pill" href={`/manage/${outcome.id}`}>
+            {copy.publish.done.manage}
+          </a>
           <button
             type="button"
             className="pill"

@@ -198,7 +198,120 @@ export const copy = {
       mismatch:
         "what was stored is the service's render, which differs from the preview you heard. yours was not stored.",
       replay: "this flip was already published by an earlier try. nothing was made twice.",
+      manage: "manage this publication",
     },
+  },
+  report: {
+    open: "report this sound",
+    heading: "report this sound",
+    about: "you are reporting {title}.",
+    categoryLabel: "what is wrong",
+    categories: {
+      rights: "the right to share it is in doubt",
+      private_conversation: "it holds a private conversation",
+      harmful: "it is harmful",
+      spam: "it is spam",
+      other: "something else",
+    },
+    noteLabel: "a note, if you want to add one",
+    noteGloss: "up to 500 characters. only the operator reads it.",
+    noContact: "no account, no name and no contact details are asked for or kept with a report.",
+    send: "send the report",
+    cancel: "close",
+    sending: "sending.",
+    sent: "the report was received.",
+    next: "the operator reads it. if the sound breaks the rules, or the right to share it is in doubt, it is hidden and stays in its chain as no longer here. you will not hear back, because graft keeps no way to reach you.",
+    done: "done",
+    rateLimited: "you have sent a lot of reports in a short time. try again {when}.",
+    gone: "that sound is no longer here, so there is nothing to report.",
+    invalid: "the note breaks a rule: {rule}.",
+    unreachable: "the report could not be sent. nothing was lost: try again in a moment.",
+  },
+  manage: {
+    title: "manage a publication",
+    intro:
+      "the manage key you were shown when you published opens two controls for that one publication, and nothing else.",
+    keyLabel: "manage key",
+    keyGloss:
+      "it is sent with each action and is not kept unless you chose to keep it in this browser.",
+    useKept: "use the key kept in this browser",
+    forgetKept: "forget the key kept in this browser",
+    forgotten: "forgotten. this browser no longer holds the key.",
+    publication: "the publication",
+    forksOpen: "open to new flips",
+    forksClosed: "closed to new flips",
+    withdrawnNow: "withdrawn: it shows as no longer here and its audio is not served",
+    close: "close it to new flips",
+    closeEffect:
+      "stops only new flips of this stage. flips already made, and the rolls they are in, stay as they are.",
+    reopen: "open it to new flips again",
+    reopenEffect: "lets people flip this stage again.",
+    withdraw: "withdraw it",
+    withdrawEffect:
+      "leaves the credit in every chain as no longer here and stops serving its audio. the stages built on it keep playing. you cannot undo this; only the operator can.",
+    confirm: "yes, withdraw it",
+    back: "not now",
+    refused: "that key was not accepted.",
+    busy: "the service was busy. nothing was changed. try again.",
+    unreachable: "the service could not be reached. nothing was changed. try again.",
+    loading: "looking for the publication.",
+    notFound: "there is no publication with this link.",
+    needKey: "enter the manage key to use these controls.",
+    manageLink: "manage this publication",
+    closedDone: "closed to new flips.",
+    reopenedDone: "open to new flips again.",
+    withdrawnDone: "withdrawn.",
+  },
+  about: {
+    title: "about graft",
+    what: {
+      heading: "what graft is",
+      body: "a lineage player with a small flip tool. every sound here began as a source and was cut and sped up or slowed down, flip by flip. the roll plays the credits back from the newest flip to the source, so you can hear where a sound came from.",
+    },
+    isNot: {
+      heading: "what it is not",
+      body: "not a sampler: one cut and one speed, with no pads, layers, effects or export. an independent experiment, not affiliated with or endorsed by any product named.",
+    },
+    states: {
+      heading: "declared, computed, unknown",
+      declared:
+        "declared: a person said it and graft prints it as typed: a title, a name, a licence line, a statement about the right to share. graft keeps the words and does not check them.",
+      computed:
+        "computed: the system produced it and can produce it again: the cut in frames, the speed as a fraction, the length, the hash of the audio, the renderer's name. reproducible is claimed only for the named renderer version and the published test vectors.",
+      unknown:
+        "unknown: nothing establishes it. that is the default for who really made a sound and whether they hold the right to share it, so those lines say unknown or not established.",
+    },
+    privacy: {
+      heading: "privacy, in plain words",
+      claims: {
+        session:
+          "a visit gets an anonymous session id that lives in memory only. it is never written to your browser and is gone when the page closes.",
+        signal:
+          "if your browser sends global privacy control or do not track, graft sends no events at all and does not load its error tracker.",
+        noIp: "graft stores no ip address in its own records. the hosting providers it runs on have to process addresses to deliver traffic, as any host does.",
+        tracker:
+          "where error tracking is switched on, it runs without ip addresses, without session replay and with a scrubber.",
+        browser:
+          "the only things graft can keep in your browser are your choice of light or dark, and a manage key if you tick the box to keep one when you publish.",
+      },
+    },
+    takedown: {
+      heading: "taking a sound down",
+      claims: {
+        report: "anyone can report a sound from the roll, without an account.",
+        hidden:
+          "a sound that is hidden or withdrawn stays in its chain as no longer here, with its credit. its audio is no longer served and new requests for it are refused.",
+        rights:
+          "when a sound is hidden because the right to share it is in doubt, the stages built on it are held too, with their credits.",
+        expire: "addresses already issued for a sound's audio expire on their own.",
+        copies: "a copy that someone already downloaded cannot be recalled.",
+      },
+    },
+    licences: {
+      heading: "the sounds made for graft",
+      body: "each is declared as {licence}. there is nothing third-party in them. the declaration is printed as typed and is not checked.",
+    },
+    footerNote: "the independence line is in the footer of every page.",
   },
   make: {
     title: "make a flip",

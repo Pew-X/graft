@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Footer } from "../../components/Footer.tsx";
 import { Make } from "../../components/Make.tsx";
 import { apiUrls } from "../../lib/api/server.ts";
 import { copy } from "../../lib/copy.ts";
@@ -26,14 +27,17 @@ export default async function MakePage({
   const query = await searchParams;
   const { curated, flips } = soundsFrom(chain as Shipped, sources as Shipped);
   return (
-    <main>
-      <Make
-        curated={curated}
-        flips={flips}
-        from={one(query["from"])}
-        start={{ cut: one(query["cut"]), speed: one(query["speed"]) }}
-        apiUrl={apiUrls().browser}
-      />
-    </main>
+    <>
+      <main>
+        <Make
+          curated={curated}
+          flips={flips}
+          from={one(query["from"])}
+          start={{ cut: one(query["cut"]), speed: one(query["speed"]) }}
+          apiUrl={apiUrls().browser}
+        />
+      </main>
+      <Footer />
+    </>
   );
 }

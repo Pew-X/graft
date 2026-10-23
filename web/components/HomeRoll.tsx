@@ -10,9 +10,11 @@ import { RollPlayer } from "./RollPlayer.tsx";
 export function HomeRoll({
   blocks,
   reportTo,
+  apiUrl,
 }: {
   blocks: readonly Block[];
   reportTo?: string | undefined;
+  apiUrl?: string | undefined;
 }) {
   const load = useMemo(() => staticLoader(blocks.map((b) => b.audioPath)), [blocks]);
   const router = useRouter();
@@ -21,6 +23,7 @@ export function HomeRoll({
       blocks={blocks}
       load={load}
       reportTo={reportTo}
+      apiUrl={apiUrl}
       openMake={(id) => router.push(`/make?from=${encodeURIComponent(id)}`)}
     />
   );

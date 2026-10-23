@@ -457,3 +457,95 @@
 .publish .notice {
   margin-bottom: 1rem;
 }
+
+/* the manage screen, the report dialog and the about page */
+.manage input[type="password"],
+.report-dialog textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.4rem 0.6rem;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+.manage .control {
+  margin: 0 0 1rem;
+}
+.manage .hint,
+.report-dialog .hint {
+  margin: 0.4rem 0 0;
+  font:
+    400 12px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+  color: var(--muted);
+}
+.sound-title-plain {
+  margin: 0;
+  font:
+    700 1.4rem/1.2 var(--f-sans),
+    sans-serif;
+}
+.report-dialog {
+  max-width: min(36rem, calc(100vw - 2rem));
+  padding: 1.25rem;
+  border: 2px solid var(--ink);
+  background: var(--bg);
+  color: var(--ink);
+}
+.report-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+}
+.report-dialog fieldset {
+  margin: 0 0 1rem;
+  padding: 0;
+  border: 0;
+}
+.report-dialog legend {
+  margin-bottom: 0.4rem;
+  font:
+    500 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.report-dialog .choice {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 44px;
+}
+.report-dialog .choice input {
+  width: 24px;
+  height: 24px;
+}
+.report-dialog .problem-line {
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 6px solid #d2342a;
+  background: var(--surface);
+}
+.flip.report {
+  margin-left: 0.5rem;
+}
+.about ul {
+  padding-left: 1.2rem;
+}
+.about li {
+  margin: 0.4rem 0;
+}
+.about h2.kicker {
+  margin-top: 2rem;
+}
+.report-dialog label .gloss {
+  display: block;
+  margin: 0.15rem 0 0.4rem;
+}
+.report-dialog .hint {
+  margin-bottom: 0.75rem;
+}
+.manage input[type="password"] {
+  margin-top: 0.5rem;
+}
