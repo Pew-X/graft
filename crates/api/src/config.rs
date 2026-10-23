@@ -540,15 +540,41 @@ impl Config {
         let s3 = match lookup("GRAFT_BLOB_S3_BUCKET") {
             None => None,
             Some(bucket) => {
-                let mut c = graft_storage::S3Config::new(
-                    lookup("GRAFT_BLOB_S3_ENDPOINT"),
-                    bucket,
-                    lookup("GRAFT_BLOB_S3_REGION").unwrap_or_else(|| "us-east-1".to_owned()),
-                    lookup("GRAFT_BLOB_S3_ACCESS_KEY_ID")
-                        .ok_or(ConfigError::Missing("GRAFT_BLOB_S3_ACCESS_KEY_ID"))?,
-                    lookup("GRAFT_BLOB_S3_SECRET_ACCESS_KEY")
-                        .ok_or(ConfigError::Missing("GRAFT_BLOB_S3_SECRET_ACCESS_KEY"))?,
-                );
+                let endpoint = lookup("GRAFT_BLOB_S3_ENDPOINT");
+                let region =
+                    lookup("GRAFT_BLOB_S3_REGION").unwrap_or_else(|| "us-east-1".to_owned());
+                let relative = lookup("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI");
+                let full = lookup("AWS_CONTAINER_CREDENTIALS_FULL_URI");
+                let mut c = match (
+                    lookup("GRAFT_BLOB_S3_ACCESS_KEY_ID"),
+                    lookup("GRAFT_BLOB_S3_SECRET_ACCESS_KEY"),
+                ) {
+                    // Keys given on purpose win over whatever the platform offers.
+                    (Some(key), Some(secret)) => {
+                        graft_storage::S3Config::new(endpoint, bucket, region, key, secret)
+                    }
+                    (Some(_), None) => {
+                        return Err(ConfigError::Missing("GRAFT_BLOB_S3_SECRET_ACCESS_KEY"));
+                    }
+                    (None, Some(_)) => {
+                        return Err(ConfigError::Missing("GRAFT_BLOB_S3_ACCESS_KEY_ID"));
+                    }
+                    // No keys: the platform's role, when it says where its credentials are. Without
+                    // either, the deployment forgot the keys: fail at start, not at the first upload.
+                    (None, None) if relative.is_some() || full.is_some() => {
+                        graft_storage::S3Config::container(
+                            endpoint,
+                            bucket,
+                            region,
+                            relative,
+                            full,
+                            lookup("AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE"),
+                        )
+                    }
+                    (None, None) => {
+                        return Err(ConfigError::Missing("GRAFT_BLOB_S3_ACCESS_KEY_ID"));
+                    }
+                };
                 c.allow_http = lookup("GRAFT_BLOB_S3_ALLOW_HTTP").is_some_and(|v| v == "true");
                 c.prefix = lookup("GRAFT_BLOB_S3_PREFIX");
                 c.refresh_after = std::time::Duration::from_secs(blob_refresh_secs);
@@ -864,6 +890,58 @@ mod tests {
                 "{refresh}/{grace}: {err:?}"
             );
         }
+    }
+
+    #[test]
+    fn s3_credentials_are_static_keys_or_the_containers_role_and_never_half_of_each() {
+        let base = [
+            ("GRAFT_DATABASE_URL", "postgres://x"),
+            ("GRAFT_BLOB_S3_BUCKET", "audio"),
+        ];
+        let with = |extra: &[(&'static str, &'static str)]| {
+            let mut all = base.to_vec();
+            all.extend_from_slice(extra);
+            Config::from_lookup(env(&all))
+        };
+        // Half a pair is a mistake, named by the half that is missing.
+        assert_eq!(
+            with(&[("GRAFT_BLOB_S3_ACCESS_KEY_ID", "k")]).expect_err("half"),
+            ConfigError::Missing("GRAFT_BLOB_S3_SECRET_ACCESS_KEY")
+        );
+        assert_eq!(
+            with(&[("GRAFT_BLOB_S3_SECRET_ACCESS_KEY", "s")]).expect_err("half"),
+            ConfigError::Missing("GRAFT_BLOB_S3_ACCESS_KEY_ID")
+        );
+        // Under ECS the platform names where the task role's credentials are; no keys are needed.
+        let role = with(&[(
+            "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+            "/v2/credentials/abc-123",
+        )])
+        .expect("a task role is enough");
+        assert!(matches!(
+            role.s3.as_ref().map(|s| &s.credentials),
+            Some(graft_storage::S3Credentials::Container { relative_uri: Some(u), .. }) if u == "/v2/credentials/abc-123"
+        ));
+        // Keys given on purpose win over whatever the platform offers.
+        let both = with(&[
+            ("GRAFT_BLOB_S3_ACCESS_KEY_ID", "k"),
+            ("GRAFT_BLOB_S3_SECRET_ACCESS_KEY", "s"),
+            (
+                "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+                "/v2/credentials/abc-123",
+            ),
+        ])
+        .expect("valid");
+        assert!(matches!(
+            both.s3.as_ref().map(|s| &s.credentials),
+            Some(graft_storage::S3Credentials::Static { .. })
+        ));
+        // The address of the role's credentials is as private as a key.
+        let printed = format!("{role:?} {role:#?}");
+        assert!(
+            !printed.contains("abc-123"),
+            "the credentials' address leaked: {printed}"
+        );
     }
 
     #[test]

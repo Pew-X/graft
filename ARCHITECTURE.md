@@ -223,7 +223,8 @@ Written by ticket 05; later tickets add rows. Every value is read from the envir
 | `GRAFT_BLOB_URL_TTL_SECS` | 300 | lifetime of an issued blob URL |
 | `GRAFT_BLOB_DIR` | unset | local directory for audio, for development (used when no bucket is configured) |
 | `GRAFT_BLOB_S3_BUCKET` | unset | the S3-compatible bucket for audio; setting it turns the S3 store on |
-| `GRAFT_BLOB_S3_ACCESS_KEY_ID`, `GRAFT_BLOB_S3_SECRET_ACCESS_KEY` | none (required with a bucket) | credentials; secrets, never logged or printed |
+| `GRAFT_BLOB_S3_ACCESS_KEY_ID`, `GRAFT_BLOB_S3_SECRET_ACCESS_KEY` | none | a key pair for local runs, tests and S3-compatible servers; secrets, never logged or printed. Both or neither: one alone stops the start. With neither, the service uses the container's role (next row), and fails at start if the platform names none, so a forgotten key does not show up at the first upload |
+| `AWS_CONTAINER_CREDENTIALS_RELATIVE_URI` (ECS), or `AWS_CONTAINER_CREDENTIALS_FULL_URI` with `AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE` (EKS pod identity) | set by the platform | short-lived credentials for the bucket, fetched and renewed by the client; nothing long-lived is configured. Keys given on purpose win. The addresses are treated as secrets (redacted, scrubbed from error reports). Tested against a stand-in credentials endpoint and a local S3 server (the fetch, the bearer token, signing with what came back); **not yet run against real AWS**: the session token a real role adds is refused by the local test server, so the first deploy is the evidence |
 | `GRAFT_BLOB_S3_ENDPOINT` | unset | endpoint for R2 or a test server; unset for Amazon S3 |
 | `GRAFT_BLOB_S3_REGION` | `us-east-1` | region (`auto` for R2) |
 | `GRAFT_BLOB_S3_PREFIX`, `GRAFT_BLOB_S3_ALLOW_HTTP` | unset, `false` | key prefix inside the bucket; plain HTTP for a local test server only |
