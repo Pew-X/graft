@@ -19,6 +19,8 @@ pub const VERSION: u32 = 1;
 pub const AUDIO_DIR: &str = "public/seed";
 /// Where the snapshot data is written, below the web root.
 pub const DATA_FILE: &str = "snapshot/chain.json";
+/// Where the curated sources are written, below the web root: the same format, every stage a source.
+pub const SOURCES_FILE: &str = "snapshot/sources.json";
 
 /// One credit line.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -159,6 +161,34 @@ pub async fn build(
         });
         if !files.iter().any(|f: &AudioFile| f.name == name) {
             files.push(AudioFile { name, bytes });
+        }
+    }
+    Ok((
+        Snapshot {
+            version: VERSION,
+            stages,
+        },
+        files,
+    ))
+}
+
+/// The snapshot of the curated sources: one stage for each, in the order given, and the audio files
+/// they point at (a file shared by two sources is listed once). Each source is a chain of one.
+pub async fn build_sources(
+    state: &AppState,
+    ids: &[PublicationId],
+) -> Result<(Snapshot, Vec<AudioFile>), SnapshotError> {
+    let mut stages = Vec::with_capacity(ids.len());
+    let mut files: Vec<AudioFile> = Vec::new();
+    for id in ids {
+        let (one, found) = build(state, id).await?;
+        let [stage] = <[Stage; 1]>::try_from(one.stages)
+            .map_err(|_| SnapshotError::NotWhole(id.to_string()))?;
+        stages.push(stage);
+        for file in found {
+            if !files.iter().any(|f| f.name == file.name) {
+                files.push(file);
+            }
         }
     }
     Ok((

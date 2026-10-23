@@ -1,0 +1,335 @@
+/* The make flow, in the roll's grammar (variant E): a torn slab for the sound, wall-label type,
+   one saturated dye for the speed, hairline panels. Tokens come from lib/theme/tokens.ts. */
+.make {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 3rem;
+}
+.make .kicker {
+  margin: 0 0 0.6rem;
+}
+.make .gloss {
+  margin-left: 0.5rem;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  font-family: var(--f-serif), serif;
+  font-style: italic;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+.stage-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 1.5rem;
+}
+.make .slab {
+  --dye: #d2342a;
+  --dye-text: #ffffff;
+  margin: 0;
+}
+.make .slab[data-dye="0"] {
+  --dye: #1e8c84;
+  --dye-text: #0c0b0a;
+}
+.slab-text {
+  display: inline-block;
+  padding: 0.14em 0.38em 0.2em;
+  background: var(--dye);
+  color: var(--dye-text);
+  clip-path: polygon(0.8% 9%, 99% 0, 100% 91%, 0 100%);
+  transform: rotate(-2deg);
+  font:
+    400 clamp(40px, 9vw, 72px) / 1 var(--f-brush),
+    cursive;
+}
+:root[data-decor="off"] .slab-text {
+  clip-path: none;
+  transform: none;
+}
+.quiet-link {
+  min-height: 44px;
+  padding: 0 1rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font:
+    500 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.make .local,
+.make .notice {
+  margin: 1.5rem 0 0;
+  color: var(--muted);
+  font:
+    400 12px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.04em;
+}
+
+/* the picker */
+.picker-title {
+  margin: 0 0 1.25rem;
+  font:
+    800 clamp(40px, 9vw, 72px) / 0.95 var(--f-cond),
+    ui-sans-serif,
+    sans-serif;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+}
+.picker section {
+  margin-bottom: 1.5rem;
+}
+.picker ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.sound button {
+  display: grid;
+  gap: 0.1rem;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.7rem 0.9rem;
+  text-align: left;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+.sound-title {
+  justify-self: start;
+  padding: 0.05em 0.35em 0.12em;
+  margin-bottom: 0.35rem;
+  background: var(--dye);
+  color: var(--dye-text);
+  clip-path: polygon(0.8% 9%, 99% 0, 100% 91%, 0 100%);
+  transform: rotate(-1.5deg);
+  font:
+    400 1.9rem/1.1 var(--f-brush),
+    cursive;
+}
+:root[data-decor="off"] .sound-title {
+  clip-path: none;
+  transform: none;
+}
+.sound:nth-child(4n + 1) {
+  --dye: #d2342a;
+  --dye-text: #ffffff;
+}
+.sound:nth-child(4n + 2) {
+  --dye: #1e8c84;
+  --dye-text: #0c0b0a;
+}
+.sound:nth-child(4n + 3) {
+  --dye: #e0a526;
+  --dye-text: #14110e;
+}
+.sound:nth-child(4n) {
+  --dye: #c2307a;
+  --dye-text: #ffffff;
+}
+.sound-by,
+.sound-licence {
+  font:
+    400 12px/1.4 var(--f-mono),
+    ui-monospace,
+    monospace;
+  color: var(--muted);
+}
+.stated {
+  margin-left: 0.6rem;
+  padding: 0 0.4rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* panels */
+.panel {
+  margin: 0 0 1.5rem;
+  padding: 1rem 0 0;
+  border-top: 1px solid var(--hair);
+}
+.cut-editor .track {
+  position: relative;
+  height: 9.5rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  touch-action: none;
+  cursor: ew-resize;
+  user-select: none;
+}
+.cut-editor svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.wave-rest {
+  fill: var(--muted);
+  opacity: 0.45;
+}
+.wave-kept {
+  fill: var(--ink);
+}
+.track[data-inverted="true"] .wave-kept {
+  fill: var(--muted);
+}
+.handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 44px;
+  margin-left: -22px;
+  display: flex;
+  justify-content: center;
+  outline-offset: -4px;
+  cursor: ew-resize;
+}
+.handle .grip {
+  width: 6px;
+  height: 100%;
+  background: #d2342a;
+  box-shadow: 0 0 0 1px var(--bg);
+}
+.handle[data-handle="end"] .grip {
+  background: #e0a526;
+}
+.handle:focus-visible {
+  outline: 3px solid var(--focus);
+}
+.cut-editor .help,
+.cut-editor .readout {
+  margin: 0.5rem 0 0;
+  font:
+    400 12px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+  color: var(--muted);
+}
+.cut-editor .readout {
+  color: var(--ink);
+}
+
+/* the speed: one saturated field, set after what was done to the sound */
+.speed-readout {
+  --dye: #e0a526;
+  --dye-text: #14110e;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+  padding: 0.1em 0.4em 0.2em;
+  background: var(--dye);
+  color: var(--dye-text);
+  clip-path: polygon(0.8% 9%, 99% 0, 100% 91%, 0 100%);
+  transform: rotate(-2deg);
+}
+.speed-readout[data-k="up"] {
+  --dye: #d2342a;
+  --dye-text: #ffffff;
+}
+.speed-readout[data-k="down"] {
+  --dye: #1e8c84;
+  --dye-text: #0c0b0a;
+}
+:root[data-decor="off"] .speed-readout {
+  clip-path: none;
+  transform: none;
+}
+.speed-readout .percent {
+  font:
+    800 clamp(56px, 16vw, 104px) / 0.95 var(--f-cond),
+    ui-sans-serif,
+    sans-serif;
+  letter-spacing: -0.02em;
+}
+.speed-readout .interval {
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.speed-control {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.speed-control input[type="range"] {
+  flex: 1 1 auto;
+  min-height: 44px;
+  accent-color: var(--ink);
+}
+.nudge {
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font:
+    500 20px var(--f-mono),
+    ui-monospace,
+    monospace;
+}
+
+/* what you hear */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+}
+.actions .primary {
+  min-width: 112px;
+  min-height: 44px;
+  padding: 0 1.2rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  font:
+    500 13px var(--f-mono),
+    ui-monospace,
+    monospace;
+}
+.actions .primary:disabled {
+  background: transparent;
+  color: var(--muted);
+  border: 1px dashed var(--line);
+}
+.refusal {
+  margin: 0;
+  flex: 1 1 16rem;
+  font:
+    400 13px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+  color: var(--ink);
+}
+.result .details {
+  margin-top: 0.75rem;
+}
+.result .details code {
+  overflow-wrap: anywhere;
+  font-family: var(--f-mono), monospace;
+  font-size: 12px;
+}
+.make :focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}

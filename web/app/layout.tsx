@@ -12,6 +12,7 @@ import { copy } from "../lib/copy.ts";
 import { themeInitScript } from "../lib/theme/init.ts";
 import { themeCss } from "../lib/theme/tokens.ts";
 import "./roll.css";
+import "./make.css";
 
 // The locked look's type (all SIL Open Font Licence, self-hosted at build time by next/font).
 const sans = Inter_Tight({

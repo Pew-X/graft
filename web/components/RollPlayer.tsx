@@ -49,6 +49,7 @@ export function RollPlayer({
   load: loadAudio,
   truncated = false,
   reportTo,
+  openMake,
 }: {
   blocks: readonly Block[];
   load: Loader;
@@ -56,6 +57,8 @@ export function RollPlayer({
   truncated?: boolean;
   /** Where to send best-effort counts (the service's events address); none, no counts. */
   reportTo?: string | undefined;
+  /** Go to the make flow for a stage. Absent where the roll is shown without the site around it. */
+  openMake?: ((id: string) => void) | undefined;
 }) {
   const [load, setLoad] = useState<Load>("loading");
   const [attempt, setAttempt] = useState(0);
@@ -283,11 +286,18 @@ export function RollPlayer({
   const onPlay = useCallback((index: number) => act((e) => e.tapStage(index)), [act]);
   const onFlip = useCallback(
     (index: number) => {
-      const id = blocks[index]?.id ?? lastId;
+      // The end label flips the stage before it; a stage that is not here has no sound to flip.
+      const block = blocks[index] ?? blocks.at(-1);
+      const id = block?.id ?? lastId;
       if (id) telemetry.current?.track("flip_started", id);
-      setNotice(copy.flip.closed);
+      if (!id || block?.state !== "available") {
+        setNotice(copy.flip.unavailable);
+        return;
+      }
+      if (openMake) openMake(id);
+      else setNotice(copy.flip.closed);
     },
-    [blocks, lastId],
+    [blocks, lastId, openMake],
   );
   const register = useCallback((index: number, node: HTMLLIElement | null) => {
     nodes.current[index] = node;

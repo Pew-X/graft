@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useMemo } from "react";
 import { createApi, fetchChain } from "../lib/api/chain.ts";
 import { liveLoader } from "../lib/roll/audio.ts";
@@ -25,12 +26,14 @@ export function LiveRoll({
     const api = createApi(apiUrl);
     return liveLoader({ chain: () => fetchChain(api, id) });
   }, [apiUrl, id]);
+  const router = useRouter();
   return (
     <RollPlayer
       blocks={blocks}
       load={load}
       truncated={truncated}
       reportTo={`${apiUrl}/v1/events`}
+      openMake={(sound) => router.push(`/make?from=${encodeURIComponent(sound)}`)}
     />
   );
 }

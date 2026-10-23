@@ -109,6 +109,62 @@ export const copy = {
   flip: {
     label: "flip this",
     closed: "making a flip is not open yet.",
+    unavailable: "this stage is not here, so it cannot be flipped.",
+  },
+  make: {
+    title: "make a flip",
+    kicker: "make a flip",
+    local: "nothing leaves this device until you publish.",
+    pick: {
+      heading: "pick a sound to start from",
+      curated: "sounds made for graft",
+      flips: "flips from the roll",
+      by: "by {author}",
+      choose: "flip this sound",
+      change: "pick another sound",
+      loading: "loading the sound.",
+      failed: "the sound could not be loaded.",
+      gone: "that sound is no longer here, so it cannot be flipped.",
+    },
+    renderer: {
+      loading: "getting the renderer ready.",
+      failed: "the renderer could not be loaded. reload to try again.",
+    },
+    cut: {
+      label: "the cut",
+      gloss: "the part of the sound that is kept",
+      start: "start of the cut",
+      end: "end of the cut",
+      help: "drag the handles, or focus one and use the arrow keys: one millisecond a press, ten with shift.",
+      range: "{from} to {to} seconds, {length} kept",
+    },
+    speed: {
+      label: "speed",
+      gloss: "how fast it is played back. faster is higher, slower is lower.",
+      slower: "slower",
+      faster: "faster",
+      approximate: "about {interval}",
+      value: "{percent}, {interval}",
+    },
+    result: {
+      label: "what you hear",
+      comesOut: "comes out {length} seconds long",
+      hash: "hash of what you hear",
+      hashGloss: "worked out here, and checked against the service's own when you publish",
+    },
+    hear: { play: "hear it", pause: "pause", why: "why you cannot hear it yet" },
+    refusals: {
+      cutShort: "the cut is too short. it needs at least {min} frames, about 10 milliseconds.",
+      cutLong: "the cut is too long. it can be at most {max} frames, 10 seconds.",
+      cutInverted: "the cut ends before it starts. move the end handle to the right of the start.",
+      cutOutside: "the cut reaches outside the sound. pull the handles back inside it.",
+      speedRange: "that speed is out of range. it has to be between a quarter and four times.",
+      speedTerms: "that speed cannot be sent. pick another.",
+      outputShort:
+        "this flip would come out too short, under {min} frames. cut a longer part or play it slower.",
+      outputLong:
+        "this flip would come out too long, over {max} frames, 20 seconds. cut less or play it faster.",
+    },
   },
   end: {
     role: "flipped by",

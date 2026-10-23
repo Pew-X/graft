@@ -335,3 +335,43 @@ async fn a_curated_file_that_differs_from_its_recorded_hash_is_refused() {
     assert_eq!(h.count("publications").await, 0, "nothing was seeded");
     h.finish().await;
 }
+
+fn committed_sources() -> Snapshot {
+    serde_json::from_str(
+        &std::fs::read_to_string(root().join("web").join(snapshot::SOURCES_FILE))
+            .expect("committed curated snapshot"),
+    )
+    .expect("a valid snapshot")
+}
+
+/// The guarantee, not a convention: the curated sources the make flow offers are exactly what a
+/// freshly seeded database says, audio included, so the browser never offers a sound the service
+/// does not hold under that id.
+#[tokio::test]
+async fn the_committed_curated_snapshot_equals_what_a_freshly_seeded_database_produces() {
+    let h = Harness::new().await;
+    let set = curated();
+    let ids = graft_api::seed::seed_curated(&h.state, &set, &root().join("seed"))
+        .await
+        .expect("seeded");
+    let (fresh, files) = snapshot::build_sources(&h.state, &ids)
+        .await
+        .expect("snapshot");
+    let diff = snapshot::differences(&committed_sources(), &fresh);
+    assert!(
+        diff.is_empty(),
+        "the curated snapshot has drifted; run `graft-seed-chain --write-snapshot web` and commit it:\n{}",
+        diff.join("\n")
+    );
+    let on_disk =
+        std::fs::read_to_string(root().join("web").join(snapshot::SOURCES_FILE)).expect("file");
+    assert_eq!(on_disk, snapshot::to_text(&fresh), "byte for byte");
+    assert_eq!(fresh.stages.len(), 10);
+    assert!(fresh.stages.iter().all(|s| s.kind == "source"));
+    for f in &files {
+        let bytes = std::fs::read(root().join("web").join(AUDIO_DIR).join(&f.name))
+            .unwrap_or_else(|_| panic!("the audio file {} is committed", f.name));
+        assert_eq!(bytes, f.bytes, "{}", f.name);
+    }
+    h.finish().await;
+}
