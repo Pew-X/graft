@@ -1,7 +1,7 @@
 // Client telemetry against the real service: events reach the ledger as client events, the privacy
 // signals switch everything off, and nothing about the visit is left in the browser.
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
-import { ADMIN, API, SEEDED_LAST, allowBucketReads, publishFlip } from "./service.ts";
+import { ADMIN, API, SEEDED_LAST, allowBucketReads, publishFlip, press } from "./service.ts";
 
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
 
@@ -81,7 +81,7 @@ test("opening a roll and playing a stage put client events in the ledger", async
   const { posts, receipts } = await watchEvents(page);
   await page.goto(`/p/${id}`);
   await expect(roll(page)).toHaveAttribute("data-audio", "ready");
-  await page.getByRole("button", { name: /up a fifth/ }).tap();
+  await press(page, page.getByRole("button", { name: /up a fifth/ }));
   await expect(roll(page)).toHaveAttribute("data-playback", "auditioning");
   await hide(page);
 
@@ -114,9 +114,9 @@ test("a stage is counted once a visit, however often the roll goes round it", as
   await page.goto(`/p/${id}`);
   await expect(roll(page)).toHaveAttribute("data-audio", "ready");
   const label = page.getByRole("button", { name: /up a fifth/ });
-  await label.tap(); // play
-  await label.tap(); // pause
-  await label.tap(); // play again
+  await press(page, label); // play
+  await press(page, label); // pause
+  await press(page, label); // play again
   await hide(page);
   await expect
     .poll(() => posts.flatMap((p) => p.events).filter((e) => e["kind"] === "stage_played"))
@@ -144,8 +144,8 @@ for (const [name, init] of [
     page.on("request", (r) => urls.push(r.url()));
     await page.goto(`/p/${id}`);
     await expect(roll(page)).toHaveAttribute("data-audio", "ready");
-    await page.getByRole("button", { name: /up a fifth/ }).tap();
-    await page.getByRole("button", { name: "flip this" }).first().tap();
+    await press(page, page.getByRole("button", { name: /up a fifth/ }));
+    await press(page, page.getByRole("button", { name: "flip this" }).first());
     await hide(page);
     await page.goto("about:blank");
     await page.waitForTimeout(1_500);
@@ -170,8 +170,8 @@ test("after a full session the browser holds no session id, no event and no cook
   const { posts } = await watchEvents(page);
   await page.goto(`/p/${id}`);
   await expect(roll(page)).toHaveAttribute("data-audio", "ready");
-  await page.getByRole("button", { name: /up a fifth/ }).tap();
-  await page.getByRole("button", { name: "flip this" }).first().tap();
+  await press(page, page.getByRole("button", { name: /up a fifth/ }));
+  await press(page, page.getByRole("button", { name: "flip this" }).first());
   await hide(page);
   await expect.poll(() => posts.length).toBeGreaterThan(0);
   const sessionId = posts[0]!.events[0]!["session_id"]!;
@@ -219,7 +219,7 @@ test("leaving the page sends what was waiting, in a request that outlives it", a
   const before = await counts(request);
   await page.goto(`/p/${id}`);
   await expect(roll(page)).toHaveAttribute("data-audio", "ready");
-  await page.getByRole("button", { name: /up a fifth/ }).tap();
+  await press(page, page.getByRole("button", { name: /up a fifth/ }));
   await expect(roll(page)).toHaveAttribute("data-playback", "auditioning");
   // Gone before the five-second timer could have fired.
   await page.goto("about:blank");

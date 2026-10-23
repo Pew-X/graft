@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { copy, fill } from "../lib/copy.ts";
 import {
   Engine,
@@ -13,13 +13,15 @@ import {
   type AudioContextConstructor,
   type State,
 } from "../lib/playback/index.ts";
-import { peaksOf } from "../lib/record/geometry.ts";
+import { peaksOf } from "../lib/record/disc.ts";
 import { startTelemetry } from "../lib/telemetry/browser.ts";
 import type { Telemetry } from "../lib/telemetry/telemetry.ts";
 import type { Loader } from "../lib/roll/audio.ts";
 import type { Block } from "../lib/roll/view.ts";
 import { CreditBlock, EndBlock } from "./CreditBlock.tsx";
-import { Record, type Live } from "./Record.tsx";
+import { Disc, type Live } from "./Disc.tsx";
+import { Footer } from "./Footer.tsx";
+import { ThemeToggle } from "./ThemeToggle.tsx";
 
 type Load = "loading" | "ready" | "failed";
 
@@ -87,6 +89,33 @@ export function RollPlayer({
   const stages = blocks.length;
   const current = currentStage(state, stages);
   const playing = isSounding(state);
+
+  // The page shows one stage large: the one playing, or the one the visitor moved to by keyboard
+  // (focus follows into a stage and the roll slides to it); at rest, the finished flip.
+  const [moved, setMoved] = useState<{ index: number; during: number | null } | null>(null);
+  const hero = moved && moved.during === current ? moved.index : (current ?? stages - 1);
+  const [shift, setShift] = useState(0);
+  const sheet = useRef<HTMLDivElement>(null);
+  const place = useCallback((): void => {
+    const node = nodes.current[hero];
+    if (!node) return;
+    const h = window.innerHeight;
+    const portrait = window.innerWidth < h * 0.9;
+    // Landscape: the stage is centred a little above the middle. Portrait: it starts below the header.
+    // A tall stage starts just under the header instead of being pushed up out of sight.
+    const top = portrait ? Math.max(h * 0.12, 96) : Math.max(72, h * 0.46 - node.offsetHeight / 2);
+    setShift(Math.round(top - node.offsetTop));
+  }, [hero]);
+  useLayoutEffect(() => {
+    place();
+    const el = sheet.current;
+    if (!el) return;
+    // Fonts arriving, a stage's details opening, the window changing: the roll finds its place again.
+    const watch = new ResizeObserver(place);
+    watch.observe(el);
+    void document.fonts?.ready.then(place);
+    return () => watch.disconnect();
+  }, [place, load]);
 
   // Fetch every stage's audio. Nothing is decoded or played yet.
   useEffect(() => {
@@ -160,12 +189,6 @@ export function RollPlayer({
     };
   }, []);
 
-  // The roll follows the audio: the current block is brought to the middle, unless motion is reduced.
-  useEffect(() => {
-    if (current === null || reduced) return;
-    nodes.current[current]?.scrollIntoView?.({ block: "center", behavior: "smooth" });
-  }, [current, reduced]);
-
   /**
    * The engine, made on the first call. That call must come from a tap: the audio context is created
    * and resumed inside it.
@@ -235,19 +258,97 @@ export function RollPlayer({
         });
   const disabled = load !== "ready";
 
+  const onPlay = useCallback((index: number) => act((e) => e.tapStage(index)), [act]);
+  const onFlip = useCallback(
+    (index: number) => {
+      const id = blocks[index]?.id ?? lastId;
+      if (id) telemetry.current?.track("flip_started", id);
+      setNotice(copy.flip.closed);
+    },
+    [blocks, lastId],
+  );
+  const register = useCallback((index: number, node: HTMLLIElement | null) => {
+    nodes.current[index] = node;
+  }, []);
+  const onFocusBlock = useCallback(
+    (index: number) => setMoved({ index, during: current }),
+    [current],
+  );
+  const heroBlock = blocks[Math.min(hero, stages - 1)];
+
   return (
     <div
       className="roll"
       data-playback={state.kind}
       data-stage={current ?? ""}
       data-step={state.kind === "rolling" ? state.step : ""}
+      data-hero={hero}
       data-sounding={playing}
       data-audio={load}
       data-reduced={reduced}
     >
-      <div className="column">
-        <p className="hint">{copy.hint.order}</p>
-        <p className="status" role="status">
+      {load === "ready" ? (
+        <Disc
+          blocks={blocks}
+          lengths={lengths}
+          playable={playable}
+          peaks={peaks}
+          live={live}
+          playing={playing}
+          reduced={reduced}
+          focus={hero}
+          onScrubStart={(stage, offset) => act((e) => e.scrubStart(stage, offset))}
+          onScrubMove={(stage, offset) => engineNow.current?.scrubMove(stage, offset)}
+          onScrubEnd={() => {
+            engineNow.current?.scrubEnd();
+            // Some phones only unlock audio on the release of a touch, not its start.
+            void audio.current?.unlock().catch(() => undefined);
+          }}
+        />
+      ) : null}
+
+      <header className="bar">
+        <h1>{copy.site.name}</h1>
+        <span className="meta" aria-hidden="true">
+          {heroBlock
+            ? fill(copy.roll.meta, { n: hero + 1, total: stages, meta: heroBlock.meta })
+            : ""}
+        </span>
+        <ThemeToggle />
+      </header>
+
+      <div className="viewport">
+        <div className="sheet" ref={sheet} style={{ transform: `translateY(${shift}px)` }}>
+          <p className="lead">{copy.roll.lead}</p>
+          <ol className="blocks" aria-label={copy.roll.label}>
+            {blocks.map((block) => (
+              <CreditBlock
+                key={block.id}
+                block={block}
+                total={stages}
+                current={current === block.index}
+                hero={hero === block.index}
+                playing={playing && state.kind === "auditioning" && state.stage === block.index}
+                disabled={disabled || !playable[block.index]}
+                onPlay={onPlay}
+                onFlip={onFlip}
+                register={register}
+                onFocusBlock={onFocusBlock}
+              />
+            ))}
+            <EndBlock
+              index={stages}
+              hero={hero === stages}
+              onFlip={() => onFlip(stages)}
+              register={register}
+              onFocusBlock={onFocusBlock}
+            />
+          </ol>
+        </div>
+      </div>
+
+      <div className="notes">
+        <p className="status" role="status" data-empty={status === ""}>
           {status}
         </p>
         {load === "failed" ? (
@@ -262,74 +363,33 @@ export function RollPlayer({
             {copy.retry}
           </button>
         ) : null}
+        {state.kind === "idle" ? <p className="hint">{copy.hint.order}</p> : null}
         {truncated ? <p className="hint">{copy.states.truncated}</p> : null}
         <p className="visually-hidden" role="status" aria-live="polite">
           {announcement}
         </p>
-
-        <ol className="blocks" aria-label={copy.roll.label}>
-          {blocks.map((block) => (
-            <CreditBlock
-              key={block.id}
-              block={block}
-              total={stages}
-              current={current === block.index}
-              playing={playing && state.kind === "auditioning" && state.stage === block.index}
-              disabled={disabled || !playable[block.index]}
-              onPlay={() => act((e) => e.tapStage(block.index))}
-              onFlip={() => {
-                telemetry.current?.track("flip_started", block.id);
-                setNotice(copy.flip.closed);
-              }}
-              nodeRef={(node) => {
-                nodes.current[block.index] = node;
-              }}
-            />
-          ))}
-          <EndBlock
-            onFlip={() => {
-              if (lastId) telemetry.current?.track("flip_started", lastId);
-              setNotice(copy.flip.closed);
-            }}
-          />
-        </ol>
       </div>
 
-      <div className="dock">
-        {load === "ready" ? (
-          <Record
-            blocks={blocks}
-            lengths={lengths}
-            playable={playable}
-            peaks={peaks}
-            live={live}
-            playing={playing}
-            onScrubStart={(stage, offset) => act((e) => e.scrubStart(stage, offset))}
-            onScrubMove={(stage, offset) => engineNow.current?.scrubMove(stage, offset)}
-            onScrubEnd={() => {
-              engineNow.current?.scrubEnd();
-              // Some phones only unlock audio on the release of a touch, not its start.
-              void audio.current?.unlock().catch(() => undefined);
-            }}
-          />
-        ) : null}
-        <div className="controls" role="group" aria-label={copy.controls.label}>
-          <button type="button" disabled={disabled} onClick={() => act((e) => e.previous())}>
-            {copy.controls.previous}
-          </button>
-          <button
-            type="button"
-            className="primary"
-            disabled={disabled}
-            onClick={() => act((e) => (playing ? e.pause() : e.play()))}
-          >
-            {playing ? copy.controls.pause : reduced ? copy.controls.playAll : copy.controls.play}
-          </button>
-          <button type="button" disabled={disabled} onClick={() => act((e) => e.next())}>
-            {copy.controls.next}
-          </button>
-        </div>
+      <div className="controls" role="group" aria-label={copy.controls.label}>
+        <button type="button" disabled={disabled} onClick={() => act((e) => e.previous())}>
+          <span aria-hidden="true">←</span>
+          <span className="visually-hidden">{copy.controls.previous}</span>
+        </button>
+        <button
+          type="button"
+          className="primary"
+          disabled={disabled}
+          onClick={() => act((e) => (playing ? e.pause() : e.play()))}
+        >
+          {playing ? copy.controls.pause : reduced ? copy.controls.playAll : copy.controls.play}
+        </button>
+        <button type="button" disabled={disabled} onClick={() => act((e) => e.next())}>
+          <span aria-hidden="true">→</span>
+          <span className="visually-hidden">{copy.controls.next}</span>
+        </button>
       </div>
+
+      <Footer />
     </div>
   );
 }

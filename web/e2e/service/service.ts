@@ -2,7 +2,7 @@
  * Helpers for the service specs: the service's address, the seeded chain's ids (they are the same
  * everywhere), and calls to the service that a visitor's browser would make or the operator would.
  */
-import { expect, type APIRequestContext, type Page } from "@playwright/test";
+import { expect, type APIRequestContext, type Locator, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -79,4 +79,14 @@ export async function allowBucketReads(page: Page): Promise<void> {
       // The page moved on or closed while this was in flight: nothing is waiting for the answer.
     }
   });
+}
+
+/**
+ * Press a control that is not the stage in view. On a phone only the stage in view can be touched
+ * (the others lie over the record), so the way to reach another is the keyboard's: focus it, which
+ * brings that stage into view, then press Enter.
+ */
+export async function press(page: Page, control: Locator): Promise<void> {
+  await control.focus();
+  await page.keyboard.press("Enter");
 }

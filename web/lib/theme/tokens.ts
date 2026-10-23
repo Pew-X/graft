@@ -13,6 +13,10 @@ export interface Theme {
   /** Borders of controls. */
   line: string;
   focus: string;
+  /** A hairline between credit lines (decoration: it carries no meaning). */
+  hair: string;
+  /** How strong the paper grain is, 0 to 1 (decoration, removable). */
+  grain: string;
 }
 
 export const light: Theme = {
@@ -22,6 +26,8 @@ export const light: Theme = {
   muted: "#5a5247",
   line: "#6b6359",
   focus: "#0b6b3a",
+  hair: "rgba(21,20,19,.14)",
+  grain: "0.5",
 };
 
 export const dark: Theme = {
@@ -31,6 +37,8 @@ export const dark: Theme = {
   muted: "#a79f93",
   line: "#7d766c",
   focus: "#5dff9c",
+  hair: "rgba(236,230,216,.14)",
+  grain: "0",
 };
 
 export const themes = { light, dark } as const;

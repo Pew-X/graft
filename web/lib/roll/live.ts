@@ -42,6 +42,9 @@ export function blocksFromChain(chain: Chain): Block[] {
       case "held":
         return {
           id: entry.id,
+          lettering: "src",
+          meta: "",
+          cutFrames: null,
           state: entry.state,
           flipped: null,
           index,
@@ -57,6 +60,9 @@ export function blocksFromChain(chain: Chain): Block[] {
       case "unavailable":
         return {
           id: entry.id,
+          lettering: "src",
+          meta: "",
+          cutFrames: null,
           state: "unavailable",
           flipped: null,
           index,

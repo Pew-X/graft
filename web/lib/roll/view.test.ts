@@ -90,3 +90,30 @@ test("a stage whose audio is not served carries no audio path", () => {
   const held = buildBlocks([{ ...snapshot.stages[0]!, audio_path: null }]);
   assert.equal(held[0]!.audioPath, null);
 });
+
+test("the lettering follows the flip: brush for a source, tall for a speed-up, wide for a slow-down", () => {
+  // dm9 chord (source), then 3/2 (up a fifth), 2/3 (down a fifth), 1/2 (down an octave)
+  assert.deepEqual(
+    blocks.map((b) => b.lettering),
+    ["src", "up", "down", "down"],
+  );
+});
+
+test("a flip at the same speed is lettered as an up, and a stage that cannot be read as a source", () => {
+  const same = buildBlocks([{ ...snapshot.stages[1]!, speed_p: 1, speed_q: 1 }]);
+  assert.equal(same[0]!.lettering, "up");
+});
+
+test("a flip carries the frames it kept of the stage before it; a source carries none", () => {
+  assert.equal(blocks[0]!.cutFrames, null);
+  assert.deepEqual(blocks[1]!.cutFrames, [0, 43200]);
+  assert.deepEqual(blocks[3]!.cutFrames, [4800, 33600]);
+});
+
+test("each block has a short line for the header: the ratio and the shift in semitones, or 'source'", () => {
+  // worked by hand: 12 * log2(3/2) = 7.02, 12 * log2(2/3) = -7.02, 12 * log2(1/2) = -12
+  assert.deepEqual(
+    blocks.map((b) => b.meta),
+    ["source", "3/2 · +7.0 st", "2/3 · -7.0 st", "1/2 · -12.0 st"],
+  );
+});

@@ -1,7 +1,4 @@
-import { Footer } from "../components/Footer.tsx";
 import { HomeRoll } from "../components/HomeRoll.tsx";
-import { ThemeToggle } from "../components/ThemeToggle.tsx";
-import { copy } from "../lib/copy.ts";
 import { buildBlocks, type StageInput } from "../lib/roll/view.ts";
 import snapshot from "../snapshot/chain.json";
 
@@ -16,16 +13,8 @@ const reportTo = publicApi ? `${publicApi}/v1/events` : undefined;
 
 export default function Home() {
   return (
-    <>
-      <header className="masthead">
-        <h1>{copy.site.name}</h1>
-        <p>{copy.site.line}</p>
-        <ThemeToggle />
-      </header>
-      <main>
-        <HomeRoll blocks={blocks} reportTo={reportTo} />
-      </main>
-      <Footer />
-    </>
+    <main>
+      <HomeRoll blocks={blocks} reportTo={reportTo} />
+    </main>
   );
 }

@@ -76,7 +76,7 @@ test("opening the home page asks the API for nothing and fetches only static fil
   expect(requests.every((u) => new URL(u).origin === "http://127.0.0.1:3100")).toBe(true);
   expect(audio).toHaveLength(4);
   for (const file of audio) expect(file.cache).toContain("immutable");
-  await expect(page.getByRole("heading", { level: 2 })).toHaveCount(4);
+  await expect(page.getByRole("heading", { level: 2 })).toHaveCount(5); // four stages and the empty label
 });
 
 test("audio stays locked until a tap, and the page says what to tap", async ({ page }) => {
@@ -149,12 +149,14 @@ test("the keyboard alone runs the whole loop", async ({ page }) => {
   const focus = (): Promise<string> =>
     page.evaluate(() => {
       const el = document.activeElement as HTMLElement | null;
-      return (el?.innerText ?? el?.getAttribute("aria-label") ?? "").split("\n")[0] ?? "";
+      // the text a screen reader would find, hidden text included
+      return (el?.textContent?.trim() || el?.getAttribute("aria-label") || "").split("\n")[0] ?? "";
     });
-  const tabTo = async (label: string, key = "Tab"): Promise<void> => {
+  const tabTo = async (label: string | RegExp, key = "Tab"): Promise<void> => {
     for (let i = 0; i < 60; i++) {
       await page.keyboard.press(key);
-      if ((await focus()) === label) return;
+      const now = await focus();
+      if (typeof label === "string" ? now === label : label.test(now)) return;
     }
     throw new Error(`never reached ${label}`);
   };
@@ -167,7 +169,7 @@ test("the keyboard alone runs the whole loop", async ({ page }) => {
   await expect(roll(page)).toHaveAttribute("data-playback", "paused");
 
   // A stage's label plays that stage alone; the same key on it again pauses it.
-  await tabTo("2", "Shift+Tab");
+  await tabTo(/^2\s?up a fifth/, "Shift+Tab");
   await page.keyboard.press("Enter");
   await expect(roll(page)).toHaveAttribute("data-playback", "auditioning");
   await expect(roll(page)).toHaveAttribute("data-stage", "1");
@@ -180,7 +182,7 @@ test("the keyboard alone runs the whole loop", async ({ page }) => {
   await expect(roll(page)).toHaveAttribute("data-playback", "auditioning");
 
   // Next stage is reachable by keyboard too: from the audition of stage 2 it auditions stage 3.
-  await tabTo("next stage");
+  await tabTo(/next stage/);
   await page.keyboard.press("Enter");
   await expect(roll(page)).toHaveAttribute("data-playback", "auditioning");
   await expect(roll(page)).toHaveAttribute("data-stage", "2");
@@ -213,11 +215,13 @@ test("the roll is real text in reading order, and the controls are named", async
   const tree = await page.locator("main").ariaSnapshot();
   // Order is source first; each stage is a heading with a button; the roll ends on the empty label.
   const headings = [...tree.matchAll(/heading "([^"]*)" \[level=2\]/g)].map((m) => m[1]);
-  expect(headings).toHaveLength(4);
+  // four stages and the empty last label, which is a heading too
+  expect(headings).toHaveLength(5);
   const order = headings.map(
     (h) => h!.match(/dm9 chord|up a fifth|down a fifth|down an octave/)?.[0],
   );
-  expect(order).toEqual(["dm9 chord", "up a fifth", "down a fifth", "down an octave"]);
+  expect(order).toEqual(["dm9 chord", "up a fifth", "down a fifth", "down an octave", undefined]);
+  expect(headings.at(-1)).toBe("maker unknown");
   expect(tree.indexOf("maker unknown")).toBeGreaterThan(tree.lastIndexOf("down an octave"));
   expect(tree).toContain('group "playback"');
   expect(tree).toContain('button "play"');

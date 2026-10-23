@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { Footer } from "../../../components/Footer.tsx";
 import { LiveRoll } from "../../../components/LiveRoll.tsx";
-import { ThemeToggle } from "../../../components/ThemeToggle.tsx";
 import { createApi, fetchChain } from "../../../lib/api/chain.ts";
 import { previewOf } from "../../../lib/api/preview.ts";
 import { apiUrls } from "../../../lib/api/server.ts";
@@ -34,21 +32,13 @@ export default async function ChainPage({ params }: { params: Promise<{ id: stri
   const chain = await read(id);
   if (chain === null) notFound();
   return (
-    <>
-      <header className="masthead">
-        <h1>{copy.site.name}</h1>
-        <p>{copy.site.line}</p>
-        <ThemeToggle />
-      </header>
-      <main>
-        <LiveRoll
-          id={id}
-          apiUrl={apiUrls().browser}
-          blocks={blocksFromChain(chain)}
-          truncated={chain.truncated !== null && chain.truncated !== undefined}
-        />
-      </main>
-      <Footer />
-    </>
+    <main>
+      <LiveRoll
+        id={id}
+        apiUrl={apiUrls().browser}
+        blocks={blocksFromChain(chain)}
+        truncated={chain.truncated !== null && chain.truncated !== undefined}
+      />
+    </main>
   );
 }
