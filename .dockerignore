@@ -4,7 +4,11 @@ target
 .claude
 .scratch
 vault
-web
+web/*
+!web/snapshot
+!web/public
+web/public/*
+!web/public/seed
 tools
 node_modules
 *.md

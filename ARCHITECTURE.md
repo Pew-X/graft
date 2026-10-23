@@ -691,6 +691,35 @@ A visitor can publish their own sound as a root publication, through the same mo
 
 **Residual risk.** Someone can still upload what they should not: a sound that is not theirs, or one that holds a private conversation despite the declaration. The limits (per address, the global cap, the storage threshold), the report and hide flow and the kill switch cap how much damage and for how long; they do not make it impossible. An uploaded source can be flipped like any other, and a hide for rights holds the flips built on it.
 
+## Hosting and environments
+
+Written by ticket 34 (the agent's part). **Nothing here has been deployed.** The pieces below are written and, where a local check was possible, checked locally; each says which.
+
+**The services.** Decided: the site on Vercel; the service as one container on AWS (ECS on Fargate); GitHub Actions deploying through an OIDC role, with no AWS keys stored anywhere; GitHub environments `dev`, `staging` and `production` behind the branch protections. Assumed and still to be confirmed: Amazon ECR for the image, the platform's secret store for the database address and the operator secret, CloudWatch for the service's JSON logs. Not decided: the database (RDS PostgreSQL or Neon), the bucket (S3 or Cloudflare R2), the public HTTPS address for the service (the browser calls it directly, so something must terminate HTTPS), the domain, and whether the queue leg (ticket 18) is built. The code works with any of the database and bucket choices.
+
+**What is written.**
+
+| Piece | What it is | State |
+|---|---|---|
+| `Dockerfile.service` | the service, the renderer artefact and the release tools in one image; non-root; certificates installed; health check path `/ready` | built; `scripts/service-image-check.sh` ran it on this machine: non-root, the release step (migrate, seed, snapshot check) passed, the service answered `/ready`, uploads reported off, and the seeded chain read back with four stages. Running it found one defect, fixed: the snapshot check compares the committed audio files too, which the first image lacked, so the first deploy's release step would have failed |
+| `.github/workflows/deploy.yml` | build and push; release task (migrate, seed, check the seeded chain against the committed snapshot); point the service at the new task definition; wait for it to settle and for `/ready`; put the previous one back if any of that fails | **written, never run**; inert until `DEPLOY_ENABLED` is set; its rollback has not been shown once, which the ticket requires |
+| Bucket access from the container's role | no static keys; see Configuration | tested against a stand-in credentials endpoint and a local S3 server, **not against AWS** |
+| TLS to the database | `sslmode=require` or `verify-full` with a root certificate | tested against a throwaway server that offers TLS |
+| Build-time guard for the site | a deployment build stops if `GRAFT_CONNECT_ORIGINS`, `GRAFT_PUBLIC_API_URL` or the https-upgrade choice is missing | tested, and a bare production build was run once and refused |
+| Load test and its workflow | see "Measured numbers" | harness done, no measurement yet |
+
+**Settings a deployment must get right** (each one fails quietly if wrong):
+
+- The site, at build time: `GRAFT_CONNECT_ORIGINS` (the service and the bucket), `GRAFT_PUBLIC_API_URL`, `GRAFT_UPGRADE_INSECURE_REQUESTS=on` behind https. At run time: `GRAFT_API_URL`.
+- The service: `GRAFT_CORS_ORIGINS` must include the site's origin; `GRAFT_TRUSTED_PROXY_HOPS=1` behind one load balancer (otherwise every visitor shares one address and the per-address limits count them as one, or the address is spoofable: it must match the real number of proxies); `GRAFT_UPLOADS` left off (it is off by default; the launch gate decides); `GRAFT_ENVIRONMENT` set so error reports say where they came from.
+- The bucket must allow cross-origin reads from the site's origin, because issued audio addresses are fetched by the browser; the tests fake this header, so a real bucket is the first place it is exercised.
+- The database address with TLS, and, for `verify-full`, the authority's certificate file present in the image or mounted.
+- Migrations run when the service starts and are forward-only; a release must work with the schema the release before it left, so that a rollback never meets a schema it cannot read.
+
+**Secrets, by name only.** In the platform's store: `GRAFT_DATABASE_URL`, `GRAFT_ADMIN_SECRET`, `GRAFT_ERROR_TRACKER_DSN` (optional), and `GRAFT_BLOB_S3_ACCESS_KEY_ID` with `GRAFT_BLOB_S3_SECRET_ACCESS_KEY` only if the bucket is not reached through the container's role. In the repository's variables, not secrets: the role to assume and the names of the cluster, service, task family and address. A scan runs over the whole history in CI (`gitleaks`).
+
+**Not done, and not claimed.** The environments do not exist. No deploy has run, so there is no readiness gate shown to block a bad release, no rollback shown, no check that the deployed seeded chain equals the snapshot, no migration rehearsed on a deployed database, no request showing uploads are off in a deployed environment, and no kill-switch toggle on staging. The monthly cost estimate waits for the choices above. The hosting-plan facts the spec left to verify (Neon's pooled and direct endpoints and its caps, whether R2 asks for a card, task memory sizing and price) wait for the same choices, and are recorded in the ticket when they are checked.
+
 ## Operator runbook
 
 Written by ticket 36 (the agent's part). One person operates this. Every command below was run once against a local service by `sh scripts/operator-rehearsal.sh` (a private database and bucket prefix, uploads on for the rehearsal only); that is a rehearsal on one machine, not on a deployed environment. The same steps run against any service with `node scripts/operator-rehearsal.mjs <hide|switch|storage-low|storage-ok> --api <url> --secret <operator secret>`: use it on staging at the launch gate. **Not yet done, and not claimed:** the rehearsal on staging, the builder's decision record on uploads, and everything marked "at deploy" (those commands depend on the host chosen in ticket 34).
