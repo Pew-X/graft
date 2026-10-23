@@ -49,7 +49,6 @@ export function contentSecurityPolicy({ production, connectOrigins }: PolicyOpti
     "form-action 'self'",
     "frame-ancestors 'none'",
   ];
-  if (production) directives.push("upgrade-insecure-requests");
   return directives.join("; ");
 }
 

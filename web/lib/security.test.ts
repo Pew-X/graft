@@ -69,9 +69,14 @@ test("scripts may not be evaluated from strings in production; development needs
   );
 });
 
-test("a production page is only ever loaded securely", () => {
-  assert.match(contentSecurityPolicy({ production: true }), /upgrade-insecure-requests/);
-  assert.doesNotMatch(contentSecurityPolicy({ production: false }), /upgrade-insecure-requests/);
+test("the policy never rewrites a page's requests to https, so a page served over plain http still loads", () => {
+  // `upgrade-insecure-requests` makes the browser fetch every stylesheet, script and sound over
+  // https; browsers exempt localhost, so tests there pass, and a page on a LAN address or an http
+  // preview loses all of its styles and scripts. Secure transport is the strict-transport-security
+  // header's job (and the exact connect-src origins keep a page from reaching anything else).
+  for (const production of [true, false]) {
+    assert.doesNotMatch(contentSecurityPolicy({ production }), /upgrade-insecure-requests/);
+  }
 });
 
 test("every page carries the policy, secure transport, no sniffing, no referrer and a narrow device policy", () => {
