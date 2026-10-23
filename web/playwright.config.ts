@@ -20,6 +20,17 @@ export default defineConfig({
       name: "chromium",
       use: { browserName: "chromium", channel: "chromium", baseURL: "http://127.0.0.1:3100" },
     },
+    // The page-hide flush is the one behaviour that differs between engines, so it alone runs in all three.
+    {
+      name: "firefox",
+      testMatch: "**/flush.spec.ts",
+      use: { browserName: "firefox", baseURL: "http://127.0.0.1:3100" },
+    },
+    {
+      name: "webkit",
+      testMatch: "**/flush.spec.ts",
+      use: { browserName: "webkit", baseURL: "http://127.0.0.1:3100" },
+    },
   ],
   // The roll specs drive the built site. The playback spec builds its own page and ignores this.
   webServer: {

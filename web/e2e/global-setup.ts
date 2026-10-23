@@ -13,6 +13,11 @@ export default async function globalSetup(): Promise<void> {
   });
   await build({
     ...common,
+    entryPoints: [join(here, "telemetry-harness.ts")],
+    outfile: join(here, "dist", "telemetry.js"),
+  });
+  await build({
+    ...common,
     entryPoints: [join(here, "long-fixture.tsx")],
     outfile: join(here, "dist", "long.js"),
     jsx: "automatic",

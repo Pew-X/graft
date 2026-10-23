@@ -25,5 +25,12 @@ export function LiveRoll({
     const api = createApi(apiUrl);
     return liveLoader({ chain: () => fetchChain(api, id) });
   }, [apiUrl, id]);
-  return <RollPlayer blocks={blocks} load={load} truncated={truncated} />;
+  return (
+    <RollPlayer
+      blocks={blocks}
+      load={load}
+      truncated={truncated}
+      reportTo={`${apiUrl}/v1/events`}
+    />
+  );
 }

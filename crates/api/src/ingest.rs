@@ -13,10 +13,10 @@
 
 use crate::http::AppState;
 use crate::problem::Problem;
-use crate::publish::ApiJson;
 use axum::Json;
-use axum::extract::State;
-use axum::http::HeaderMap;
+use axum::body::Bytes;
+use axum::extract::{FromRequest, Request, State};
+use axum::http::{HeaderMap, StatusCode};
 use graft_storage::{EventKind, NewEvent, Origin};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -24,6 +24,32 @@ use utoipa::ToSchema;
 
 /// Largest body this route reads. A full batch of 20 events is about 4 KB.
 pub const MAX_BODY_BYTES: usize = 16 * 1024;
+
+/// The events body as JSON, whatever its content type says. The browser's way to send a batch that
+/// must outlive the page (a beacon) is a `text/plain` body, because that is the one type a
+/// cross-origin request may use without a preflight, and a preflight cannot finish while a page is
+/// unloading. The body is held to the same rules as any other: it must be exactly the documented
+/// JSON, within the size cap. Accepting it makes the route postable from any site, which costs
+/// nothing here: it is anonymous, stores no address, is limited per address and per session, and
+/// its counts never become a public fact.
+pub struct EventsBody(pub IngestRequest);
+
+impl<S: Send + Sync> FromRequest<S> for EventsBody {
+    type Rejection = Problem;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        let bytes = Bytes::from_request(req, state).await.map_err(|rejection| {
+            if rejection.status() == StatusCode::PAYLOAD_TOO_LARGE {
+                Problem::too_large()
+            } else {
+                Problem::bad_request("the body could not be read")
+            }
+        })?;
+        serde_json::from_slice(&bytes).map(Self).map_err(|_| {
+            Problem::bad_request("the body must be JSON with exactly the documented fields")
+        })
+    }
+}
 
 /// An event time more than this far ahead of the server's clock is clamped to the server's now.
 const FUTURE_SKEW_MS: i64 = 5 * 60 * 1000;
@@ -98,7 +124,7 @@ fn opted_out(headers: &HeaderMap) -> bool {
 pub async fn ingest_events(
     State(state): State<AppState>,
     headers: HeaderMap,
-    ApiJson(request): ApiJson<IngestRequest>,
+    EventsBody(request): EventsBody,
 ) -> Result<Json<IngestReceipt>, Problem> {
     // A browser that signals Global Privacy Control or Do Not Track must not be measured: whatever
     // arrives with the signal is ignored, not stored and not examined.

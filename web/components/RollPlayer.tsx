@@ -14,6 +14,8 @@ import {
   type State,
 } from "../lib/playback/index.ts";
 import { peaksOf } from "../lib/record/geometry.ts";
+import { startTelemetry } from "../lib/telemetry/browser.ts";
+import type { Telemetry } from "../lib/telemetry/telemetry.ts";
 import type { Loader } from "../lib/roll/audio.ts";
 import type { Block } from "../lib/roll/view.ts";
 import { CreditBlock, EndBlock } from "./CreditBlock.tsx";
@@ -44,11 +46,14 @@ export function RollPlayer({
   blocks,
   load: loadAudio,
   truncated = false,
+  reportTo,
 }: {
   blocks: readonly Block[];
   load: Loader;
   /** The chain goes back further than the page follows. */
   truncated?: boolean;
+  /** Where to send best-effort counts (the service's events address); none, no counts. */
+  reportTo?: string | undefined;
 }) {
   const [load, setLoad] = useState<Load>("loading");
   const [attempt, setAttempt] = useState(0);
@@ -63,6 +68,8 @@ export function RollPlayer({
   const reducedRef = useRef(false);
   const cleanup = useRef<Array<() => void>>([]);
   const nodes = useRef<Array<HTMLElement | null>>([]);
+  const telemetry = useRef<Telemetry | null>(null);
+  const reported = useRef<Set<number>>(new Set());
 
   const playable = useMemo(() => blocks.map((b) => b.state === "available"), [blocks]);
   const unplayable = playable.filter((p) => !p).length;
@@ -115,6 +122,28 @@ export function RollPlayer({
     query.addEventListener("change", apply);
     return () => query.removeEventListener("change", apply);
   }, []);
+
+  // Best-effort counts: nothing at all when the browser signals it must not be measured.
+  useEffect(() => {
+    const started = startTelemetry(reportTo);
+    telemetry.current = started?.telemetry ?? null;
+    return () => {
+      started?.dispose();
+      telemetry.current = null;
+    };
+  }, [reportTo]);
+  const lastId = blocks.at(-1)?.id;
+  useEffect(() => {
+    if (load === "ready" && lastId) telemetry.current?.track("roll_opened", lastId);
+  }, [load, lastId]);
+  useEffect(() => {
+    // Once per stage per visit, however many times the roll goes round.
+    if (!playing || current === null || reported.current.has(current)) return;
+    const block = blocks[current];
+    if (!block || block.state !== "available") return;
+    reported.current.add(current);
+    telemetry.current?.track("stage_played", block.id);
+  }, [playing, current, blocks]);
 
   // Leaving the page stops everything.
   useEffect(() => {
@@ -242,13 +271,21 @@ export function RollPlayer({
               playing={playing && state.kind === "auditioning" && state.stage === block.index}
               disabled={disabled || !playable[block.index]}
               onPlay={() => act((e) => e.tapStage(block.index))}
-              onFlip={() => setNotice(copy.flip.closed)}
+              onFlip={() => {
+                telemetry.current?.track("flip_started", block.id);
+                setNotice(copy.flip.closed);
+              }}
               nodeRef={(node) => {
                 nodes.current[block.index] = node;
               }}
             />
           ))}
-          <EndBlock onFlip={() => setNotice(copy.flip.closed)} />
+          <EndBlock
+            onFlip={() => {
+              if (lastId) telemetry.current?.track("flip_started", lastId);
+              setNotice(copy.flip.closed);
+            }}
+          />
         </ol>
       </div>
 
