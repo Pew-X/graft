@@ -260,6 +260,18 @@ Written by ticket 05; later tickets add rows. Every value is read from the envir
 
 Without a bucket or `GRAFT_BLOB_DIR` the service keeps audio in memory and says so in its log. The seed script refuses to seed into memory, and also reads `GRAFT_RENDERER_WASM` (the artefact, checked against the pins).
 
+### Site configuration
+
+The site (`web/`) reads these from the environment. Two are read when the site is built, and getting them wrong fails quietly in the browser, so they are named here.
+
+| Variable | Read | Meaning |
+|---|---|---|
+| `GRAFT_API_URL` | when a page is asked for | where the site's server reaches the service (default `http://127.0.0.1:8080`) |
+| `GRAFT_PUBLIC_API_URL` | when a page is asked for; **at build time for the home page** | where a browser reaches the service, when that differs; the home page reports best-effort counts only if this was set when the site was built |
+| `GRAFT_CONNECT_ORIGINS` | **at build time** | comma-separated origins the content security policy lets a page connect to besides itself: the service and the bucket audio is read from. A value that is not a plain origin stops the build. **If it is unset the policy is `connect-src 'self'`**: chain pages cannot load audio, events go nowhere and the operator's page cannot reach the service, all without an error on the page |
+
+For a deployment to work, three settings elsewhere must agree with those: the service's `GRAFT_CORS_ORIGINS` must include the site's origin (reading chains, sending events, the operator's header), and the bucket must allow cross-origin reads from the site's origin.
+
 ## Interface contract
 
 Written by ticket 05.

@@ -166,7 +166,7 @@ jobs:
           cd web
           pnpm install --frozen-lockfile
           echo "PLAYWRIGHT_VERSION=$(pnpm exec playwright --version | cut -d' ' -f2)" >> "$GITHUB_ENV"
-          command -v psql >/dev/null || sudo apt-get install -y -qq --no-install-recommends postgresql-client
+          command -v psql >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends postgresql-client)
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         if: needs.changes.outputs.service == 'true'
         with:
