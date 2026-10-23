@@ -13,9 +13,11 @@ import {
   type AudioContextConstructor,
   type State,
 } from "../lib/playback/index.ts";
+import { peaksOf } from "../lib/record/geometry.ts";
 import { fetchPcm } from "../lib/roll/pcm.ts";
 import type { Block } from "../lib/roll/view.ts";
 import { CreditBlock, EndBlock } from "./CreditBlock.tsx";
+import { Record, type Live } from "./Record.tsx";
 
 type Load = "loading" | "ready" | "failed";
 
@@ -45,8 +47,10 @@ export function RollPlayer({ blocks }: { blocks: readonly Block[] }) {
   const [state, setState] = useState<State>(idle);
   const [notice, setNotice] = useState("");
   const [reduced, setReduced] = useState(false);
+  const [peaks, setPeaks] = useState<number[][]>([]);
   const audio = useRef<LazyAudio | null>(null);
   const engine = useRef<Promise<Engine | null> | null>(null);
+  const engineNow = useRef<Engine | null>(null);
   const reducedRef = useRef(false);
   const cleanup = useRef<Array<() => void>>([]);
   const nodes = useRef<Array<HTMLElement | null>>([]);
@@ -64,6 +68,7 @@ export function RollPlayer({ blocks }: { blocks: readonly Block[] }) {
     Promise.all(paths.map((p) => fetchPcm(p as string, abort.signal)))
       .then((pcm) => {
         audio.current = new LazyAudio(audioConstructor, pcm);
+        setPeaks(pcm.map((samples) => peaksOf(samples, 96)));
         setLoad("ready");
       })
       .catch(() => {
@@ -117,6 +122,7 @@ export function RollPlayer({ blocks }: { blocks: readonly Block[] }) {
         onError: () => setNotice(copy.hint.soundFailed),
       });
       made.setReducedMotion(reducedRef.current);
+      engineNow.current = made;
       cleanup.current.push(attachLifecycle(made, { document, window }));
       if (lazy.context) cleanup.current.push(attachContextLifecycle(made, lazy.context));
       return made;
@@ -138,6 +144,14 @@ export function RollPlayer({ blocks }: { blocks: readonly Block[] }) {
     },
     [ensure],
   );
+
+  // Read by the record every frame, so the stylus follows the sound without re-rendering the page.
+  const live = useCallback((): Live | null => {
+    const e = engineNow.current;
+    const stage = e?.currentStage ?? null;
+    const position = e?.stagePosition ?? null;
+    return stage === null || position === null ? null : { stage, position };
+  }, []);
 
   const status =
     notice ||
@@ -168,48 +182,67 @@ export function RollPlayer({ blocks }: { blocks: readonly Block[] }) {
       data-audio={load}
       data-reduced={reduced}
     >
-      <p className="hint">{copy.hint.order}</p>
-      <p className="status" role="status">
-        {status}
-      </p>
-      <p className="visually-hidden" role="status" aria-live="polite">
-        {announcement}
-      </p>
+      <div className="column">
+        <p className="hint">{copy.hint.order}</p>
+        <p className="status" role="status">
+          {status}
+        </p>
+        <p className="visually-hidden" role="status" aria-live="polite">
+          {announcement}
+        </p>
 
-      <ol className="blocks" aria-label={copy.roll.label}>
-        {blocks.map((block) => (
-          <CreditBlock
-            key={block.id}
-            block={block}
-            total={stages}
-            current={current === block.index}
-            playing={playing && state.kind === "auditioning" && state.stage === block.index}
-            disabled={disabled}
-            onPlay={() => act((e) => e.tapStage(block.index))}
-            onFlip={() => setNotice(copy.flip.closed)}
-            nodeRef={(node) => {
-              nodes.current[block.index] = node;
+        <ol className="blocks" aria-label={copy.roll.label}>
+          {blocks.map((block) => (
+            <CreditBlock
+              key={block.id}
+              block={block}
+              total={stages}
+              current={current === block.index}
+              playing={playing && state.kind === "auditioning" && state.stage === block.index}
+              disabled={disabled}
+              onPlay={() => act((e) => e.tapStage(block.index))}
+              onFlip={() => setNotice(copy.flip.closed)}
+              nodeRef={(node) => {
+                nodes.current[block.index] = node;
+              }}
+            />
+          ))}
+          <EndBlock onFlip={() => setNotice(copy.flip.closed)} />
+        </ol>
+      </div>
+
+      <div className="dock">
+        {load === "ready" ? (
+          <Record
+            blocks={blocks}
+            peaks={peaks}
+            live={live}
+            playing={playing}
+            onScrubStart={(stage, offset) => act((e) => e.scrubStart(stage, offset))}
+            onScrubMove={(stage, offset) => engineNow.current?.scrubMove(stage, offset)}
+            onScrubEnd={() => {
+              engineNow.current?.scrubEnd();
+              // Some phones only unlock audio on the release of a touch, not its start.
+              void audio.current?.unlock().catch(() => undefined);
             }}
           />
-        ))}
-        <EndBlock onFlip={() => setNotice(copy.flip.closed)} />
-      </ol>
-
-      <div className="controls" role="group" aria-label={copy.controls.label}>
-        <button type="button" disabled={disabled} onClick={() => act((e) => e.previous())}>
-          {copy.controls.previous}
-        </button>
-        <button
-          type="button"
-          className="primary"
-          disabled={disabled}
-          onClick={() => act((e) => (playing ? e.pause() : e.play()))}
-        >
-          {playing ? copy.controls.pause : reduced ? copy.controls.playAll : copy.controls.play}
-        </button>
-        <button type="button" disabled={disabled} onClick={() => act((e) => e.next())}>
-          {copy.controls.next}
-        </button>
+        ) : null}
+        <div className="controls" role="group" aria-label={copy.controls.label}>
+          <button type="button" disabled={disabled} onClick={() => act((e) => e.previous())}>
+            {copy.controls.previous}
+          </button>
+          <button
+            type="button"
+            className="primary"
+            disabled={disabled}
+            onClick={() => act((e) => (playing ? e.pause() : e.play()))}
+          >
+            {playing ? copy.controls.pause : reduced ? copy.controls.playAll : copy.controls.play}
+          </button>
+          <button type="button" disabled={disabled} onClick={() => act((e) => e.next())}>
+            {copy.controls.next}
+          </button>
+        </div>
       </div>
     </div>
   );

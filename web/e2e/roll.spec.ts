@@ -8,7 +8,7 @@ test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
 const roll = (page: Page) => page.locator(".roll");
 const ready = (page: Page) => expect(roll(page)).toHaveAttribute("data-audio", "ready");
 
-/** Record every value the roll's step takes, in order, from before the first tap. */
+/** Record every value the roll's step has, in order, from before the first tap. */
 async function watchSteps(page: Page): Promise<void> {
   await page.evaluate(() => {
     const el = document.querySelector(".roll")!;
@@ -147,9 +147,10 @@ test("the keyboard alone runs the whole loop", async ({ page }) => {
   await page.goto("/");
   await ready(page);
   const focus = (): Promise<string> =>
-    page.evaluate(
-      () => (document.activeElement as HTMLElement | null)?.innerText.split("\n")[0] ?? "",
-    );
+    page.evaluate(() => {
+      const el = document.activeElement as HTMLElement | null;
+      return (el?.innerText ?? el?.getAttribute("aria-label") ?? "").split("\n")[0] ?? "";
+    });
   const tabTo = async (label: string, key = "Tab"): Promise<void> => {
     for (let i = 0; i < 60; i++) {
       await page.keyboard.press(key);

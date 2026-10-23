@@ -34,6 +34,13 @@ export const copy = {
     stageButton: "{n}. {title}",
     current: "now playing",
   },
+  record: {
+    label: "the record",
+    needle: "drag the needle.",
+    value: "stage {n} of {total}, {title}, {at} of {length} seconds",
+    empty: "the roll ends on you. no sound here yet.",
+    hover: "{n}. {title}",
+  },
   flip: {
     label: "flip this",
     closed: "making a flip is not open yet.",

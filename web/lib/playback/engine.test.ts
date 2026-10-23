@@ -468,3 +468,36 @@ test("tapping the stage that was paused resumes it, from where it stopped", () =
   assert.equal(engine.state.kind, "auditioning");
   assert.ok(Math.abs((graph.sounds.at(-1)?.offset ?? -1) - 0.3) < 1e-9);
 });
+
+test("the stage position says how far into the stage's output the sound is, for the stylus to ride", () => {
+  const { clock, engine } = setup();
+  assert.equal(engine.stagePosition, null, "silent and idle: nowhere");
+
+  // Roll: the teaser is the finished flip (1.2 s), repeating every 1.2 + 0.05 s.
+  engine.play();
+  clock.advance(0.5);
+  assert.ok(near(engine.stagePosition!, 0.5));
+  clock.advance(0.725); // 1.225 s in: inside the gap, so the stylus rests at the end of the groove
+  assert.ok(near(engine.stagePosition!, 1.2));
+  clock.advance(0.125); // 1.35 s in: 0.1 s into the second repeat
+  assert.ok(near(engine.stagePosition!, 0.1));
+
+  // Paused: frozen where it stopped, however long it stays paused.
+  engine.pause();
+  const frozen = engine.stagePosition;
+  clock.advance(10);
+  assert.equal(engine.stagePosition, frozen);
+});
+
+test("in an audition the stage position runs to the end of the stage and stays there", () => {
+  const { clock, engine } = setup();
+  engine.tapStage(2); // 0.72 s long
+  clock.advance(0.3);
+  assert.ok(near(engine.stagePosition!, 0.3));
+  engine.tapStage(2);
+  clock.advance(10);
+  assert.ok(near(engine.stagePosition!, 0.3), "paused at 0.3");
+  engine.play();
+  clock.advance(5);
+  assert.ok(near(engine.stagePosition!, 0.72), "ended: at the end of the groove");
+});
