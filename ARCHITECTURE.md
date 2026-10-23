@@ -538,6 +538,20 @@ Written by ticket 28. `/make` lets a maker pick a sound, drag the two ends of a 
 
 **Not claimed.** The preview latency is measured in CI-grade Chromium (new bytes at the speaker within 500 ms of a keypress); a real phone is a manual check, recorded in the ticket.
 
+## Publishing from the page
+
+Written by ticket 29. The publish step is the last, optional step of making: a title, a name, a plain statement that what is published is public, and a button. There is no account and no gate at the start.
+
+**One attempt, one key.** The retry key is generated when the maker presses publish for a given flip (parent, cut, speed), and the same request, key included, goes out on every try of that attempt. `publishWithRetries` (`web/lib/publish/client.ts`) retries a lost answer or a "busy" answer (503 retry-later, 502, 503, 504, 408) three times with a bounded backoff (0.4, 0.8 and 1.6 s), reports "trying again, n of 4" as it goes, then stops and offers a manual retry with the same key. Everything else the service says is a refusal and is final. A different cut or speed starts a new attempt with a new key; the same key with different content is the service's `key-conflict`, which the page explains and answers with a "start a fresh attempt" that uses a new key. Pressing publish twice quickly sends one request (a ref guard set in the handler, not state).
+
+**Tested against the real service.** The browser tests lose the answer after the service has made the flip (`route.fetch` then `abort`) and assert the same key on both requests and exactly one flip on the parent; keep the service answering busy for four tries and then succeed on a manual retry; go offline and come back; and reuse a key. Each refusal the service can give has its own sentence (publishing off, storage full, rate limited, publish cap, fork cap, forks closed, depth cap, parent held, parent gone, conflict, an invalid field named with its rule, an internal error), triggered through a fixture for the switched ones and for real for the invalid title. None says "error".
+
+**Hints are advisory.** `web/lib/publish/hints.ts` mirrors the service's public-text rules (60 and 32 characters, allowed characters, links and @handles removed) so a maker learns while typing; only an empty field blocks the button. The service is authoritative and its refusal names the field and the rule.
+
+**The manage key.** It is shown once, in the response that creates the publication, with what it is and is not ("not an identity and not a login"); nothing the service answers afterwards contains it (asserted on the chain read and on the page after navigating). Keeping it in this browser is a checkbox the maker ticks: `graft.manage-keys` in local storage is then the one value graft stores in a browser, and a test shows publishing alone stores nothing. A browser that blocks storage is told so and asked to copy the key instead.
+
+**Honesty about the preview.** The page sends its output hash as a cross-check. If the service reports a mismatch, the page says that what was stored is the service's render and the preview was not stored.
+
 ## The chain route
 
 Written by ticket 27. A permanent link to any publication, `/p/<public id>`, opens that publication's chain in the roll and the record: the credits, the states and the audio come from the service, not from the static snapshot the home page uses. The code is in `web/app/p/[id]/`, `web/components/LiveRoll.tsx`, `web/lib/roll/live.ts` and `web/lib/roll/audio.ts`.

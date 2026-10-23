@@ -14,6 +14,7 @@ import { useAsync } from "../lib/make/use-async.ts";
 import { fetchPcm } from "../lib/roll/pcm.ts";
 import { describeSpeed } from "../lib/roll/speed.ts";
 import { CutEditor } from "./CutEditor.tsx";
+import { PublishStep } from "./PublishStep.tsx";
 import { SoundPicker } from "./SoundPicker.tsx";
 
 /** The first thing heard is a flip, not the sound unchanged: up a fifth. */
@@ -104,6 +105,8 @@ export function Make({
         <Editor
           key={origin.kind === "shipped" ? origin.sound.id : origin.id}
           title={origin.kind === "shipped" ? origin.sound.title : null}
+          parentId={origin.kind === "shipped" ? origin.sound.id : origin.id}
+          apiUrl={apiUrl}
           samples={sound.value}
           engine={engine.status === "ready" ? engine.value : null}
           engineFailed={engine.status === "failed"}
@@ -132,6 +135,8 @@ class GoneError extends Error {}
 
 function Editor({
   title,
+  parentId,
+  apiUrl,
   samples,
   engine,
   engineFailed,
@@ -139,6 +144,8 @@ function Editor({
   onChange,
 }: {
   title: string | null;
+  parentId: string;
+  apiUrl: string;
   samples: Int16Array;
   engine: Renderer | null;
   engineFailed: boolean;
@@ -154,6 +161,7 @@ function Editor({
     return indexOf((given ?? DEFAULT_SPEED).p, (given ?? DEFAULT_SPEED).q);
   });
   const [listening, setListening] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [previewer] = useState(
     () =>
       new Previewer(
@@ -291,6 +299,15 @@ function Editor({
           >
             {listening ? copy.make.hear.pause : copy.make.hear.play}
           </button>
+          <button
+            type="button"
+            className="pill"
+            disabled={problem !== null || ready === null || publishing}
+            aria-describedby="why-not"
+            onClick={() => setPublishing(true)}
+          >
+            {copy.publish.open}
+          </button>
           <p id="why-not" className="refusal" role="status">
             {problem
               ? refusal(problem)
@@ -317,6 +334,17 @@ function Editor({
           </details>
         ) : null}
       </section>
+      {publishing && ready ? (
+        <PublishStep
+          parentId={parentId}
+          cut={cut}
+          p={p}
+          q={q}
+          previewHash={ready.hash}
+          apiUrl={apiUrl}
+          onClose={() => setPublishing(false)}
+        />
+      ) : null}
     </>
   );
 }

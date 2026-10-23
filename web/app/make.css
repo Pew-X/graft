@@ -333,3 +333,127 @@
   outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
+
+/* the publish step */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+.pill:disabled {
+  color: var(--muted);
+  border-style: dashed;
+}
+.publish {
+  margin: 0 0 1.5rem;
+  padding: 1rem 0 0;
+  border-top: 1px solid var(--hair);
+}
+.publish .public {
+  margin: 0 0 0.5rem;
+  font:
+    800 clamp(28px, 6vw, 44px) / 1 var(--f-cond),
+    ui-sans-serif,
+    sans-serif;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+}
+.publish .field {
+  margin: 0 0 0.75rem;
+}
+.publish label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font:
+    500 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.publish input[type="text"] {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.25rem 0.6rem;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 1rem;
+}
+.publish input[aria-invalid="true"] {
+  border-color: #d2342a;
+}
+.publish .hint,
+.publish .progress {
+  min-height: 1.5em;
+  margin: 0.25rem 0 0;
+  font:
+    400 12px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+  color: var(--muted);
+}
+.publish .problem {
+  margin-top: 0.75rem;
+  font:
+    400 13px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+}
+.publish .problem:empty {
+  display: none;
+}
+.publish .problem p {
+  margin: 0 0 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-left: 6px solid #d2342a;
+  background: var(--surface);
+}
+.publish .link {
+  overflow-wrap: anywhere;
+  font-family: var(--f-mono), monospace;
+  color: var(--ink);
+}
+.publish .manage-key code {
+  display: block;
+  padding: 0.6rem 0.75rem;
+  overflow-wrap: anywhere;
+  border: 2px dashed var(--ink);
+  background: var(--surface);
+  font:
+    500 14px var(--f-mono),
+    ui-monospace,
+    monospace;
+}
+.publish .check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  min-height: 44px;
+  text-transform: none;
+  letter-spacing: 0;
+  font:
+    400 14px/1.4 var(--f-sans),
+    sans-serif;
+}
+.publish .check input {
+  width: 24px;
+  height: 24px;
+  margin-top: 0.1rem;
+}
+.publish .notice {
+  margin-bottom: 1rem;
+}

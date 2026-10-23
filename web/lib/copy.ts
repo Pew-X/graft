@@ -111,6 +111,95 @@ export const copy = {
     closed: "making a flip is not open yet.",
     unavailable: "this stage is not here, so it cannot be flipped.",
   },
+  publish: {
+    open: "publish this flip",
+    heading: "publish",
+    public: "what you publish is public. anyone with the link can hear it and flip it.",
+    noAccount:
+      "there is no account. you will get a key to keep, once, if you want to manage it later.",
+    title: "title",
+    titleGloss: "up to 60 characters, shown as typed",
+    name: "your name",
+    nameGloss: "up to 32 characters, shown as typed. not a handle, and it links nowhere.",
+    submit: "publish",
+    cancel: "keep editing",
+    publishing: "publishing.",
+    trying:
+      "trying again, {n} of {of}. the same request is sent each time, so nothing is made twice.",
+    hints: {
+      empty: "this is empty, or only a link or a handle, which are removed.",
+      tooLong: "{over} characters too many. the limit is {max}.",
+      character: "{character} is not allowed here.",
+      adjusted: "links and @handles are removed from public text.",
+    },
+    adjusted: "a link or a handle was removed from your {fields}.",
+    gaveUp: {
+      network:
+        "the network did not answer after {attempts} tries. nothing was lost: try again and the same request goes out.",
+      busy: "the service is busy and did not finish after {attempts} tries. nothing was changed: try again and the same request goes out.",
+      server:
+        "the service did not finish after {attempts} tries. nothing was changed: try again and the same request goes out.",
+    },
+    retry: "try again",
+    fresh: "start a fresh attempt",
+    offline: "you look to be offline.",
+    refusals: {
+      publishingOff:
+        "publishing is switched off for now. your flip is still here: you can keep making and try again later.",
+      storageFull:
+        "graft has reached the storage it keeps for sounds, so nothing new can be published for now. try again later.",
+      rateLimited: "you have published a lot in a short time. try again {when}.",
+      publishCap:
+        "everyone together has published as much as is allowed for now. try again {when}.",
+      forkCap: "this stage has been flipped as often as is allowed this hour. try again {when}.",
+      forkClosed: "the maker of this stage has closed it to new flips.",
+      depthCap: "this chain is as long as chains can be, so it cannot hold another stage.",
+      parentHeld:
+        "this stage is held while its rights are looked at, so nothing can be built on it for now.",
+      parentGone: "the stage you were flipping is no longer here, so this cannot be published.",
+      conflict:
+        "this attempt was already used for a different flip. start a fresh attempt to publish this one.",
+      internal:
+        "something went wrong on our side. nothing was published. try again and the same request goes out.",
+      invalid: "the {field} breaks a rule: {rule}.",
+    },
+    rules: {
+      empty: "it is empty",
+      too_long: "it is too long",
+      character: "it has a character that is not allowed",
+      mixed_scripts: "a word mixes letters from different scripts",
+      denied_word: "it uses a word that is not allowed",
+    },
+    fields: { title: "title", author: "name" },
+    when: {
+      soon: "in a moment",
+      seconds: "in about {n} seconds",
+      minutes: "in about {n} minutes",
+      hour: "in about an hour",
+      hours: "in about {n} hours",
+    },
+    done: {
+      heading: "published",
+      link: "the link to your flip",
+      open: "open it",
+      copy: "copy the link",
+      copied: "copied.",
+      copyFailed: "copying did not work here. select the link and copy it.",
+      keyHeading: "your manage key",
+      keyOnce:
+        "this is shown once and cannot be shown again. keep it if you may want to stop new flips or withdraw this later.",
+      keyIsNot:
+        "it is not an identity and not a login. it only opens the controls for this one publication. if you lose it, the only loss is that this publication's settings cannot be changed.",
+      keep: "keep this key in this browser",
+      keepGloss:
+        "optional. it is the only thing graft stores in your browser, and only because you chose to.",
+      kept: "kept in this browser.",
+      keepFailed: "this browser would not store it. copy the key somewhere safe instead.",
+      mismatch:
+        "what was stored is the service's render, which differs from the preview you heard. yours was not stored.",
+      replay: "this flip was already published by an earlier try. nothing was made twice.",
+    },
+  },
   make: {
     title: "make a flip",
     kicker: "make a flip",
