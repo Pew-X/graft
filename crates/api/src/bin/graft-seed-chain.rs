@@ -46,7 +46,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let wasm_path =
         std::env::var("GRAFT_RENDERER_WASM").map_err(|_| "GRAFT_RENDERER_WASM is required")?;
     let host = RenderHost::load(&std::fs::read(wasm_path)?, HostLimits::default())?;
-    let store = Store::connect(&config.database_url, 4).await?;
+    let store = Store::connect_waiting(
+        &config.database_url,
+        4,
+        std::time::Duration::from_secs(config.db_startup_wait_secs),
+    )
+    .await?;
     store.migrate().await?;
     let blobs = graft_api::blobs::build_blob_store(&config)?;
     let state = AppState::new(&config, store, blobs, Arc::new(host));

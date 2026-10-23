@@ -47,7 +47,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         version: id.version,
         wasm_sha256: Sha256Hash::parse(&id.wasm_sha256)?,
     };
-    let store = Store::connect(&config.database_url, 2).await?;
+    let store = Store::connect_waiting(
+        &config.database_url,
+        2,
+        std::time::Duration::from_secs(config.db_startup_wait_secs),
+    )
+    .await?;
     store.migrate().await?;
     let blobs = graft_api::blobs::build_blob_store(&config)?;
     let source = SeedSource {

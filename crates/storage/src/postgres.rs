@@ -167,6 +167,50 @@ impl Store {
         Ok(Self::from_pool(pool))
     }
 
+    /// Connect, waiting up to `wait` for a database that is not answering yet: unreachable, or still
+    /// starting up (SQLSTATE 57P03). This is what a database that pauses when idle needs after a
+    /// pause, when its first connection starts it and it takes some seconds to be ready. Anything
+    /// else (a wrong password, a malformed address, a server that does not offer the TLS asked for)
+    /// is returned at once, because waiting cannot fix it. Each attempt lasts up to five seconds (the
+    /// pool retries within it) and the wait bounds how many attempts are made: a wait of zero is one
+    /// attempt. The URL is never logged.
+    pub async fn connect_waiting(
+        url: &str,
+        max_connections: u32,
+        wait: std::time::Duration,
+    ) -> Result<Self, StoreError> {
+        let deadline = std::time::Instant::now() + wait;
+        let mut attempt: u32 = 0;
+        loop {
+            attempt += 1;
+            let tried = PgPoolOptions::new()
+                .max_connections(max_connections)
+                .acquire_timeout(std::time::Duration::from_secs(5))
+                .connect(url)
+                .await;
+            let err = match tried {
+                Ok(pool) => return Ok(Self::from_pool(pool)),
+                Err(err) => err,
+            };
+            let not_yet = match &err {
+                sqlx::Error::Io(_) | sqlx::Error::PoolTimedOut => true,
+                sqlx::Error::Database(e) => e.code().is_some_and(|c| c == "57P03"),
+                _ => false,
+            };
+            let now = std::time::Instant::now();
+            if !not_yet || now >= deadline {
+                return Err(db(err));
+            }
+            let left = deadline - now;
+            tracing::warn!(
+                attempt,
+                seconds_left = left.as_secs(),
+                "the database is not answering yet; waiting for it"
+            );
+            tokio::time::sleep(std::time::Duration::from_secs(1).min(left)).await;
+        }
+    }
+
     /// A store that connects on first use, so building it never touches the network.
     pub fn connect_lazy(url: &str, max_connections: u32) -> Result<Self, StoreError> {
         let pool = PgPoolOptions::new()

@@ -46,6 +46,9 @@ pub struct Config {
     /// The longest a request's body may take to arrive; past it the read fails and the request is
     /// answered with a timeout and freed. The handler's own work is never cancelled by it.
     pub request_timeout_secs: u64,
+    /// How long start-up waits for a database that is not answering yet (unreachable, or starting after
+    /// a pause) before giving up; 0 makes one attempt. A wrong password is never waited on.
+    pub db_startup_wait_secs: u64,
     /// How many of the allowed origins were given (a typo is refused at start-up, never dropped).
     /// The canonical renderer artefact the service loads at start-up.
     pub renderer_wasm: Option<std::path::PathBuf>,
@@ -602,6 +605,12 @@ impl Config {
                 reason: "must be at least 1".to_owned(),
             });
         }
+        let mut db_startup_wait_secs: u64 = 60;
+        number(
+            &lookup,
+            "GRAFT_DB_STARTUP_WAIT_SECS",
+            &mut db_startup_wait_secs,
+        )?;
         let mut request_timeout_secs: u64 = 30;
         number(
             &lookup,
@@ -662,6 +671,7 @@ impl Config {
             lock_wait_ms,
             max_concurrent_renders,
             request_timeout_secs,
+            db_startup_wait_secs,
             renderer_wasm: lookup("GRAFT_RENDERER_WASM").map(std::path::PathBuf::from),
             extra_deny_words,
             admin_secret,
@@ -942,6 +952,29 @@ mod tests {
             !printed.contains("abc-123"),
             "the credentials' address leaked: {printed}"
         );
+    }
+
+    #[test]
+    fn the_wait_for_a_database_that_is_starting_defaults_to_a_minute_and_zero_means_one_attempt() {
+        let base = [("GRAFT_DATABASE_URL", "postgres://x")];
+        assert_eq!(
+            Config::from_lookup(env(&base))
+                .expect("valid")
+                .db_startup_wait_secs,
+            60
+        );
+        let zero = Config::from_lookup(env(&[
+            ("GRAFT_DATABASE_URL", "postgres://x"),
+            ("GRAFT_DB_STARTUP_WAIT_SECS", "0"),
+        ]))
+        .expect("zero is allowed");
+        assert_eq!(zero.db_startup_wait_secs, 0);
+        let bad = Config::from_lookup(env(&[
+            ("GRAFT_DATABASE_URL", "postgres://x"),
+            ("GRAFT_DB_STARTUP_WAIT_SECS", "soon"),
+        ]))
+        .expect_err("not a number");
+        assert!(matches!(bad, ConfigError::Invalid { .. }), "{bad:?}");
     }
 
     #[test]
