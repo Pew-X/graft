@@ -29,6 +29,16 @@ Written by ticket 01; rows for storage, events and api updated by ticket 05.
 - Only code, scripts, README.md, ARCHITECTURE.md and configuration are committed. Commit messages are plain conventional text with no trailers or addresses; `scripts/lint-commit-msg.mjs` enforces that in the local hook and in CI, on every commit and on the pull request title.
 - Branch flow: feature branch, then `dev` (squash), then `staging` and `main` by promotion pull requests (merge commit, so the branches stay aligned).
 
+### Where CI time goes
+
+Typical runs, from the last green ones: `rust` 4 to 10 minutes (the cold-cache end is the slow one; the browser tests against the real service add three or four when the site or the service changed), `cross-host vectors (ubuntu-24.04)` 3 to 5, `renderer` 2 to 6 (when its paths changed), `check image` about 4 (when its files changed), `web` about 1 (about 2 with the browser tests, when `web/` changed), and `supply chain`, `secret scan`, `repo hygiene` and `what changed` under a minute each. The macOS leg runs only when started by hand. A pull request that touches only documentation runs the cheap jobs and nothing else.
+
+What keeps it short: the `changes` job decides from the paths which of the slow jobs a pull request can affect (a skipped job counts as passing); a newer push to a pull request cancels the run before it; the browser tests run in the one job that already has the browsers, and the build is not repeated there; Chromium for the service tests is cached by Playwright version; `scripts/precheck.sh` runs the same lints, repository rules, API-contract check and web checks locally in under a minute, and `--full` adds the tests.
+
+**Every job has a time limit**, set to about three times the longest run seen, because a hung runner otherwise holds a job for six hours. The "18 minutes" once seen on the cross-host job was exactly that: a runner stall (the cancelled run was replaced by a re-run of the same commit that finished in three and a half minutes), not apt or rustup, so the limit is the fix, and a stall now costs at most fifteen minutes before it can be re-run.
+
+**What is deliberately not split.** Formatting and lints stay in the required `rust` job, ahead of the tests. Moving them to a job of their own would save a minute or two of waiting, but branch protection would not require the new job, and a lint that cannot block a merge is not a lint; the saving is available if the new job is added to the required checks, which is the builder's setting to change.
+
 Written by ticket 01.
 
 ## Determinism contract

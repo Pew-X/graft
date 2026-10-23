@@ -25,6 +25,7 @@ jobs:
   changes:
     name: what changed
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     outputs:
       renderer: ${{ steps.f.outputs.renderer }}
       image: ${{ steps.f.outputs.image }}
@@ -72,6 +73,7 @@ jobs:
   repo:
     name: repo hygiene and scripts
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -98,6 +100,7 @@ jobs:
     name: rust
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     # A fresh Postgres 16 per job: the HTTP seam and the store tests run against the real engine.
     services:
       postgres:
@@ -183,6 +186,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.renderer == 'true'
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -225,7 +229,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.renderer == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 15
     # The image carries the browsers' system libraries, which otherwise take ~9 minutes to install.
     container:
       image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:7852dc5a7d72f5fe458a597d690f6c42fbc8e9e26ddfa95f8e6ef552558d9bbf
@@ -308,7 +312,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.image == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build the check image
@@ -334,6 +338,7 @@ jobs:
   supply-chain:
     name: supply chain
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2.87.30
@@ -345,6 +350,7 @@ jobs:
   secrets:
     name: secret scan
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -360,6 +366,7 @@ jobs:
     name: web
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     # The image carries Chromium and its system libraries; the browser tests (the playback engine
     # over real Web Audio, the roll at a phone viewport) run here, only when web/ can have changed.
     container:
