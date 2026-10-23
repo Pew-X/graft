@@ -20,15 +20,16 @@ export default defineConfig({
       name: "chromium",
       use: { browserName: "chromium", channel: "chromium", baseURL: "http://127.0.0.1:3100" },
     },
-    // The page-hide flush is the one behaviour that differs between engines, so it alone runs in all three.
+    // The page-hide flush is the one behaviour that differs between engines, and the core loop is the
+    // one thing every visitor does: those two run in all three engines.
     {
       name: "firefox",
-      testMatch: "**/flush.spec.ts",
+      testMatch: ["**/flush.spec.ts", "**/core-loop.spec.ts"],
       use: { browserName: "firefox", baseURL: "http://127.0.0.1:3100" },
     },
     {
       name: "webkit",
-      testMatch: "**/flush.spec.ts",
+      testMatch: ["**/flush.spec.ts", "**/core-loop.spec.ts"],
       use: { browserName: "webkit", baseURL: "http://127.0.0.1:3100" },
     },
   ],

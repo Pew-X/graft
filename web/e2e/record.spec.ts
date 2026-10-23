@@ -220,6 +220,54 @@ test("the disc keeps frames flowing while a stage plays", async ({ page }) => {
   await expect(page.locator(".record")).toHaveAttribute("data-record", "live");
 });
 
+// The frame budget, stated with numbers. Target: 60 frames a second (16.7 ms a frame). The CPU is slowed with
+// the browser's own throttle (Chrome's DevTools call 4x "mid-tier mobile" and 6x "low-tier mobile") while the
+// deepest chain (twelve stages, thirteen rings) plays. Measured on the builder's Mac, headless: the median
+// stayed at 16.7 ms up to 40x. This is a proxy, not a phone: the real-phone check stays manual and is named
+// as open in ARCHITECTURE.md. The record degrades to cached bands when the median of 30 frames passes 26 ms
+// (lib/record/frames.ts); the test below asserts what the visitor gets either way.
+for (const [rate, medianMs, p95Ms] of [
+  [4, 20, 34],
+  [6, 26, 50],
+] as const) {
+  test(`the thirteen-ring record plays at ${rate}x CPU slowdown with a median frame under ${medianMs} ms`, async ({
+    page,
+  }) => {
+    const cdp = await page.context().newCDPSession(page);
+    await openLong(page);
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate });
+    await page.getByRole("button", { name: "play", exact: true }).tap();
+    await expect(roll(page)).toHaveAttribute("data-sounding", "true");
+    await page.waitForTimeout(2500); // long enough for the governor to have judged 30 frames
+    const gaps = await page.evaluate(
+      () =>
+        new Promise<number[]>((resolve) => {
+          const out: number[] = [];
+          let last = performance.now();
+          const tick = (t: number): void => {
+            out.push(t - last);
+            last = t;
+            if (out.length < 120) requestAnimationFrame(tick);
+            else resolve(out);
+          };
+          requestAnimationFrame(tick);
+        }),
+    );
+    const sorted = [...gaps].sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)]!;
+    const p95 = sorted[Math.floor(sorted.length * 0.95)]!;
+    const mode = await page.locator(".record").getAttribute("data-record");
+    test.info().annotations.push({
+      type: `frame pacing at ${rate}x (ms)`,
+      description: `median ${median.toFixed(1)}, p95 ${p95.toFixed(1)}, record ${mode}`,
+    });
+    expect(median).toBeLessThan(medianMs);
+    expect(p95).toBeLessThan(p95Ms);
+    // Whichever drawing it settled on, it still answers.
+    await expect(roll(page)).toHaveAttribute("data-sounding", "true");
+  });
+}
+
 test("slow frames put the record back on a drawn copy of its grooves, and it still works", async ({
   page,
 }) => {
