@@ -187,16 +187,23 @@
 .track[data-inverted="true"] .wave-kept {
   fill: var(--muted);
 }
+/* The two handles keep to their own sides of the cut's edges, so two handles close together never
+   cover each other: the start's touch area lies before its line and the end's after it. */
 .handle {
   position: absolute;
   top: 0;
   bottom: 0;
   width: 44px;
-  margin-left: -22px;
   display: flex;
-  justify-content: center;
   outline-offset: -4px;
   cursor: ew-resize;
+}
+.handle[data-handle="start"] {
+  margin-left: -44px;
+  justify-content: flex-end;
+}
+.handle[data-handle="end"] {
+  justify-content: flex-start;
 }
 .handle .grip {
   width: 6px;
@@ -423,6 +430,9 @@
   background: var(--surface);
 }
 .publish .link {
+  display: block;
+  padding: 0.6rem 0;
+  min-height: 44px;
   overflow-wrap: anywhere;
   font-family: var(--f-mono), monospace;
   color: var(--ink);

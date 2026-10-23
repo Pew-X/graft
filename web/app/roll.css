@@ -84,6 +84,7 @@ button:disabled {
 .footer a {
   color: inherit;
   display: inline-block;
+  min-width: 44px;
   min-height: 44px;
   line-height: 44px;
 }

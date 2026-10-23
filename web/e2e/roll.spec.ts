@@ -324,7 +324,8 @@ for (const [name, viewport] of [
     // Its last control is reachable by pointer once scrolled to, and it answers.
     await flip.scrollIntoViewIfNeeded();
     await flip.click();
-    await expect(page.getByRole("status").first()).toContainText("making a flip is not open yet");
+    // On the site it opens the make flow for the stage in view.
+    await expect(page).toHaveURL(/\/make\?from=[a-z0-9]+$/);
   });
 }
 
