@@ -211,7 +211,7 @@ Written by ticket 05; later tickets add rows. Every value is read from the envir
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `GRAFT_DATABASE_URL` | none (required) | Postgres connection string |
+| `GRAFT_DATABASE_URL` | none (required) | Postgres connection string. The client speaks TLS (rustls, the same `aws-lc-rs` provider the bucket client already uses): `?sslmode=require` encrypts without checking the certificate, `?sslmode=verify-full&sslrootcert=<file>` checks it against the authority in the file (for RDS, Amazon's published CA bundle shipped with the image or mounted). RDS on PostgreSQL 15 and later, and Neon, refuse a connection without TLS. `scripts/tls-database-check.sh` shows both modes and a refusal of the wrong authority against a throwaway server; the build was previously without TLS support and could not have connected to either |
 | `GRAFT_BIND` | `127.0.0.1:8080` | listen address |
 | `GRAFT_CORS_ORIGINS` | empty | comma-separated origins allowed cross-origin; empty means none |
 | `GRAFT_MAX_CHAIN_DEPTH` | 12 | deepest chain, source counted as stage 1 |
