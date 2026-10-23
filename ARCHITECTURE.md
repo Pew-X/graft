@@ -686,6 +686,36 @@ A visitor can publish their own sound as a root publication, through the same mo
 
 **Residual risk.** Someone can still upload what they should not: a sound that is not theirs, or one that holds a private conversation despite the declaration. The limits (per address, the global cap, the storage threshold), the report and hide flow and the kill switch cap how much damage and for how long; they do not make it impossible. An uploaded source can be flipped like any other, and a hide for rights holds the flips built on it.
 
+## Operator runbook
+
+Written by ticket 36 (the agent's part). One person operates this. Every command below was run once against a local service by `sh scripts/operator-rehearsal.sh` (a private database and bucket prefix, uploads on for the rehearsal only); that is a rehearsal on one machine, not on a deployed environment. The same steps run against any service with `node scripts/operator-rehearsal.mjs <hide|switch|storage-low|storage-ok> --api <url> --secret <operator secret>`: use it on staging at the launch gate. **Not yet done, and not claimed:** the rehearsal on staging, the builder's decision record on uploads, and everything marked "at deploy" (those commands depend on the host chosen in ticket 34).
+
+The operator's secret travels in one header, `x-graft-admin-secret`. The operator's page (`/admin` on the site) makes the same calls.
+
+| Task | How | Rehearsed locally |
+|---|---|---|
+| See that it is alive | `GET /health` (no database), `GET /ready` (pings the database, 503 when it cannot), `GET /metrics` (Prometheus text) | yes |
+| Read what visitors reported | `GET /admin/reports` | yes |
+| Hide a publication | `POST /admin/publications/{id}/hide` with `{"reason":"rights"}` (stages built on it are held: credit visible, audio refused) or `{"reason":"withdrawn"}` (they keep playing) | yes, both |
+| Release it | `DELETE /admin/publications/{id}/hide`; everything is computed on read, so it plays again at once | yes |
+| Stop all publishing | `PUT /admin/switch` with `{"publishing":false}`: flips, sources and client events refuse with `publishing-off` (503); reads, reports, withdrawals and the operator's routes stay open; no redeploy; another instance sees the change within `GRAFT_SWITCH_CACHE_MS` (2 s) | yes |
+| Reopen it | the same call with `true` | yes |
+| Switch visitor uploads off in an emergency | set `GRAFT_UPLOADS=off` and restart (the kill switch also closes uploads, at once, without a restart: prefer it first) | yes (restart path) |
+| Raise or lower the storage threshold | set `GRAFT_STORAGE_LIMIT_BYTES` and restart. The service refuses to start with a limit at or below its overshoot bound (61,440,000 bytes with the defaults), so the lowest rehearsable limit is the bound plus a little; over the threshold, writes are refused with `storage-full` (503) and reads continue | yes |
+| Rotate the operator secret | set a new `GRAFT_ADMIN_SECRET` (at least 24 characters) and restart; the old secret answers 403, the new one 200 | yes |
+| Rotate the database or bucket credentials | change the secret in the host's store and restart; the service prints them redacted | at deploy |
+| Recount the rollups from the ledger | `graft-rebuild-rollups` (reads the database settings; safe while the service runs; hours older than the 30-day retention cannot be recounted and are kept as they are) | yes |
+| Remove audio nothing refers to | `graft-blob-cleanup` (idempotent; leaves anything younger than `GRAFT_ORPHAN_GRACE_SECS`) | yes |
+| Seed again | `graft-seed-chain --manifest seed/chain.json`; running it twice changes nothing | yes |
+| Where logs, traces and metrics are read | logs on standard output (JSON, a request id on each line), metrics at `/metrics`, traces at the OTLP endpoint when `OTEL_EXPORTER_OTLP_ENDPOINT` is set, errors at the tracker when `GRAFT_ERROR_TRACKER_DSN` is set | logs and metrics: yes |
+| Run a migration | the service applies pending migrations when it starts (`store.migrate()`), forward-only. A migration must work with the release before it, so that rolling back one release never meets a schema it cannot read: add before you use, remove only a release later | start-up path: yes; the two-release rule is a convention, not a test |
+| Roll back a release | redeploy the previous image; under the rule above the schema it finds is compatible | at deploy |
+| Drain a dead-letter queue | none exists: the deployed event path is the Postgres sink (ticket 18, the queue leg, is not part of this build) | not applicable |
+
+**Takedown, in plain words.** A hidden or withdrawn publication stays in its chain as "no longer here" with its credit; new requests for its audio are refused; addresses already issued expire on their own (`GRAFT_BLOB_URL_TTL_SECS`, 300 s by default); a copy someone already downloaded cannot be recalled. The about page and the removed state say this. The wording on the report confirmation is the builder's to approve at the launch gate.
+
+**What the rehearsal does not show.** It ran on one machine against a local Postgres and an S3-compatible container, not on the host, so it says nothing about the host's networking, secrets store or deploy tooling. The kill switch was shown across every write route by the Rust test (`every_write_route_is_classified_and_the_switch_closes_exactly_those_that_add_publications`, which fails when a write route is added without a decision); the rehearsal shows the same on a running process.
+
 ## Rollups and the analytical read path
 
 Written by ticket 14.
