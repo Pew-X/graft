@@ -8,5 +8,17 @@ export default defineConfig({
   timeout: 60_000,
   workers: 1,
   reporter: [["list"]],
-  projects: [{ name: "chromium", use: { browserName: "chromium", channel: "chromium" } }],
+  projects: [
+    {
+      name: "chromium",
+      use: { browserName: "chromium", channel: "chromium", baseURL: "http://127.0.0.1:3100" },
+    },
+  ],
+  // The roll specs drive the built site. The playback spec builds its own page and ignores this.
+  webServer: {
+    command: "pnpm build && pnpm start --port 3100",
+    url: "http://127.0.0.1:3100",
+    reuseExistingServer: !process.env["CI"],
+    timeout: 240_000,
+  },
 });

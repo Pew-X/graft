@@ -468,6 +468,20 @@ Written by ticket 21. The code is in `web/lib/playback/`: a pure state machine (
 
 **Not tested here, by design.** Real iOS Safari: whether the context resumes on the first tap, and the behaviour with the silent switch on (Web Audio is muted by it on iOS). Phone performance. Headphones unplugged on a real device (the code pauses on the `devicechange` event and when the context is suspended or interrupted; only a device can show that those events fire in practice). These are manual checks for the builder's listening and cold-phone test, recorded as such.
 
+## The roll
+
+Written by ticket 23. The home page is the seeded chain as a roll of credit blocks over the playback engine. The code is in `web/`: `app/page.tsx` (a server page that reads the snapshot at build time), `components/` (the player, the credit blocks, the theme toggle, the footer), `lib/roll/` (the view-model, the speed wording, the audio decoder), `lib/copy.ts` (every string a visitor reads) and `lib/theme/tokens.ts` (the colours, defined once).
+
+**Opening needs no API.** The page and its four audio files are static: the audio is fetched as `/seed/<sha-256>.pcm` (cacheable for a year, immutable) and decoded by a 16-bit little-endian reader that does not depend on the machine's byte order. The audio context is created on the first tap, inside the gesture, and not before; until then the page says plainly what to tap. A browser test blocks every other origin and checks that the page asks the API for nothing.
+
+**The view-model.** `buildBlocks` turns a stage into a block: a numeral, a title, the credit lines for its face, and a details layer with the exact values (frame range, speed as a fraction with its percentage and nearest interval, length, renderer, stage and record identifiers, the audio hash). The details are derived from the numbers, and a test checks they agree with the lines the server wrote. A value the server marks with any state other than declared or computed is shown as unknown, the weakest claim. Dyes cycle by stage index and are always printed next to the numeral and the title.
+
+**Honesty is text.** Each line ends with its state in words (declared, computed, unknown), and a declared value also says "as typed". A browser test checks every line has its word, a copy test walks every string for the words the project does not use, and a contrast test works the WCAG ratio from the definition over the tokens, and a second one measures the rendered text in both themes.
+
+**Reduced motion and the keyboard.** With reduced motion the page does not scroll by itself, the cursor does not blink, and the main control reads "play all"; every block has a visible "play this stage" button in every mode. The keyboard runs the whole loop (a test does it). Controls are 44 px or larger (a test measures them).
+
+**What is not here yet.** The record (ticket 24), the chain route and every other state (27), the make flow behind "flip this" (28; the button says so), and the about page the footer links to (30). The type and slab styling is a first coat; ticket 25 owns the look. The first-visit hint for the needle arrives with the record.
+
 ## Events and the outbox
 
 Written by ticket 13. The consumer, rollups and the operator's read are the next section (ticket 14); the client ingest endpoint is ticket 15.
