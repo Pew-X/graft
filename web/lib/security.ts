@@ -49,7 +49,7 @@ export function contentSecurityPolicy({
 }: PolicyOptions): string {
   const directives = [
     "default-src 'self'",
-    `script-src 'self' 'unsafe-inline'${production ? "" : " 'unsafe-eval'"}`,
+    `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'${production ? "" : " 'unsafe-eval'"}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
     "font-src 'self'",

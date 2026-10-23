@@ -48,6 +48,8 @@ interface Props {
   disabled: boolean;
   onPlay: (index: number) => void;
   onFlip: (index: number) => void;
+  /** Absent where reports cannot be sent (no service to send them to). */
+  onReport?: ((index: number) => void) | undefined;
   register: (index: number, node: HTMLLIElement | null) => void;
   onFocusBlock: (index: number) => void;
 }
@@ -68,6 +70,7 @@ export const CreditBlock = memo(function CreditBlock({
   onFlip,
   register,
   onFocusBlock,
+  onReport,
 }: Props) {
   const heading = `stage-${block.id}`;
   return (
@@ -129,6 +132,11 @@ export const CreditBlock = memo(function CreditBlock({
         <button type="button" className="flip" onClick={() => onFlip(block.index)}>
           {copy.flip.label}
         </button>
+        {onReport && block.state === "available" ? (
+          <button type="button" className="flip report" onClick={() => onReport(block.index)}>
+            {copy.report.open}
+          </button>
+        ) : null}
       </article>
     </li>
   );

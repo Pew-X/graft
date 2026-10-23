@@ -19,6 +19,7 @@ use utoipa::OpenApi;
     ),
     paths(
         routes::get_chain,
+        routes::get_features,
         routes::get_publication,
         publish::publish_flip,
         maker::set_fork_permission,
@@ -43,7 +44,8 @@ use utoipa::OpenApi;
         crate::ingest::IngestReceipt,
         crate::source::PublishSourceRequest,
         crate::source::DeclarationRequest,
-        crate::source::PublishedSource
+        crate::source::PublishedSource,
+        crate::moderation::SwitchView
     ))
 )]
 struct ApiDoc;

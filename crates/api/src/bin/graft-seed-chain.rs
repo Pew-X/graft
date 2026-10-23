@@ -1,18 +1,21 @@
 //! Seeds the chain the roll opens on and writes or checks its static snapshot.
 //!
-//!   graft-seed-chain [--manifest seed/chain.json] [--write-snapshot web | --check-snapshot web]
+//!   graft-seed-chain [--manifest seed/chain.json] [--sources seed/sources.json] [--write-snapshot web | --check-snapshot web]
 //!
 //! The chain is seeded through the publish pipeline every visitor uses (see ARCHITECTURE.md, "First open and the static snapshot"), into
 //! the database and blob store the usual settings name, so it needs a renderer artefact too
 //! (`GRAFT_RENDERER_WASM`). Running it again changes nothing. `--check-snapshot` exits with an
 //! error naming the stage if the committed snapshot differs from what this database produced: point
 //! it at a freshly created database to ask whether the snapshot has drifted.
+//!
+//! It also seeds the curated sources (`seed/sources.json` beside the manifest, unless `--sources`
+//! names another file); the chain's own source is one of them, so it is not made twice.
 #![allow(clippy::print_stdout, clippy::print_stderr)] // a command-line tool: output is its interface
 
 use graft_api::config::Config;
 use graft_api::http::AppState;
-use graft_api::seed::{parse_manifest, seed_chain};
-use graft_api::snapshot::{self, AUDIO_DIR, DATA_FILE};
+use graft_api::seed::{parse_curated, parse_manifest, seed_chain, seed_curated};
+use graft_api::snapshot::{self, AUDIO_DIR, DATA_FILE, SOURCES_FILE};
 use graft_render_host::{Limits as HostLimits, RenderHost};
 use graft_storage::Store;
 use std::collections::HashMap;
@@ -60,14 +63,43 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .collect::<Vec<_>>()
             .join(" ")
     );
+    let sources_path = a
+        .get("sources")
+        .map_or_else(|| dir.join("sources.json"), PathBuf::from);
+    let mut curated_ids = None;
+    if sources_path.exists() {
+        let curated = parse_curated(&std::fs::read_to_string(&sources_path)?)?;
+        let ids = seed_curated(&state, &curated, dir).await?;
+        println!("seeded {} curated sources", ids.len());
+        curated_ids = Some(ids);
+    }
     let leaf = ids.last().ok_or("the manifest seeds nothing")?;
-    let (fresh, files) = snapshot::build(&state, leaf).await?;
+    let (fresh, mut files) = snapshot::build(&state, leaf).await?;
+    // The curated sources, when there are any: the same format, each stage a source.
+    let sources = match &curated_ids {
+        Some(ids) => {
+            let (snap, found) = snapshot::build_sources(&state, ids).await?;
+            for f in found {
+                if !files.iter().any(|g| g.name == f.name) {
+                    files.push(f);
+                }
+            }
+            Some(snap)
+        }
+        None => None,
+    };
+    let snapshots: Vec<(&str, &snapshot::Snapshot)> = std::iter::once((DATA_FILE, &fresh))
+        .chain(sources.iter().map(|s| (SOURCES_FILE, s)))
+        .collect();
 
     if let Some(web) = a.get("write-snapshot") {
         let web = Path::new(web);
-        let data = web.join(DATA_FILE);
-        std::fs::create_dir_all(data.parent().unwrap_or(web))?;
-        std::fs::write(&data, snapshot::to_text(&fresh))?;
+        for (file, snap) in &snapshots {
+            let data = web.join(file);
+            std::fs::create_dir_all(data.parent().unwrap_or(web))?;
+            std::fs::write(&data, snapshot::to_text(snap))?;
+            println!("wrote {}", data.display());
+        }
         let audio_dir = web.join(AUDIO_DIR);
         std::fs::create_dir_all(&audio_dir)?;
         for old in std::fs::read_dir(&audio_dir)? {
@@ -83,13 +115,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         for f in &files {
             std::fs::write(audio_dir.join(&f.name), &f.bytes)?;
         }
-        println!("wrote {} and {} audio files", data.display(), files.len());
+        println!("wrote {} audio files", files.len());
     }
     if let Some(web) = a.get("check-snapshot") {
         let web = Path::new(web);
-        let committed: snapshot::Snapshot =
-            serde_json::from_str(&std::fs::read_to_string(web.join(DATA_FILE))?)?;
-        let mut problems = snapshot::differences(&committed, &fresh);
+        let mut problems = Vec::new();
+        for (file, snap) in &snapshots {
+            let committed: snapshot::Snapshot =
+                serde_json::from_str(&std::fs::read_to_string(web.join(file))?)?;
+            problems.extend(snapshot::differences(&committed, snap));
+        }
         for f in &files {
             match std::fs::read(web.join(AUDIO_DIR).join(&f.name)) {
                 Ok(bytes) if bytes == f.bytes => {}

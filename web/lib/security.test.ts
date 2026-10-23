@@ -69,6 +69,12 @@ test("scripts may not be evaluated from strings in production; development needs
   );
 });
 
+test("the renderer may be compiled as WebAssembly in production, which is not the same as evaluating a string", () => {
+  const production = directive(contentSecurityPolicy({ production: true }), "script-src");
+  assert.ok(production.includes("'wasm-unsafe-eval'"));
+  assert.ok(!production.includes("'unsafe-eval'"), "'wasm-unsafe-eval' does not contain it");
+});
+
 test("by default the policy does not rewrite a page's requests to https, so a page over plain http still loads", () => {
   // `upgrade-insecure-requests` makes the browser fetch every stylesheet, script and sound over
   // https; browsers exempt only localhost, so tests there pass and a page on a LAN address or an http

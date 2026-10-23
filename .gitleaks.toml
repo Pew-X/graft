@@ -1,6 +1,7 @@
 # Extends gitleaks' default rules. The allowlist names only throwaway values that are deliberately in
 # the repository: the credentials of a local test container (documented in README.md and used by CI)
-# and a fake operator secret that a test uses to prove secrets never reach the logs. Nothing else is
+# a fake operator secret that a test uses to prove secrets never reach the logs, and the fixed retry
+# keys two browser tests send to prove a closed stage refuses a new flip. Nothing else is
 # allowed; a real credential anywhere still fails the scan.
 title = "graft"
 
@@ -8,8 +9,9 @@ title = "graft"
 useDefault = true
 
 [[allowlists]]
-description = "throwaway credentials of the local and CI test object store, and a fake test secret"
+description = "throwaway credentials of the local and CI test object store, a fake test secret, and two fixed test retry keys"
 regexes = [
   '''graftsecret12345''',
   '''an-operator-secret-0123456789''',
+  '''e2e-(closed|reopened)-0123456789abcdef''',
 ]

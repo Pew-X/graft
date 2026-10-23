@@ -323,9 +323,9 @@ pub struct SwitchState {
     pub publishing: bool,
 }
 
-/// What the operator reads about the two switches. Publishing can be changed while the service
+/// What the operator reads about the two switches, and what anyone may read at `/v1/features`. Publishing can be changed while the service
 /// runs; uploads are set when it starts (`GRAFT_UPLOADS`), so this only reports them.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
 pub struct SwitchView {
     /// Whether publishing is open.
     pub publishing: bool,

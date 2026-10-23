@@ -28,6 +28,8 @@ interface Snapshot {
 }
 
 const snapshot = JSON.parse(readFileSync(join(web, "snapshot", "chain.json"), "utf8")) as Snapshot;
+// The curated sources ship beside the chain: the same format, every stage a source, audio in the same folder.
+const sources = JSON.parse(readFileSync(join(web, "snapshot", "sources.json"), "utf8")) as Snapshot;
 
 test("the snapshot is a chain: a source, then each stage built on the one before", () => {
   assert.equal(snapshot.version, 1);
@@ -50,7 +52,7 @@ test("the snapshot is a chain: a source, then each stage built on the one before
 
 test("every stage's audio is a static file named by the SHA-256 of its bytes, and nothing else is there", () => {
   const referenced = new Set<string>();
-  for (const stage of snapshot.stages) {
+  for (const stage of [...snapshot.stages, ...sources.stages]) {
     const match = /^\/seed\/([0-9a-f]{64})\.pcm$/.exec(stage.audio_path);
     assert.ok(match, `${stage.audio_path} is a content-hashed path`);
     const name = match[1]!;

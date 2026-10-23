@@ -818,6 +818,24 @@
           "audio"
         ],
         "type": "object"
+      },
+      "SwitchView": {
+        "description": "What the operator reads about the two switches, and what anyone may read at `/v1/features`. Publishing can be changed while the service\nruns; uploads are set when it starts (`GRAFT_UPLOADS`), so this only reports them.",
+        "properties": {
+          "publishing": {
+            "description": "Whether publishing is open.",
+            "type": "boolean"
+          },
+          "uploads": {
+            "description": "Whether visitors may publish their own sources.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "publishing",
+          "uploads"
+        ],
+        "type": "object"
       }
     }
   },
@@ -931,6 +949,27 @@
         "summary": "Report a batch of client events.",
         "tags": [
           "crate::ingest"
+        ]
+      }
+    },
+    "/v1/features": {
+      "get": {
+        "operationId": "get_features",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwitchView"
+                }
+              }
+            },
+            "description": "Whether publishing and uploads are open"
+          }
+        },
+        "summary": "What the service is open for right now: publishing (the kill switch) and visitors' own sources.\nTwo booleans and nothing else, so a page can say a door is closed before anything is sent\nthrough it.",
+        "tags": [
+          "routes"
         ]
       }
     },

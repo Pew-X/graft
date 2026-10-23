@@ -23,8 +23,10 @@ else
 fi
 
 api_pid=""
+uploads_pid=""
 cleanup() {
   [ -n "$api_pid" ] && kill "$api_pid" 2>/dev/null || true
+  [ -n "$uploads_pid" ] && kill "$uploads_pid" 2>/dev/null || true
   sql "drop database if exists $db with (force)" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT INT TERM
@@ -71,10 +73,23 @@ for _ in $(seq 1 60); do
 done
 curl -fs "http://127.0.0.1:$api_port/ready" >/dev/null
 
+# A second instance of the same service on the same database with visitor uploads switched on (they
+# are off by default, and the first instance keeps the default). The upload specs send their requests
+# to this one; the rest never see it.
+uploads_port=$((api_port + 1))
+GRAFT_UPLOADS=on GRAFT_BIND="127.0.0.1:$uploads_port" target/debug/graft-api >"${TMPDIR:-/tmp}/graft-svc-api-uploads-$run.log" 2>&1 &
+uploads_pid=$!
+for _ in $(seq 1 60); do
+  curl -fs "http://127.0.0.1:$uploads_port/ready" >/dev/null 2>&1 && break
+  kill -0 "$uploads_pid" 2>/dev/null || { echo "the uploads instance stopped; see ${TMPDIR:-/tmp}/graft-svc-api-uploads-$run.log"; exit 1; }
+  sleep 1
+done
+
 cd web
 # The site's content security policy lets pages talk to exactly these origins, besides themselves.
 export GRAFT_CONNECT_ORIGINS="http://127.0.0.1:$api_port,$s3"
 GRAFT_SERVICE_E2E=1 \
 GRAFT_API_URL="http://127.0.0.1:$api_port" \
+GRAFT_UPLOADS_API_URL="http://127.0.0.1:$uploads_port" \
 GRAFT_SERVICE_S3="$s3" \
 pnpm exec playwright test "$@"
