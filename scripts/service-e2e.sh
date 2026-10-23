@@ -47,6 +47,16 @@ export GRAFT_BIND="127.0.0.1:$api_port"
 export GRAFT_CORS_ORIGINS=http://127.0.0.1:3100
 export GRAFT_ADMIN_SECRET=svc-test-admin-secret-0123456789
 export GRAFT_ENVIRONMENT=svc-test
+# The abuse limits are tested in the Rust suite. Here one address publishes dozens of flips of the
+# same stage within a minute, so they are lifted well out of the way.
+export GRAFT_PUBLISH_PER_IP=100000
+export GRAFT_REPORT_PER_IP=100000
+export GRAFT_INGEST_PER_IP=100000
+export GRAFT_GLOBAL_PUBLISH_PER_HOUR=100000
+export GRAFT_GLOBAL_PUBLISH_BURST=1000
+# The storage limit must exceed what the cap above could admit before the total is read again.
+export GRAFT_STORAGE_LIMIT_BYTES=900000000000000
+export GRAFT_MAX_FORKS_PER_STAGE_PER_HOUR=100000
 
 target/debug/graft-seed-chain --manifest seed/chain.json >/dev/null
 target/debug/graft-api >"${TMPDIR:-/tmp}/graft-svc-api-$run.log" 2>&1 &

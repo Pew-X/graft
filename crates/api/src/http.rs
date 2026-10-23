@@ -336,6 +336,8 @@ fn cors(config: &Config) -> CorsLayer {
         .allow_headers([
             header::CONTENT_TYPE,
             HeaderName::from_static("x-graft-manage-key"),
+            // The admin page sends the operator secret in a header from the browser.
+            HeaderName::from_static("x-graft-admin-secret"),
         ])
         .max_age(std::time::Duration::from_secs(600))
 }

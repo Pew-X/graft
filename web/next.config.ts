@@ -11,6 +11,11 @@ const config: NextConfig = {
         source: "/seed/:path*",
         headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
       },
+      {
+        // The operator's page is not for search engines or archives, whatever links to it.
+        source: "/admin",
+        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" }],
+      },
     ];
   },
 };

@@ -58,11 +58,15 @@ async function watchEvents(page: Page) {
   await page.route("**/v1/events", async (route) => {
     if (route.request().method() !== "POST") return route.fallback();
     posts.push(JSON.parse(route.request().postData() ?? "{}"));
-    const response = await route.fetch();
-    receipts.push(
-      ((await response.json().catch(() => ({}))) as { accepted?: number }).accepted ?? -1,
-    );
-    return route.fulfill({ response });
+    try {
+      const response = await route.fetch();
+      receipts.push(
+        ((await response.json().catch(() => ({}))) as { accepted?: number }).accepted ?? -1,
+      );
+      await route.fulfill({ response });
+    } catch {
+      // The page moved on or closed while this was in flight: nothing is waiting for the answer.
+    }
   });
   return { posts, receipts };
 }

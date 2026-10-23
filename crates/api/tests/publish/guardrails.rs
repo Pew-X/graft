@@ -425,3 +425,74 @@ async fn storage_admission_overshoots_by_less_than_the_documented_bound_then_ref
     );
     h.finish().await;
 }
+
+#[tokio::test]
+async fn the_operator_can_read_both_switches_and_what_each_says_about_visitors() {
+    // The admin page shows the kill switch (changeable at run time) and the uploads flag (set when
+    // the service starts) side by side, so one read gives both.
+    let h = with_secret(|c| c.guardrails.uploads_enabled = true).await;
+    let (status, _, res) = h
+        .send("GET", "/admin/switch", &[(ADMIN, SECRET)], None)
+        .await;
+    assert_eq!(status, StatusCode::OK, "{res}");
+    assert_eq!(res, json!({ "publishing": true, "uploads": true }));
+    switch(&h, false).await;
+    let (_, _, res) = h
+        .send("GET", "/admin/switch", &[(ADMIN, SECRET)], None)
+        .await;
+    assert_eq!(res, json!({ "publishing": false, "uploads": true }));
+
+    let off = with_secret(|_| {}).await;
+    let (_, _, res) = off
+        .send("GET", "/admin/switch", &[(ADMIN, SECRET)], None)
+        .await;
+    assert_eq!(
+        res,
+        json!({ "publishing": true, "uploads": false }),
+        "uploads are off unless the service was started with them on"
+    );
+}
+
+#[tokio::test]
+async fn the_page_on_the_configured_origin_may_send_the_admin_secret_header_and_no_other_origin_may()
+ {
+    // The admin page sends the secret in a header from the browser. That needs the preflight to
+    // allow the header, and only for the origin the site is served from.
+    let h = with_secret(|c| c.cors_origins = vec!["https://site.example".into()]).await;
+    let preflight = |origin: &'static str| {
+        let h = &h;
+        async move {
+            h.send(
+                "OPTIONS",
+                "/admin/switch",
+                &[
+                    ("origin", origin),
+                    ("access-control-request-method", "PUT"),
+                    (
+                        "access-control-request-headers",
+                        "content-type,x-graft-admin-secret",
+                    ),
+                ],
+                None,
+            )
+            .await
+        }
+    };
+    let (_, headers, _) = preflight("https://site.example").await;
+    let allowed = headers
+        .get("access-control-allow-headers")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    assert!(
+        allowed.contains("x-graft-admin-secret"),
+        "allowed: {allowed:?}"
+    );
+    assert_eq!(
+        headers
+            .get("access-control-allow-origin")
+            .and_then(|v| v.to_str().ok()),
+        Some("https://site.example")
+    );
+    let (_, other, _) = preflight("https://elsewhere.example").await;
+    assert!(other.get("access-control-allow-origin").is_none());
+}

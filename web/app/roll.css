@@ -418,3 +418,99 @@ body {
   line-height: 44px;
   color: inherit;
 }
+
+/* The operator's page: plain, stacked, and usable on a phone. */
+.admin {
+  padding-bottom: 3rem;
+}
+.admin h2,
+.admin h3 {
+  margin: 1.25rem 0 0.5rem;
+}
+.admin-gate {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 24rem;
+  padding-top: 1rem;
+}
+.admin-gate input {
+  font: inherit;
+  min-height: 44px;
+  padding: 0.25rem 0.5rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 2px solid var(--line);
+}
+.admin-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.admin-bar h2 {
+  flex: 1 1 auto;
+  margin: 0;
+}
+.admin-switches {
+  display: flex;
+  gap: 1.5rem;
+  margin: 0 0 0.5rem;
+}
+.admin-switches dt {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+.admin-switches dd {
+  margin: 0;
+  font-weight: 700;
+}
+.admin-reports {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+}
+.admin-reports li {
+  border: 2px solid var(--line);
+  padding: 0.75rem;
+}
+.admin-reports p {
+  margin: 0 0 0.35rem;
+}
+.admin-title {
+  font-weight: 700;
+}
+.admin-note {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.admin-state {
+  font-weight: 700;
+}
+.admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.admin-actions a {
+  display: inline-block;
+  min-height: 44px;
+  line-height: 44px;
+  color: inherit;
+}
+.admin-table {
+  overflow-x: auto;
+}
+.admin-table table {
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.admin-table th,
+.admin-table td {
+  border: 1px solid var(--line);
+  padding: 0.25rem 0.5rem;
+  text-align: left;
+  white-space: nowrap;
+}

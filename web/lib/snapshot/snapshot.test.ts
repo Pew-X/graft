@@ -73,8 +73,23 @@ test("the audio is served with a cache lifetime of a year and marked immutable",
   assert.ok(rule, "a header rule covers /seed");
   const cache = rule.headers.find((h) => h.key.toLowerCase() === "cache-control");
   assert.equal(cache?.value, "public, max-age=31536000, immutable");
-  // A file whose name is its hash can never change, so nothing else needs this rule.
-  assert.equal(rules.length, 1);
+  // A file whose name is its hash can never change, so no other path gets a long cache lifetime.
+  const long = rules.filter((r) =>
+    r.headers.some((h) => h.key.toLowerCase() === "cache-control" && /immutable/.test(h.value)),
+  );
+  assert.deepEqual(
+    long.map((r) => r.source),
+    ["/seed/:path*"],
+  );
+});
+
+test("the operator's page is kept out of search engines and archives", async () => {
+  const rule = (await config.headers!()).find((r) => r.source === "/admin");
+  assert.ok(rule, "a header rule covers /admin");
+  const robots = rule.headers.find((h) => h.key.toLowerCase() === "x-robots-tag");
+  assert.match(robots?.value ?? "", /noindex/);
+  assert.match(robots?.value ?? "", /nofollow/);
+  assert.match(robots?.value ?? "", /noarchive/);
 });
 
 test("the snapshot names only public ids, hashes and computed facts, never a key or a signed address", () => {

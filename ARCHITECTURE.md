@@ -510,6 +510,18 @@ Written by ticket 27. A permanent link to any publication, `/p/<public id>`, ope
 
 **How it is tested.** `scripts/service-e2e.sh` starts a private database and a bucket prefix on the Postgres and S3-compatible server the other tests use, seeds the chain, starts the service, builds the site and runs Playwright with `GRAFT_SERVICE_E2E` set so the specs under `web/e2e/service` run. CI runs it as a step of the `rust` job (which already has both servers and the built service) when the site or the service changed; Chromium comes from a cache keyed on the Playwright version.
 
+## The operator's page
+
+Written by ticket 33. `/admin` is a small page for one person, usable on a phone, over the admin routes that already exist (reports, hide and lift, the kill switch, the rollups). It is not a product surface and has no accounts: the service decides, by the secret, whether to answer.
+
+**The gate.** The page is a form until the secret is typed. The secret is held in the page's memory and sent in the `x-graft-admin-secret` header of each call, straight from the browser to the service (which now lists that header in its CORS allowance, for the site's origin only; a test checks that another origin gets none). It is never in an address, a body or storage, a test finds it in none of them, and locking the page forgets it. Every refusal (a wrong secret, a missing one, too many tries) reads the same: "that was not accepted. wait a little before trying again." The page is sent with `x-robots-tag: noindex, nofollow, noarchive` and a robots tag, and no page links to it (a test looks on the home page and a chain page).
+
+**What it shows.** The reports, newest first, each with its publication's title and name as typed, the category, the note, when it was filed and the publication's state now (visible, hidden: withdrawn, hidden: rights), with "hide: withdrawn", "hide: rights" and "lift the hide", and a link to open its chain. The two switches: publishing (open or closed, with a button; it applies from the next request) and uploads (on or off, read only: it is set when the service starts, so `GET /admin/switch` now reports both). The event path: events by hour and kind, what is waiting to be delivered and how old the oldest is, what is waiting to be counted and how old.
+
+**What it says and does not say.** The events are labelled as best-effort counts of sessions, one session being one page load; the page never says visitors or people, and a test looks. Reports show no personal data because the service holds none: a report has a category, a note and a time. Everything the service sends is printed as text: the service refuses `<` in any public text, notes included, so markup cannot arrive at all; as the second layer a test files a note made of HTML entities and finds them printed as typed, with no element made from them.
+
+**Tested against the real service.** Wrong and right secrets; the secret's whereabouts; the indexing headers; a report listed with its state, hidden for rights from the page, the stage built on it shown held on its chain, then lifted and released; hide and lift from the page; the kill switch closed from the page making a real publish answer 503 and opened making it answer 201; the event view after a client event; and the page on a phone (every control 44 px, nothing scrolling sideways).
+
 ## Events and the outbox
 
 Written by ticket 13. The consumer, rollups and the operator's read are the next section (ticket 14); the client ingest endpoint is ticket 15.

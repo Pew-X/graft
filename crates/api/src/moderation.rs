@@ -323,11 +323,24 @@ pub struct SwitchState {
     pub publishing: bool,
 }
 
-/// Whether publishing is open right now.
-pub async fn get_switch(State(state): State<AppState>) -> Json<SwitchState> {
+/// What the operator reads about the two switches. Publishing can be changed while the service
+/// runs; uploads are set when it starts (`GRAFT_UPLOADS`), so this only reports them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct SwitchView {
+    /// Whether publishing is open.
+    pub publishing: bool,
+    /// Whether visitors may publish their own sources.
+    pub uploads: bool,
+}
+
+/// Whether publishing is open right now, and whether uploads are on.
+pub async fn get_switch(State(state): State<AppState>) -> Json<SwitchView> {
     let publishing = state.guards.switch.publishing_open().await;
     state.metrics.set_publishing_open(publishing);
-    Json(SwitchState { publishing })
+    Json(SwitchView {
+        publishing,
+        uploads: state.uploads_enabled,
+    })
 }
 
 /// Open or close publishing. Takes effect on the next request to this instance and, on others,
@@ -335,7 +348,7 @@ pub async fn get_switch(State(state): State<AppState>) -> Json<SwitchState> {
 pub async fn set_switch(
     State(state): State<AppState>,
     ApiJson(request): ApiJson<SwitchState>,
-) -> Result<Json<SwitchState>, Problem> {
+) -> Result<Json<SwitchView>, Problem> {
     state
         .guards
         .switch
@@ -350,5 +363,8 @@ pub async fn set_switch(
         publishing = request.publishing,
         "the operator changed the kill switch"
     );
-    Ok(Json(request))
+    Ok(Json(SwitchView {
+        publishing: request.publishing,
+        uploads: state.uploads_enabled,
+    }))
 }

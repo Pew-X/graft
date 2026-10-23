@@ -69,10 +69,14 @@ export async function hide(
 export async function allowBucketReads(page: Page): Promise<void> {
   const s3 = process.env["GRAFT_SERVICE_S3"] ?? "http://127.0.0.1:59000";
   await page.route(`${s3}/**`, async (route) => {
-    const response = await route.fetch();
-    await route.fulfill({
-      response,
-      headers: { ...response.headers(), "access-control-allow-origin": "*" },
-    });
+    try {
+      const response = await route.fetch();
+      await route.fulfill({
+        response,
+        headers: { ...response.headers(), "access-control-allow-origin": "*" },
+      });
+    } catch {
+      // The page moved on or closed while this was in flight: nothing is waiting for the answer.
+    }
   });
 }
