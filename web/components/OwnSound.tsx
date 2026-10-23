@@ -1,8 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { copy } from "../lib/copy.ts";
-import { type Decoded, decodeToCanonical } from "../lib/own/decode.ts";
+import { type Decoded, decodeToCanonical, tooBigToRead } from "../lib/own/decode.ts";
 import { type Recording, startRecording } from "../lib/own/mic.ts";
 import { MAX_FRAMES } from "../lib/own/source.ts";
 
@@ -28,6 +28,14 @@ export function OwnSound({
 }) {
   const [status, setStatus] = useState<Status>({ name: "idle" });
   const recording = useRef<Recording | null>(null);
+  // Leaving the screen while recording lets the microphone go and discards what was recorded.
+  useEffect(
+    () => () => {
+      recording.current?.cancel();
+      recording.current = null;
+    },
+    [],
+  );
 
   async function finish(data: ArrayBuffer) {
     setStatus({ name: "reading" });
@@ -90,7 +98,15 @@ export function OwnSound({
               const file = e.target.files?.[0];
               e.target.value = "";
               if (!file) return;
-              void file.arrayBuffer().then(finish);
+              // Judged by its size before a byte is read: a huge file is never pulled into memory.
+              if (tooBigToRead(file)) {
+                setStatus({ name: "problem", text: copy.own.tooBig });
+                return;
+              }
+              setStatus({ name: "reading" });
+              file.arrayBuffer().then(finish, () => {
+                setStatus({ name: "problem", text: copy.own.unreadable });
+              });
             }}
           />
         </label>

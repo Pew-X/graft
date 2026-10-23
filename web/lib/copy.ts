@@ -403,6 +403,7 @@ export const copy = {
     result: {
       label: "what you hear",
       comesOut: "comes out {length} seconds long",
+      updating: "the sound is being worked out again. wait a moment, then publish.",
       hash: "hash of what you hear",
       hashGloss: "worked out here, and checked against the service's own when you publish",
     },

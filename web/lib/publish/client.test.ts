@@ -104,6 +104,17 @@ test("a refusal is final: nothing is retried automatically and the reason is kep
   assert.equal(sent.length, 1);
 });
 
+test("an answer that says published but names no publication is not believed", async () => {
+  const html: WireResult = { status: 200, body: null };
+  const out = await publishWithRetries(script(html).wire, body, options().opts);
+  assert.deepEqual(out, { kind: "refused", refusal: { kind: "internal" } });
+  const noId: WireResult = { status: 201, body: { publication: {}, manage_key: "k" } };
+  assert.deepEqual(await publishWithRetries(script(noId).wire, body, options().opts), {
+    kind: "refused",
+    refusal: { kind: "internal" },
+  });
+});
+
 test("a switched-off upload door is a refusal, not a busy service: nothing is retried", async () => {
   const { wire, sent } = script(problem("uploads-off", 503));
   const out = await publishWithRetries(wire, body, options().opts);

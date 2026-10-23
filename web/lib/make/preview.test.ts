@@ -108,3 +108,35 @@ test("unlock makes and resumes the context once, inside the gesture, and play re
   await p.play(Int16Array.of(1, 2, 3));
   assert.equal(f.created.length, 1, "no second context");
 });
+
+test("a stop that comes while the context is still waking is honoured: the loop never starts", async () => {
+  const f = fake();
+  let wake: () => void = () => undefined;
+  f.context.resume = () =>
+    new Promise<void>((resolve) => {
+      wake = () => {
+        (f.context as { state: string }).state = "running";
+        resolve();
+      };
+    });
+  const p = new Previewer(() => f.Ctor);
+  const playing = p.play(Int16Array.of(1, 2, 3));
+  p.stop(); // the maker pressed pause before the audio woke
+  wake();
+  await playing;
+  assert.equal(f.sources.length, 0, "no source was ever started");
+  assert.equal(p.playing, false);
+});
+
+test("closing the previewer stops the loop and closes its audio context, once", async () => {
+  const f = fake();
+  let closed = 0;
+  (f.context as unknown as { close: () => Promise<void> }).close = async () => void (closed += 1);
+  const p = new Previewer(() => f.Ctor);
+  await p.play(Int16Array.of(1, 2, 3));
+  p.close();
+  p.close();
+  assert.equal(p.playing, false);
+  assert.equal(f.sources[0]?.stopped, true);
+  assert.equal(closed, 1);
+});

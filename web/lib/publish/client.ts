@@ -131,10 +131,14 @@ export async function publishWithRetries(
     if (result.status === 200 || result.status === 201) {
       const b = record(result.body);
       const publication = record(b["publication"]);
+      // An answer that says "published" but names nothing (a captive portal, a proxy) is not believed.
+      if (typeof publication["id"] !== "string" || publication["id"] === "") {
+        return { kind: "refused", refusal: { kind: "internal" } };
+      }
       return {
         kind: "published",
         created: result.status === 201,
-        id: String(publication["id"] ?? ""),
+        id: publication["id"],
         manageKey: typeof b["manage_key"] === "string" ? b["manage_key"] : null,
         previewMatches: typeof b["preview_matches"] === "boolean" ? b["preview_matches"] : null,
         adjusted: Array.isArray(b["adjusted_fields"]) ? b["adjusted_fields"].map(String) : [],

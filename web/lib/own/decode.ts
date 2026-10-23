@@ -10,6 +10,9 @@ export const MAX_FILE_BYTES = 30_000_000;
 /** The longest recording that can be trimmed down to a source: two minutes. */
 export const MAX_DECODED_FRAMES = 120 * 48_000;
 
+/** Whether a file is over the limit by its size alone, so it is refused before it is read at all. */
+export const tooBigToRead = (file: { size: number }): boolean => file.size > MAX_FILE_BYTES;
+
 export type Decoded =
   | { ok: true; samples: Int16Array }
   | { ok: false; reason: "tooBig" | "unreadable" | "tooLongToTrim" | "channels" | "empty" };

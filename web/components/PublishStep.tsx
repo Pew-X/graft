@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { copy, fill } from "../lib/copy.ts";
 import {
   type Outcome,
@@ -99,6 +99,7 @@ export function PublishStep({
   /** Extra fields between the name and the button. */
   children?: ReactNode;
 }) {
+  const uid = useId();
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
   const [phase, setPhase] = useState<Phase>({ name: "form" });
@@ -155,8 +156,8 @@ export function PublishStep({
     const { outcome } = phase;
     const url = new URL(`/p/${outcome.id}`, window.location.href).href;
     return (
-      <section className="publish done" aria-labelledby="done-heading">
-        <h3 id="done-heading" ref={heading} tabIndex={-1} className="kicker">
+      <section className="publish done" aria-labelledby={`${uid}-done`}>
+        <h3 id={`${uid}-done`} ref={heading} tabIndex={-1} className="kicker">
           {copy.publish.done.heading}
         </h3>
         <p className="kicker">{copy.publish.done.link}</p>
@@ -253,8 +254,8 @@ export function PublishStep({
 
   const publishing = phase.name === "publishing";
   return (
-    <section className="publish" aria-labelledby="publish-heading">
-      <h3 id="publish-heading" className="kicker">
+    <section className="publish" aria-labelledby={`${uid}-heading`}>
+      <h3 id={`${uid}-heading`} className="kicker">
         {headingText}
       </h3>
       <p className="public">{statement}</p>
@@ -267,7 +268,7 @@ export function PublishStep({
       >
         <div ref={titleInput}>
           <Field
-            id="publish-title"
+            id={`${uid}-title`}
             label={copy.publish.title}
             gloss={copy.publish.titleGloss}
             value={title}
@@ -276,7 +277,7 @@ export function PublishStep({
           />
         </div>
         <Field
-          id="publish-name"
+          id={`${uid}-name`}
           label={copy.publish.name}
           gloss={copy.publish.nameGloss}
           value={author}
@@ -289,7 +290,7 @@ export function PublishStep({
             type="submit"
             className="primary"
             disabled={!canSubmit || publishing}
-            aria-describedby="publish-why"
+            aria-describedby={`${uid}-why`}
           >
             {copy.publish.submit}
           </button>
@@ -298,7 +299,7 @@ export function PublishStep({
           </button>
         </div>
       </form>
-      <p id="publish-why" className="hint">
+      <p id={`${uid}-why`} className="hint">
         {gate ? "" : gateWhy}
       </p>
       <p role="status" className="progress">

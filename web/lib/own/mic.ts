@@ -6,6 +6,8 @@ export type MicProblem = "denied" | "unavailable";
 export interface Recording {
   /** Stop and hand back what was recorded. */
   stop(): Promise<Blob>;
+  /** Stop and throw away what was recorded, and let the microphone go. */
+  cancel(): void;
 }
 
 /**
@@ -29,19 +31,34 @@ export async function startRecording(
       problem: name === "NotFoundError" || name === "NotReadableError" ? "unavailable" : "denied",
     };
   }
-  const recorder = new MediaRecorder(stream);
+  const release = () => stream.getTracks().forEach((t) => t.stop());
+  let recorder: MediaRecorder;
   const chunks: Blob[] = [];
-  recorder.ondataavailable = (e) => chunks.push(e.data);
+  try {
+    recorder = new MediaRecorder(stream);
+    recorder.ondataavailable = (e) => chunks.push(e.data);
+    recorder.start();
+  } catch {
+    // The microphone was allowed but cannot be recorded from: let it go, so its indicator goes out.
+    release();
+    return { ok: false, problem: "unavailable" };
+  }
   const timer = setTimeout(onLimit, MAX_SECONDS * 1000);
-  recorder.start();
   return {
     ok: true,
     recording: {
+      cancel: () => {
+        clearTimeout(timer);
+        recorder.ondataavailable = null;
+        recorder.onstop = null;
+        if (recorder.state !== "inactive") recorder.stop();
+        release();
+      },
       stop: () =>
         new Promise<Blob>((resolve) => {
           clearTimeout(timer);
           recorder.onstop = () => {
-            stream.getTracks().forEach((t) => t.stop());
+            release();
             resolve(new Blob(chunks, { type: recorder.mimeType }));
           };
           if (recorder.state !== "inactive") recorder.stop();

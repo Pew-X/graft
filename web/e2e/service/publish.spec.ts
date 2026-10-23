@@ -276,7 +276,9 @@ test("a link in the title is removed by the service and the page says so", async
   const parent = await parentFor(request);
   await open(page, parent);
   await page.getByLabel(/^title/).fill("hear https://example.com now");
-  await expect(page.locator("#publish-title-hint")).toContainText("links and @handles are removed");
+  await expect(page.locator('.publish [id$="-title-hint"]')).toContainText(
+    "links and @handles are removed",
+  );
   await page.getByLabel(/^your name/).fill("page maker");
   await page.getByRole("button", { name: "publish", exact: true }).click();
   await expect(page.getByText("a link or a handle was removed from your title")).toBeVisible();
@@ -334,4 +336,23 @@ test("the step is keyboard-complete: focus lands on the title, errors take focus
   await page.keyboard.type("key maker");
   await page.keyboard.press("Enter");
   await expect(page.getByRole("heading", { name: "published" })).toBeFocused();
+});
+
+test("changing the cut after publishing does not take the result, or the one-time key, off the screen", async ({
+  page,
+  request,
+}) => {
+  const parent = await parentFor(request);
+  await open(page, parent);
+  await fill(page);
+  await page.getByRole("button", { name: "publish", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "published" })).toBeVisible();
+  const key = await page.getByTestId("manage-key").innerText();
+  // A handle dragged past the other makes the cut invalid: the controls say so, the result stays.
+  const start = page.getByRole("slider", { name: "start of the cut" });
+  await start.focus();
+  await page.keyboard.press("End");
+  await expect(page.locator("#why-not")).toContainText("ends before it starts");
+  await expect(page.getByRole("heading", { name: "published" })).toBeVisible();
+  await expect(page.getByTestId("manage-key")).toHaveText(key);
 });

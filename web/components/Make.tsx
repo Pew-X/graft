@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createApi, fetchChain } from "../lib/api/chain.ts";
 import { copy, fill } from "../lib/copy.ts";
 import { checkFlip, renderFlip } from "../lib/make/flip.ts";
-import { type Cut, outputFrames, refusal, seconds } from "../lib/make/cut.ts";
+import { type Cut, LIMITS, outputFrames, refusal, seconds } from "../lib/make/cut.ts";
 import { Previewer } from "../lib/make/preview.ts";
 import { RENDERER_PATH, loadRenderer, type Renderer } from "../lib/make/renderer.ts";
 import type { Sound } from "../lib/make/sounds.ts";
@@ -23,7 +23,6 @@ import { SoundPicker } from "./SoundPicker.tsx";
 
 /** The first thing heard is a flip, not the sound unchanged: up a fifth. */
 const DEFAULT_SPEED = { p: 3, q: 2 };
-const LONGEST_CUT = 480_000;
 
 /** Where the audio of the sound being flipped comes from. */
 type Origin = { kind: "shipped"; sound: Sound } | { kind: "live"; id: string };
@@ -91,7 +90,8 @@ export function Make({
         ? { kind: "live", id: from }
         : null;
 
-  const engine = useAsync("renderer", renderer);
+  const [engineTry, setEngineTry] = useState(0);
+  const engine = useAsync(`renderer:${engineTry}`, renderer);
 
   const path = origin?.kind === "shipped" ? origin.sound.audioPath : null;
   const liveId = origin?.kind === "live" ? origin.id : null;
@@ -125,6 +125,7 @@ export function Make({
           samples={own}
           engine={engine.status === "ready" ? engine.value : null}
           engineFailed={engine.status === "failed"}
+          onRetryEngine={() => setEngineTry((n) => n + 1)}
           start={start}
           onChange={() => setOwn(null)}
         />
@@ -144,6 +145,7 @@ export function Make({
           samples={sound.value}
           engine={engine.status === "ready" ? engine.value : null}
           engineFailed={engine.status === "failed"}
+          onRetryEngine={() => setEngineTry((n) => n + 1)}
           start={start}
           onChange={() => {
             // Back to the list. A sound named in the link is forgotten with it.
@@ -152,13 +154,34 @@ export function Make({
           }}
         />
       ) : (
-        <p className="notice" role="status">
-          {sound.status === "failed"
-            ? sound.error instanceof GoneError
-              ? copy.make.pick.gone
-              : copy.make.pick.failed
-            : copy.make.pick.loading}
-        </p>
+        <div>
+          <p className="notice" role="status">
+            {sound.status === "failed"
+              ? sound.error instanceof GoneError
+                ? copy.make.pick.gone
+                : copy.make.pick.failed
+              : copy.make.pick.loading}
+          </p>
+          {sound.status === "failed" ? (
+            <div className="actions">
+              <button
+                type="button"
+                className="pill"
+                onClick={() => {
+                  if (from) router.push("/make");
+                  else setPicked(null);
+                }}
+              >
+                {copy.make.pick.change}
+              </button>
+              {sound.error instanceof GoneError ? null : (
+                <button type="button" className="pill" onClick={() => window.location.reload()}>
+                  {copy.publish.retry}
+                </button>
+              )}
+            </div>
+          ) : null}
+        </div>
       )}
       <p className="local">{copy.make.local}</p>
     </div>
@@ -175,6 +198,7 @@ function Editor({
   samples,
   engine,
   engineFailed,
+  onRetryEngine,
   start,
   onChange,
 }: {
@@ -186,12 +210,13 @@ function Editor({
   samples: Int16Array;
   engine: Renderer | null;
   engineFailed: boolean;
+  onRetryEngine: () => void;
   start: Start;
   onChange: () => void;
 }) {
   const frames = samples.length;
   const [cut, setCut] = useState<Cut>(
-    () => parseCut(start.cut) ?? { start: 0, end: Math.min(frames, LONGEST_CUT) },
+    () => parseCut(start.cut) ?? { start: 0, end: Math.min(frames, LIMITS.maxCutFrames) },
   );
   const [stop, setStop] = useState<number>(() => {
     const given = parseSpeed(start.speed);
@@ -240,12 +265,14 @@ function Editor({
   const latest =
     made.status === "ready" ? made.value : made.status === "loading" ? made.previous : undefined;
   const ready = latest?.ok ? latest : null;
+  // What may be published: the render of exactly this cut and speed, not the one before it.
+  const current = made.status === "ready" && made.value.ok ? made.value : null;
 
   useEffect(() => {
     if (listening && ready) void previewer.play(ready.samples).catch(() => setListening(false));
     else previewer.stop();
   }, [previewer, listening, ready]);
-  useEffect(() => () => previewer.stop(), [previewer]);
+  useEffect(() => () => previewer.close(), [previewer]);
 
   // Any gesture on a control starts the preview and keeps it going as the control moves.
   const touch = useCallback(() => {
@@ -353,7 +380,7 @@ function Editor({
           <button
             type="button"
             className="pill"
-            disabled={problem !== null || ready === null || publishing || flipParent === null}
+            disabled={problem !== null || current === null || publishing || flipParent === null}
             aria-describedby="why-not"
             onClick={() => setPublishing(true)}
           >
@@ -381,6 +408,11 @@ function Editor({
                     ? fill(copy.make.result.comesOut, { length: seconds(outLength) })
                     : ""}
           </p>
+          {engineFailed && problem === null ? (
+            <button type="button" className="pill" onClick={onRetryEngine}>
+              {copy.publish.retry}
+            </button>
+          ) : null}
         </div>
         {own ? (
           <p id="own-why" className="hint">
@@ -441,7 +473,7 @@ function Editor({
           </fieldset>
         </PublishStep>
       ) : null}
-      {publishing && ready && flipParent !== null ? (
+      {publishing && flipParent !== null ? (
         <PublishStep
           signature={`${flipParent}:${cut.start}-${cut.end}:${p}/${q}`}
           buildBody={({ title, author, retryKey }) => ({
@@ -451,8 +483,10 @@ function Editor({
             title,
             author,
             retry_key: retryKey,
-            preview_hash: ready.hash,
+            ...(current ? { preview_hash: current.hash } : {}),
           })}
+          gate={current !== null}
+          gateWhy={problem ? refusal(problem) : copy.make.result.updating}
           apiUrl={apiUrl}
           onClose={() => setPublishing(false)}
         />

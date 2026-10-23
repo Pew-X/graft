@@ -86,6 +86,14 @@ const screens: Screen[] = [
   {
     name: "make: your own sound and its declaration",
     go: async (page) => {
+      // Uploads on, whatever service (or none) this run has: the declaration is what is scanned.
+      await page.route("**/v1/features", (r) =>
+        r.fulfill({
+          contentType: "application/json",
+          headers: { "access-control-allow-origin": "*" },
+          body: JSON.stringify({ publishing: true, uploads: true }),
+        }),
+      );
       await page.goto("/make");
       await page
         .locator("input[type=file]")

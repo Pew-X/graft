@@ -88,7 +88,7 @@ test("a picked file is cut and flipped on the device, published as a source unde
   await page.getByLabel(/^your name/).fill("pat");
   const submit = page.getByRole("button", { name: "publish", exact: true });
   await expect(submit).toBeDisabled();
-  await expect(page.locator("#publish-why")).toContainText(
+  await expect(page.locator('.publish [id$="-why"]')).toContainText(
     "I made this sound or I have the right to share it",
   );
   await page.getByLabel(/i confirm/).check();

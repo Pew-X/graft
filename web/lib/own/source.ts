@@ -1,6 +1,7 @@
 /** The body of a source published from the maker's own recording. */
 import type { PublishSourceBody } from "../publish/client.ts";
 import { type Cut, LIMITS, type Problem } from "../make/cut.ts";
+import { toBytes } from "../make/renderer.ts";
 
 /** The statement the service requires, word for word; a test compares it with the service's. */
 export const DECLARATION_TEXT =
@@ -13,9 +14,7 @@ export type Basis = "own_recording" | "right_to_share";
 
 /** Standard base64 of canonical bytes (little-endian 16-bit), built in chunks so it never overruns the call limit. */
 export function toBase64(samples: Int16Array): string {
-  const bytes = new Uint8Array(samples.length * 2);
-  const view = new DataView(bytes.buffer);
-  for (let i = 0; i < samples.length; i++) view.setInt16(i * 2, samples[i] ?? 0, true);
+  const bytes = toBytes(samples);
   let binary = "";
   for (let i = 0; i < bytes.length; i += 0x8000) {
     binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));

@@ -227,3 +227,26 @@ test("the flip button on the roll opens the make flow for that stage", async ({ 
   await expect(page).toHaveURL(/\/make\?from=/);
   await expect(page.getByRole("slider", { name: "start of the cut" })).toBeVisible();
 });
+
+test("a sound that fails to load gives a way back to the list, not a dead end", async ({
+  page,
+}) => {
+  await page.route("**/seed/*.pcm", (route) => route.abort("connectionreset"));
+  await page.goto("/make");
+  await page.getByRole("button", { name: "flip this sound: saber hum" }).click();
+  await expect(page.getByRole("status").first()).toContainText("could not be loaded");
+  await page.getByRole("button", { name: "pick another sound" }).click();
+  await expect(page.getByRole("heading", { name: "pick a sound to start from" })).toBeVisible();
+});
+
+test("a file over the size limit is refused by its size alone, without being read", async ({
+  page,
+}) => {
+  await page.goto("/make");
+  await page.locator("input[type=file]").setInputFiles({
+    name: "huge.wav",
+    mimeType: "audio/wav",
+    buffer: Buffer.alloc(30_000_001),
+  });
+  await expect(page.getByText("that file is too large")).toBeVisible();
+});

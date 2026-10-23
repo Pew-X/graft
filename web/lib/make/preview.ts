@@ -19,6 +19,7 @@ export interface PreviewContext {
   readonly state: string;
   readonly destination: unknown;
   resume(): Promise<void>;
+  close?(): Promise<void>;
   createGain(): { gain: ParamLike; connect(d: unknown): unknown };
   createBuffer(
     channels: number,
@@ -40,6 +41,8 @@ export class Previewer {
   readonly #ctor: () => Ctor | undefined;
   #context: PreviewContext | null = null;
   #stopLoop: (() => void) | null = null;
+  /** Bumped by every stop, so a play that was waiting on the context can tell it was cancelled. */
+  #generation = 0;
 
   constructor(ctor: () => Ctor | undefined) {
     this.#ctor = ctor;
@@ -69,7 +72,9 @@ export class Previewer {
 
   /** Loop `samples`, replacing whatever was looping. */
   async play(samples: Int16Array): Promise<void> {
+    const wanted = this.#generation;
     const context = await this.unlock();
+    if (wanted !== this.#generation) return; // stopped while the audio was waking
     this.stop();
     const buffer = context.createBuffer(1, samples.length, SAMPLE_RATE);
     buffer.copyToChannel(pcmToFloat(samples), 0);
@@ -95,7 +100,16 @@ export class Previewer {
   }
 
   stop(): void {
+    this.#generation += 1;
     this.#stopLoop?.();
     this.#stopLoop = null;
+  }
+
+  /** Stop, and give the audio context back: browsers allow only a few. */
+  close(): void {
+    this.stop();
+    const context = this.#context;
+    this.#context = null;
+    void context?.close?.().catch(() => undefined);
   }
 }
