@@ -76,7 +76,7 @@ test("opening the home page asks the API for nothing and fetches only static fil
   expect(requests.every((u) => new URL(u).origin === "http://127.0.0.1:3100")).toBe(true);
   expect(audio).toHaveLength(4);
   for (const file of audio) expect(file.cache).toContain("immutable");
-  await expect(page.getByRole("heading", { level: 2 })).toHaveCount(4);
+  await expect(page.getByRole("heading", { level: 2 })).toHaveCount(5); // four stages and the empty label
 });
 
 test("audio stays locked until a tap, and the page says what to tap", async ({ page }) => {
@@ -149,12 +149,14 @@ test("the keyboard alone runs the whole loop", async ({ page }) => {
   const focus = (): Promise<string> =>
     page.evaluate(() => {
       const el = document.activeElement as HTMLElement | null;
-      return (el?.innerText ?? el?.getAttribute("aria-label") ?? "").split("\n")[0] ?? "";
+      // the text a screen reader would find, hidden text included
+      return (el?.textContent?.trim() || el?.getAttribute("aria-label") || "").split("\n")[0] ?? "";
     });
-  const tabTo = async (label: string, key = "Tab"): Promise<void> => {
+  const tabTo = async (label: string | RegExp, key = "Tab"): Promise<void> => {
     for (let i = 0; i < 60; i++) {
       await page.keyboard.press(key);
-      if ((await focus()) === label) return;
+      const now = await focus();
+      if (typeof label === "string" ? now === label : label.test(now)) return;
     }
     throw new Error(`never reached ${label}`);
   };
@@ -167,7 +169,7 @@ test("the keyboard alone runs the whole loop", async ({ page }) => {
   await expect(roll(page)).toHaveAttribute("data-playback", "paused");
 
   // A stage's label plays that stage alone; the same key on it again pauses it.
-  await tabTo("2", "Shift+Tab");
+  await tabTo(/^2\s?up a fifth/, "Shift+Tab");
   await page.keyboard.press("Enter");
   await expect(roll(page)).toHaveAttribute("data-playback", "auditioning");
   await expect(roll(page)).toHaveAttribute("data-stage", "1");
@@ -180,7 +182,7 @@ test("the keyboard alone runs the whole loop", async ({ page }) => {
   await expect(roll(page)).toHaveAttribute("data-playback", "auditioning");
 
   // Next stage is reachable by keyboard too: from the audition of stage 2 it auditions stage 3.
-  await tabTo("next stage");
+  await tabTo(/next stage/);
   await page.keyboard.press("Enter");
   await expect(roll(page)).toHaveAttribute("data-playback", "auditioning");
   await expect(roll(page)).toHaveAttribute("data-stage", "2");
@@ -213,11 +215,13 @@ test("the roll is real text in reading order, and the controls are named", async
   const tree = await page.locator("main").ariaSnapshot();
   // Order is source first; each stage is a heading with a button; the roll ends on the empty label.
   const headings = [...tree.matchAll(/heading "([^"]*)" \[level=2\]/g)].map((m) => m[1]);
-  expect(headings).toHaveLength(4);
+  // four stages and the empty last label, which is a heading too
+  expect(headings).toHaveLength(5);
   const order = headings.map(
     (h) => h!.match(/dm9 chord|up a fifth|down a fifth|down an octave/)?.[0],
   );
-  expect(order).toEqual(["dm9 chord", "up a fifth", "down a fifth", "down an octave"]);
+  expect(order).toEqual(["dm9 chord", "up a fifth", "down a fifth", "down an octave", undefined]);
+  expect(headings.at(-1)).toBe("maker unknown");
   expect(tree.indexOf("maker unknown")).toBeGreaterThan(tree.lastIndexOf("down an octave"));
   expect(tree).toContain('group "playback"');
   expect(tree).toContain('button "play"');
@@ -288,4 +292,78 @@ test("a saved theme applies before the first paint, even on a page without the t
   expect(seen).toEqual(["light"]);
   const background = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   expect(background).toBe("rgb(239, 235, 227)"); // the light wall, not leader black
+});
+
+for (const [name, viewport] of [
+  ["a short landscape screen", { width: 1000, height: 420 }],
+  ["a phone", { width: 390, height: 844 }],
+] as const) {
+  test(`on ${name} the stage in view scrolls, so every line and "flip this" can be reached`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    await page.goto("/");
+    await ready(page);
+    // Let the roll finish sliding to its place before measuring anything.
+    await page.evaluate(() =>
+      Promise.all(
+        document
+          .getAnimations()
+          .filter((a) => a instanceof CSSTransition)
+          .map((a) => a.finished),
+      ),
+    );
+    const article = page.locator('.block[data-hero="true"] > article');
+    const flip = page.locator('.block[data-hero="true"] .flip');
+    // The stage in view is taller than the room it has, so it is its own scrolling region.
+    expect(await article.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+    // It stays above the controls (and, on a phone, above the record).
+    const box = (await article.boundingBox())!;
+    const controls = (await page.locator(".controls").boundingBox())!;
+    expect(box.y + box.height).toBeLessThanOrEqual(controls.y + 1);
+    // Its last control is reachable by pointer once scrolled to, and it answers.
+    await flip.scrollIntoViewIfNeeded();
+    await flip.click();
+    await expect(page.getByRole("status").first()).toContainText("making a flip is not open yet");
+  });
+}
+
+test("the roll opens already in place: the first placement does not slide through the whole chain", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1400, height: 800 });
+  await page.addInitScript(() => {
+    (window as unknown as { slides: number }).slides = 0;
+    document.addEventListener("transitionstart", (e) => {
+      if ((e.target as HTMLElement).classList?.contains("sheet"))
+        (window as unknown as { slides: number }).slides++;
+    });
+  });
+  await page.goto("/");
+  await ready(page);
+  await page.waitForTimeout(1200);
+  expect(await page.evaluate(() => (window as unknown as { slides: number }).slides)).toBe(0);
+});
+
+test("the disc keeps turning when the pointer leaves it while a stage plays", async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 800 });
+  await page.goto("/");
+  await ready(page);
+  await page.getByRole("button", { name: "play", exact: true }).click();
+  await expect(roll(page)).toHaveAttribute("data-sounding", "true");
+  // The mouse goes over the record, then off it onto the controls (which lie above the canvas).
+  await page.mouse.move(1100, 400);
+  await page.mouse.move(700, 850);
+  const sample = () =>
+    page.locator("canvas.disc").evaluate((c: HTMLCanvasElement) => {
+      const d = c
+        .getContext("2d")!
+        .getImageData(Math.round(c.width * 0.62), Math.round(c.height * 0.2), 300, 60).data;
+      let h = 0;
+      for (let i = 0; i < d.length; i += 11) h = (h * 31 + d[i]!) >>> 0;
+      return h;
+    });
+  const first = await sample();
+  await page.waitForTimeout(500);
+  expect(await sample(), "the disc is still being redrawn").not.toBe(first);
 });

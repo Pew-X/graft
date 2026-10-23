@@ -21,6 +21,12 @@ export interface PolicyOptions {
   production: boolean;
   /** Comma-separated origins the page may connect to besides itself. */
   connectOrigins?: string | undefined;
+  /**
+   * Make the browser fetch every request of the page over https. Off by default, because it breaks a
+   * page served over plain http (a LAN test, a preview): browsers exempt only localhost. A production
+   * site behind https sets it (`GRAFT_UPGRADE_INSECURE_REQUESTS=on` when the site is built).
+   */
+  upgradeInsecure?: boolean | undefined;
 }
 
 const ORIGIN = /^https?:\/\/[A-Za-z0-9.-]+(:\d{1,5})?$/;
@@ -36,7 +42,11 @@ function origins(list: string | undefined): string[] {
     });
 }
 
-export function contentSecurityPolicy({ production, connectOrigins }: PolicyOptions): string {
+export function contentSecurityPolicy({
+  production,
+  connectOrigins,
+  upgradeInsecure,
+}: PolicyOptions): string {
   const directives = [
     "default-src 'self'",
     `script-src 'self' 'unsafe-inline'${production ? "" : " 'unsafe-eval'"}`,
@@ -49,7 +59,7 @@ export function contentSecurityPolicy({ production, connectOrigins }: PolicyOpti
     "form-action 'self'",
     "frame-ancestors 'none'",
   ];
-  if (production) directives.push("upgrade-insecure-requests");
+  if (upgradeInsecure) directives.push("upgrade-insecure-requests");
   return directives.join("; ");
 }
 

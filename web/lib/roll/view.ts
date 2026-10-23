@@ -51,8 +51,16 @@ export interface DetailRow {
 /** What a reader of the chain is told about a stage's availability. */
 export type StageState = "available" | "no_longer_here" | "held" | "unavailable";
 
+/** The lettering of a title: brush for a source, tall and tilted for a speed-up, wide and heavy for a slow-down. */
+export type Lettering = "src" | "up" | "down";
+
 export interface Block {
   id: string;
+  lettering: Lettering;
+  /** A short line for the header: "3/2 · +7.0 st", or "source". */
+  meta: string;
+  /** The frames of the stage before it that a flip kept; null for a source and for a stage not shown. */
+  cutFrames: readonly [number, number] | null;
   state: StageState;
   /** "flipped 3 times", for a stage that can be heard; null otherwise or when not known. */
   flipped: string | null;
@@ -132,10 +140,31 @@ export function faceLines(
     });
 }
 
+/** "3/2 · +7.0 st": the ratio and the shift in semitones, signed. */
+function metaOf(kind: string, p: number | null, q: number | null): string {
+  if (kind === "source") return "source";
+  if (p === null || q === null) return "flip";
+  const semitones = 12 * Math.log2(p / q);
+  const tenths = Math.round(Math.abs(semitones) * 10) / 10;
+  return `${p}/${q} · ${semitones < 0 && tenths > 0 ? "-" : "+"}${tenths.toFixed(1)} st`;
+}
+
+/** The lettering a stage's title gets. */
+export function letteringOf(
+  kind: string,
+  speed: { p: number | null; q: number | null },
+): Lettering {
+  if (kind === "source") return "src";
+  return speed.p !== null && speed.q !== null && speed.p < speed.q ? "down" : "up";
+}
+
 /** A stage that can be heard, as a block. */
 export function blockFor(stage: StageInput, index: number, flipped: string | null = null): Block {
   return {
     id: stage.id,
+    lettering: letteringOf(stage.kind, { p: stage.speed_p, q: stage.speed_q }),
+    meta: metaOf(stage.kind, stage.speed_p, stage.speed_q),
+    cutFrames: stage.kind === "flip" ? [stage.cut_start, stage.cut_end] : null,
     state: "available",
     flipped,
     index,

@@ -39,3 +39,26 @@ test("nothing is judged before there are enough frames to judge", () => {
   feed(g, 80, 5);
   assert.equal(g.degraded, false);
 });
+
+test("frames before a pause are not measured against frames after it: a pause is not a slow frame", () => {
+  const g = new FrameGovernor();
+  let t = feed(g, 1000 / 60, 40);
+  // The loop stops (paused, or only redrawn when the visitor acts), and starts again much later.
+  g.pause();
+  t += 60_000;
+  for (let i = 0; i < 40; i++) {
+    t += 1000 / 60;
+    g.frame(t);
+  }
+  assert.equal(g.degraded, false);
+});
+
+test("without a pause the same gap would count, which is why the loop says when it stops", () => {
+  const g = new FrameGovernor();
+  let t = feed(g, 1000 / 60, 10);
+  for (let i = 0; i < 25; i++) {
+    t += 500; // a person pressing keys, one redraw each
+    g.frame(t);
+  }
+  assert.equal(g.degraded, true);
+});

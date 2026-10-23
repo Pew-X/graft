@@ -16,7 +16,6 @@ export const copy = {
     loading: "loading the sounds.",
     loadFailed: "the sounds could not be loaded. reload to try again.",
     soundFailed: "the sound could not start. tap play to try again.",
-    noAudio: "this browser cannot play the sounds. the credits below still read in full.",
   },
   controls: {
     label: "playback",
@@ -29,17 +28,18 @@ export const copy = {
     playAll: "play all",
   },
   roll: {
+    lead: "a sound has a past.",
+    meta: "stage {n} of {total} · {meta}",
+    metaShort: "stage {n} of {total}",
+    kicker: "no. {n} · {kind}",
+    kickerYours: "no. {n} · yours",
     label: "the credits",
     stage: "stage {n} of {total}: {title}",
-    stageButton: "{n}. {title}",
-    current: "now playing",
   },
   record: {
     label: "the record",
     needle: "drag the needle.",
     value: "stage {n} of {total}, {title}, {at} of {length} seconds",
-    empty: "the roll ends on you. no sound here yet.",
-    hover: "{n}. {title}",
   },
   states: {
     no_longer_here: "this sound is no longer here, but its credit is.",

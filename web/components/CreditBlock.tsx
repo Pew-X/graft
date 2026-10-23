@@ -1,26 +1,24 @@
-import type { Ref } from "react";
+import { memo } from "react";
 import { copy, fill } from "../lib/copy.ts";
 import type { Block, DetailRow, FaceLine } from "../lib/roll/view.ts";
 
-/** A value with its honesty state in words; colour is never the only carrier of the state. */
+/** The honesty state in words (colour is never the only carrier of it). */
 function Stated({ state, asTyped }: { state: string; asTyped: boolean }) {
   return (
-    <span className="state" data-state={state}>
+    <u className="state" data-state={state}>
       {state}
       {asTyped ? ` · ${copy.state.asTyped}` : ""}
-    </span>
+    </u>
   );
 }
 
 function Line({ line }: { line: FaceLine }) {
   return (
     <div className="line" data-honesty={line.honesty}>
-      <dt>
-        <span className="role">{line.word}</span>
-        <span className="gloss">{line.gloss}</span>
-      </dt>
+      <dt>{line.word}</dt>
       <dd>
-        <span className="value">{line.value}</span>{" "}
+        <span className="value">{line.value}</span>
+        {line.gloss ? <em>{line.gloss}</em> : null}
         <Stated state={line.state} asTyped={line.asTyped} />
       </dd>
     </div>
@@ -32,44 +30,68 @@ function Detail({ row }: { row: DetailRow }) {
     <div className="line" data-honesty={row.honesty}>
       <dt>{row.label}</dt>
       <dd>
-        <code>{row.value}</code> <Stated state={row.state} asTyped={row.asTyped} />
+        <code>{row.value}</code>
+        <Stated state={row.state} asTyped={row.asTyped} />
       </dd>
     </div>
   );
 }
 
-export function CreditBlock({
+interface Props {
+  block: Block;
+  total: number;
+  /** The stage the engine says is current. */
+  current: boolean;
+  /** The stage the page is showing as the hero (the current one, or the one the visitor moved to). */
+  hero: boolean;
+  playing: boolean;
+  disabled: boolean;
+  onPlay: (index: number) => void;
+  onFlip: (index: number) => void;
+  register: (index: number, node: HTMLLIElement | null) => void;
+  onFocusBlock: (index: number) => void;
+}
+
+/**
+ * One stage as a wall label: a kicker, a cut-paper title slab in the stage's dye (lettered after what
+ * was done to the sound), and the credit lines. The page shows one stage large and the others dimmed;
+ * every stage is always real text in reading order.
+ */
+export const CreditBlock = memo(function CreditBlock({
   block,
   total,
   current,
+  hero,
   playing,
   disabled,
   onPlay,
   onFlip,
-  nodeRef,
-}: {
-  block: Block;
-  total: number;
-  current: boolean;
-  playing: boolean;
-  disabled: boolean;
-  onPlay: () => void;
-  onFlip: () => void;
-  nodeRef: Ref<HTMLLIElement>;
-}) {
+  register,
+  onFocusBlock,
+}: Props) {
   const heading = `stage-${block.id}`;
   return (
     <li
-      ref={nodeRef}
+      ref={(node) => register(block.index, node)}
       className="block"
       data-dye={block.dye}
       data-state={block.state}
       data-current={current}
+      data-hero={hero}
       aria-current={current ? "step" : undefined}
+      onFocus={() => onFocusBlock(block.index)}
     >
       <article aria-labelledby={heading}>
-        <h2 id={heading} className="slab">
-          <button type="button" disabled={disabled} onClick={onPlay} aria-pressed={playing}>
+        <p className="kicker">
+          {fill(copy.roll.kicker, { n: String(block.numeral).padStart(2, "0"), kind: block.kind })}
+        </p>
+        <h2 id={heading} className="slab" data-k={block.lettering}>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => onPlay(block.index)}
+            aria-pressed={playing}
+          >
             <span className="numeral" aria-hidden="true">
               {block.numeral}
             </span>
@@ -104,28 +126,50 @@ export function CreditBlock({
             </dl>
           </details>
         )}
-        <button type="button" className="flip" onClick={onFlip}>
+        <button type="button" className="flip" onClick={() => onFlip(block.index)}>
           {copy.flip.label}
         </button>
       </article>
     </li>
   );
-}
+});
 
 /** The last label: empty, and the place the next flip goes. */
-export function EndBlock({ onFlip }: { onFlip: () => void }) {
+export const EndBlock = memo(function EndBlock({
+  index,
+  hero,
+  onFlip,
+  register,
+  onFocusBlock,
+}: {
+  index: number;
+  hero: boolean;
+  onFlip: () => void;
+  register: (index: number, node: HTMLLIElement | null) => void;
+  onFocusBlock: (index: number) => void;
+}) {
   return (
-    <li className="block end">
+    <li
+      ref={(node) => register(index, node)}
+      className="block end"
+      data-hero={hero}
+      onFocus={() => onFocusBlock(index)}
+    >
       <article aria-label={copy.end.role}>
+        <p className="kicker">
+          {fill(copy.roll.kickerYours, { n: String(index + 1).padStart(2, "0") })}
+        </p>
+        <h2 className="slab" data-k="src">
+          <span className="empty-slab">
+            <span className="cursor" aria-hidden="true" />
+            <span className="value">{copy.end.value}</span>
+          </span>
+        </h2>
         <dl className="face">
           <div className="line" data-honesty="unknown">
-            <dt>
-              <span className="role">{copy.end.role}</span>
-              <span className="gloss">{copy.end.gloss}</span>
-            </dt>
+            <dt>{copy.end.role}</dt>
             <dd>
-              <span className="cursor" aria-hidden="true" />
-              <span className="value">{copy.end.value}</span>{" "}
+              <em>{copy.end.gloss}</em>
               <Stated state="unknown" asTyped={false} />
             </dd>
           </div>
@@ -136,4 +180,4 @@ export function EndBlock({ onFlip }: { onFlip: () => void }) {
       </article>
     </li>
   );
-}
+});

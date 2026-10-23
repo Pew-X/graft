@@ -1,7 +1,7 @@
 // The site's security headers, under real use: every page works with the policy on and no page
 // breaks it, and the policy is the one that was written (no wider because of how it was built).
 import { expect, test, type Page } from "@playwright/test";
-import { ADMIN, API, SEEDED_LAST, allowBucketReads, publishFlip } from "./service.ts";
+import { ADMIN, API, SEEDED_LAST, allowBucketReads, publishFlip, press } from "./service.ts";
 
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
 
@@ -59,7 +59,7 @@ test("the home page, a chain page and the operator's page all work under the pol
   const { id } = await publishFlip(request, SEEDED_LAST, "policy flip");
   await page.goto(`/p/${id}`);
   await expect(page.locator(".roll")).toHaveAttribute("data-audio", "ready");
-  await page.getByRole("button", { name: /up a fifth/ }).tap();
+  await press(page, page.getByRole("button", { name: /up a fifth/ }));
   await expect(page.locator(".roll")).toHaveAttribute("data-playback", "auditioning");
 
   // The operator's page: a call with the secret in a header.
