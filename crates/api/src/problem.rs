@@ -29,6 +29,33 @@ pub struct Problem {
     pub retry_after_secs: Option<u32>,
 }
 
+/// The error a request body ends with when it did not finish arriving in time. Extractors look for
+/// it in what a failed read reports, so that a stalled client is answered with a timeout.
+#[derive(Debug)]
+pub struct BodyTimedOut;
+
+impl std::fmt::Display for BodyTimedOut {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("the request body did not arrive in time")
+    }
+}
+
+impl std::error::Error for BodyTimedOut {}
+
+/// Whether a failed read of a request body failed because it timed out, looking through the
+/// causes the extractors wrap it in.
+#[must_use]
+pub fn body_timed_out(error: &(dyn std::error::Error + 'static)) -> bool {
+    let mut current = Some(error);
+    while let Some(e) = current {
+        if e.is::<BodyTimedOut>() {
+            return true;
+        }
+        current = e.source();
+    }
+    false
+}
+
 impl Problem {
     fn base(
         kind: &'static str,

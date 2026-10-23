@@ -39,7 +39,9 @@ impl<S: Send + Sync> FromRequest<S> for EventsBody {
 
     async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
         let bytes = Bytes::from_request(req, state).await.map_err(|rejection| {
-            if rejection.status() == StatusCode::PAYLOAD_TOO_LARGE {
+            if crate::problem::body_timed_out(&rejection) {
+                Problem::request_timeout()
+            } else if rejection.status() == StatusCode::PAYLOAD_TOO_LARGE {
                 Problem::too_large()
             } else {
                 Problem::bad_request("the body could not be read")

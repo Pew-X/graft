@@ -129,7 +129,13 @@ pub async fn set_fork_permission(
     // body of any size gets the same answer as a body of none), and it is read to a bound.
     let body = axum::body::to_bytes(body, MAX_BODY_BYTES)
         .await
-        .map_err(|_| Problem::too_large())?;
+        .map_err(|e| {
+            if crate::problem::body_timed_out(&e) {
+                Problem::request_timeout()
+            } else {
+                Problem::too_large()
+            }
+        })?;
     let request: ForkPermissionRequest = serde_json::from_slice(&body).map_err(|_| {
         Problem::bad_request("the body must be JSON with exactly the documented fields")
     })?;

@@ -553,6 +553,26 @@ async fn a_client_that_connects_and_goes_quiet_does_not_hold_a_request_for_ever(
                 .is_some_and(|v| v.starts_with("application/problem+json"))
         );
     }
+    // The maker route reads its body only after the key is accepted; a stall there is cut off too.
+    let parent = source(&h).await;
+    let made = h
+        .post("/v1/publications", &body(&parent, 1000, 24_000, 3, 2, 901))
+        .await
+        .2;
+    let id = made["publication"]["id"].as_str().expect("id").to_owned();
+    let key = made["manage_key"].as_str().expect("key").to_owned();
+    let (status, _, bytes) = tokio::time::timeout(
+        Duration::from_secs(10),
+        h.send_stalled_body(
+            "PUT",
+            &format!("/v1/publications/{id}/fork-permission"),
+            &[(MANAGE, &key)],
+            "application/json",
+        ),
+    )
+    .await
+    .expect("answered within ten seconds");
+    assert_eq!(status, StatusCode::REQUEST_TIMEOUT, "{}", text(&bytes));
     // Ordinary requests are untouched by the deadline.
     let (status, _, _) = h.get("/health").await;
     assert_eq!(status, StatusCode::OK);

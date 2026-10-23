@@ -171,7 +171,8 @@ export function Record({
   const target = (x: number, y: number): { band: number; offset: number } | null => {
     const band = bandAt(geometry, Math.hypot(x, y), held.current);
     if (band === null) return null;
-    return { band, offset: offsetAt(angleOf(x, y), lengths[band] ?? 0) };
+    // The empty band has no length of its own; a drag that drifts into it keeps the last stage's.
+    return { band, offset: offsetAt(angleOf(x, y), lengths[Math.min(band, stages - 1)] ?? 0) };
   };
 
   const onDown = (event: PointerEvent<SVGSVGElement>): void => {
@@ -210,6 +211,7 @@ export function Record({
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       setHint(false);
+      if (playable[cursor.stage] === false) return; // nothing to hear there
       onScrubStart(cursor.stage, cursor.offset);
       onScrubEnd();
       return;

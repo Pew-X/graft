@@ -2,10 +2,10 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 import { copy } from "../lib/copy.ts";
+import { THEME_KEY } from "../lib/theme/init.ts";
 
 type Mode = "system" | "light" | "dark";
 const ORDER: Mode[] = ["system", "light", "dark"];
-const KEY = "graft-theme";
 
 // The choice lives in this browser if storage lets it, and in memory for the visit if not.
 let chosen: Mode | null = null;
@@ -14,7 +14,7 @@ const listeners = new Set<() => void>();
 function read(): Mode {
   if (chosen !== null) return chosen;
   try {
-    const saved = localStorage.getItem(KEY);
+    const saved = localStorage.getItem(THEME_KEY);
     if (saved === "light" || saved === "dark") return saved;
   } catch {
     /* storage blocked */
@@ -25,8 +25,8 @@ function read(): Mode {
 function choose(mode: Mode): void {
   chosen = mode;
   try {
-    if (mode === "system") localStorage.removeItem(KEY);
-    else localStorage.setItem(KEY, mode);
+    if (mode === "system") localStorage.removeItem(THEME_KEY);
+    else localStorage.setItem(THEME_KEY, mode);
   } catch {
     /* the choice lasts for this visit */
   }

@@ -31,6 +31,7 @@ getrandom = "0.3"
 base64 = "0.22"
 subtle = "2"
 thiserror = "2"
+futures = { version = "0.3", default-features = false, features = ["std"] }
 
 opentelemetry = "0.33"
 opentelemetry_sdk = { version = "0.33", default-features = false, features = ["trace", "rt-tokio"] }
@@ -43,7 +44,6 @@ sentry-tracing = { version = "0.49", default-features = false }
 opentelemetry_sdk = { version = "0.33", default-features = false, features = ["trace", "rt-tokio", "testing"] }
 graft-storage = { workspace = true, features = ["test-support"] }
 http-body-util = "0.1"
-futures = { version = "0.3", default-features = false, features = ["std"] }
 proptest = "1"
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "postgres"] }
 

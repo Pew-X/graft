@@ -32,7 +32,8 @@ trap cleanup EXIT INT TERM
 sql "create database $db"
 
 wasm="$root/target/wasm32-unknown-unknown/wasm/graft_render.wasm"
-[ -f "$wasm" ] || sh scripts/build-wasm.sh
+# Always built (a no-op when nothing changed): a stale artefact would test an old renderer.
+sh scripts/build-wasm.sh
 cargo build -q -p graft-api --bins
 
 export GRAFT_DATABASE_URL="${admin_url%/*}/$db"

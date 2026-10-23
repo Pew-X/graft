@@ -265,3 +265,27 @@ for (const scheme of ["light", "dark"] as const) {
     }
   });
 }
+
+test("a saved theme applies before the first paint, even on a page without the toggle", async ({
+  page,
+}) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.addInitScript(() => localStorage.setItem("graft-theme", "light"));
+  // Checked as the document is parsed, before the page's own code has run.
+  const seen: string[] = [];
+  await page.exposeFunction("themeAtParse", (t: string) => seen.push(t));
+  await page.addInitScript(() => {
+    document.addEventListener(
+      "DOMContentLoaded",
+      () =>
+        void (window as unknown as { themeAtParse: (t: string) => void }).themeAtParse(
+          document.documentElement.getAttribute("data-theme") ?? "none",
+        ),
+    );
+  });
+  const response = await page.goto("/no-such-page");
+  expect(response?.status()).toBe(404);
+  expect(seen).toEqual(["light"]);
+  const background = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  expect(background).toBe("rgb(239, 235, 227)"); // the light wall, not leader black
+});

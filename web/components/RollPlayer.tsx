@@ -62,6 +62,8 @@ export function RollPlayer({
   const [notice, setNotice] = useState("");
   const [reduced, setReduced] = useState(false);
   const [peaks, setPeaks] = useState<number[][]>([]);
+  // Which stages turned out to have audio to play, once the loader has answered.
+  const [heard, setHeard] = useState<boolean[] | null>(null);
   const audio = useRef<LazyAudio | null>(null);
   const engine = useRef<Promise<Engine | null> | null>(null);
   const engineNow = useRef<Engine | null>(null);
@@ -71,7 +73,10 @@ export function RollPlayer({
   const telemetry = useRef<Telemetry | null>(null);
   const reported = useRef<Set<number>>(new Set());
 
-  const playable = useMemo(() => blocks.map((b) => b.state === "available"), [blocks]);
+  const playable = useMemo(
+    () => blocks.map((b, i) => b.state === "available" && (heard === null || heard[i] === true)),
+    [blocks, heard],
+  );
   const unplayable = playable.filter((p) => !p).length;
   const unplayableText =
     unplayable === 0
@@ -89,6 +94,7 @@ export function RollPlayer({
     loadAudio(abort.signal)
       .then((pcm) => {
         audio.current = new LazyAudio(audioConstructor, pcm);
+        setHeard(pcm.map((samples) => samples !== null));
         setLengths(pcm.map((samples) => (samples === null ? 0 : samples.length / 48_000)));
         setPeaks(pcm.map((samples) => (samples === null ? [] : peaksOf(samples, 96))));
         setLoad("ready");

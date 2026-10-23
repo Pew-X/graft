@@ -108,6 +108,32 @@ test("a stage withdrawn by the operator reads 'no longer here' with its credit, 
   }
 });
 
+test("the record's keyboard control makes no sound on a stage that is not here", async ({
+  page,
+  request,
+}) => {
+  const a = await publishFlip(request, SEEDED_LAST, "kilo");
+  const b = await publishFlip(request, a.id, "lima");
+  await hide(request, a.id, "withdrawn");
+  try {
+    await page.goto(`/p/${b.id}`);
+    await expect(roll(page)).toHaveAttribute("data-audio", "ready");
+    // Stage 5 (alpha, withdrawn) is the one above the last: up from stage 6, then Enter.
+    const record = page.getByRole("slider", { name: "the record" });
+    await record.focus();
+    for (let i = 0; i < 5; i++) await page.keyboard.press("ArrowDown");
+    await expect(record).toHaveAttribute("aria-valuetext", /stage 6 of 6, lima/);
+    await page.keyboard.press("ArrowUp");
+    await expect(record).toHaveAttribute("aria-valuetext", /stage 5 of 6, kilo/);
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(300);
+    await expect(roll(page)).toHaveAttribute("data-playback", "idle");
+    await expect(roll(page)).toHaveAttribute("data-sounding", "false");
+  } finally {
+    await hide(request, a.id, null);
+  }
+});
+
 test("a stage hidden for rights holds the stages built on it; lifting the hide releases them", async ({
   page,
   request,

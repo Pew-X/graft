@@ -76,3 +76,24 @@ test("a chain that is no longer there is an error", async () => {
   const load = liveLoader({ chain: async () => null, pcm: async () => new Int16Array(0) });
   await assert.rejects(load(new AbortController().signal));
 });
+
+test("many addresses expiring together cost one fresh read of the chain, not one each", async () => {
+  let rounds = 0;
+  const many = (round: number): Chain =>
+    ({
+      stages: Array.from({ length: 8 }, (_, i) =>
+        available(`s${i}`, `https://blobs.example/s${i}?round=${round}`),
+      ),
+      truncated: null,
+    }) as unknown as Chain;
+  const load = liveLoader({
+    chain: async () => many(++rounds),
+    pcm: async (url) => {
+      if (url.includes("round=1")) throw new HttpError(403);
+      return pcmFor(url);
+    },
+  });
+  const out = await load(new AbortController().signal);
+  assert.equal(rounds, 2, "the first read, and one shared refresh");
+  assert.ok(out.every((pcm) => pcm !== null));
+});

@@ -30,7 +30,7 @@ jobs:
       renderer: ${{ steps.f.outputs.renderer }}
       image: ${{ steps.f.outputs.image }}
       web: ${{ steps.f.outputs.web }}
-      stack: ${{ steps.f.outputs.service }}
+      service: ${{ steps.f.outputs.service }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

@@ -214,7 +214,7 @@ pub fn router(state: AppState, config: &Config) -> Router {
         .layer(cors(config))
         .layer(middleware::from_fn_with_state(
             std::time::Duration::from_secs(config.request_timeout_secs),
-            deadline,
+            body_deadline,
         ))
         // Outermost, so every response (a refused preflight and a timeout included) is logged,
         // counted and given the security headers.
@@ -222,19 +222,42 @@ pub fn router(state: AppState, config: &Config) -> Router {
         .with_state(state)
 }
 
-/// Frees a request that takes too long, from its first byte to its answer. The body is read inside
-/// the handler, so a client that connects and stops sending is cut off here too, instead of holding
-/// the request (and what it waits on) for ever. It sits inside the observing layer, so the timeout
-/// is counted, logged and given the usual security headers.
-async fn deadline(
+/// Frees a request whose body does not arrive in time. Only the reading of the body is bounded:
+/// a client that connects and stops sending is cut off here (its read fails with `BodyTimedOut`,
+/// which the extractors answer with a timeout), instead of holding the request open for ever. The
+/// handler itself is never cancelled, because a publish dropped half way would release its render
+/// permit while the render goes on, or fall between taking a token and storing the result.
+async fn body_deadline(
     State(limit): State<std::time::Duration>,
     request: Request,
     next: Next,
 ) -> Response {
-    match tokio::time::timeout(limit, next.run(request)).await {
-        Ok(response) => response,
-        Err(_) => Problem::request_timeout().into_response(),
-    }
+    use futures::StreamExt;
+    let (parts, body) = request.into_parts();
+    let until = tokio::time::Instant::now() + limit;
+    // (the body's data, whether it has already ended in an error)
+    let stream = futures::stream::unfold(
+        (body.into_data_stream(), false),
+        move |(mut data, over)| async move {
+            if over {
+                return None;
+            }
+            match tokio::time::timeout_at(until, data.next()).await {
+                Ok(None) => None,
+                Ok(Some(Ok(bytes))) => Some((Ok(bytes), (data, false))),
+                Ok(Some(Err(e))) => Some((Err(Box::new(e) as axum::BoxError), (data, true))),
+                Err(_) => Some((
+                    Err(Box::new(crate::problem::BodyTimedOut) as axum::BoxError),
+                    (data, true),
+                )),
+            }
+        },
+    );
+    next.run(Request::from_parts(
+        parts,
+        axum::body::Body::from_stream(stream),
+    ))
+    .await
 }
 
 /// The operator routes. The secret is checked by a layer, before any query or body is parsed.

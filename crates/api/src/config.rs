@@ -43,8 +43,8 @@ pub struct Config {
     pub lock_wait_ms: u64,
     /// Most renders running at once.
     pub max_concurrent_renders: usize,
-    /// The longest a request may take from its first byte to its answer, reading a slow body
-    /// included; past it the request is answered with a timeout and freed.
+    /// The longest a request's body may take to arrive; past it the read fails and the request is
+    /// answered with a timeout and freed. The handler's own work is never cancelled by it.
     pub request_timeout_secs: u64,
     /// How many of the allowed origins were given (a typo is refused at start-up, never dropped).
     /// The canonical renderer artefact the service loads at start-up.
@@ -737,7 +737,7 @@ mod tests {
     }
 
     #[test]
-    fn a_request_may_take_thirty_seconds_unless_told_otherwise_and_never_none() {
+    fn a_body_has_thirty_seconds_to_arrive_unless_told_otherwise_and_never_none() {
         let db = ("GRAFT_DATABASE_URL", "postgres://x");
         let c = Config::from_lookup(env(&[db])).expect("valid");
         assert_eq!(c.request_timeout_secs, 30);

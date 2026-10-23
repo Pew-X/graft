@@ -102,6 +102,7 @@ where
         match Json::<T>::from_request(req, state).await {
             Ok(Json(value)) => Ok(Self(value)),
             Err(rejection) => Err(match &rejection {
+                _ if crate::problem::body_timed_out(&rejection) => Problem::request_timeout(),
                 JsonRejection::BytesRejection(_)
                     if rejection.status() == StatusCode::PAYLOAD_TOO_LARGE =>
                 {
