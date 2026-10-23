@@ -146,8 +146,15 @@ async fn a_signed_url_serves_the_bytes_without_credentials_and_stops_working_aft
 
 #[tokio::test]
 async fn refused_credentials_give_a_class_of_error_and_leak_nothing() {
-    let mut bad = config(&prefix());
-    bad.secret_access_key = "the-wrong-secret-0000".to_owned();
+    let mut bad = S3Config::new(
+        Some(endpoint()),
+        "graft-test",
+        "us-east-1",
+        KEY_ID,
+        "the-wrong-secret-0000",
+    );
+    bad.allow_http = true;
+    bad.prefix = Some(prefix());
     let s = S3BlobStore::new(&bad).expect("building does not contact the server");
     let err = s
         .put_if_absent(vec![1, 2, 3])
@@ -254,4 +261,83 @@ async fn a_store_does_not_list_objects_that_belong_to_a_longer_prefix() {
         .map(|i| i.hash)
         .collect();
     assert_eq!(seen_by_b, vec![theirs]);
+}
+
+/// A stand-in for the container credentials endpoint (what ECS and EKS provide): it answers every
+/// request with credentials and remembers the Authorization header it was sent. Its session token is
+/// empty because the local test server checks tokens against its own store and refuses any other; a
+/// real role's token travels with every request and is accepted by S3, which this test cannot show.
+async fn fake_credentials_endpoint(
+    access_key_id: &str,
+    secret: &str,
+) -> (String, Arc<std::sync::Mutex<Vec<String>>>) {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind");
+    let url = format!(
+        "http://{}/credentials",
+        listener.local_addr().expect("addr")
+    );
+    let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let (key, secret, log) = (access_key_id.to_owned(), secret.to_owned(), seen.clone());
+    tokio::spawn(async move {
+        loop {
+            let Ok((mut stream, _)) = listener.accept().await else {
+                return;
+            };
+            let mut buf = vec![0u8; 4096];
+            let n = stream.read(&mut buf).await.unwrap_or(0);
+            let request = String::from_utf8_lossy(&buf[..n]).to_string();
+            let auth = request
+                .lines()
+                .find_map(|l| {
+                    l.strip_prefix("authorization: ")
+                        .or_else(|| l.strip_prefix("Authorization: "))
+                })
+                .unwrap_or("")
+                .to_owned();
+            log.lock().expect("lock").push(auth);
+            let expiry = "2099-01-01T00:00:00Z";
+            let body = format!(
+                r#"{{"AccessKeyId":"{key}","SecretAccessKey":"{secret}","Token":"","Expiration":"{expiry}"}}"#
+            );
+            let reply = format!(
+                "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            let _ = stream.write_all(reply.as_bytes()).await;
+        }
+    });
+    (url, seen)
+}
+
+#[tokio::test]
+async fn a_task_role_supplies_the_credentials_and_the_store_works_without_static_keys() {
+    let (url, seen) = fake_credentials_endpoint(KEY_ID, SECRET).await;
+    let token_file = std::env::temp_dir().join(format!("graft-token-{}", prefix()));
+    std::fs::write(&token_file, "the-pod-token").expect("write the token file");
+    let mut c = S3Config::container(
+        Some(endpoint()),
+        "graft-test",
+        "us-east-1",
+        None,
+        Some(url),
+        Some(token_file.to_string_lossy().into_owned()),
+    );
+    c.allow_http = true;
+    c.prefix = Some(prefix());
+    let store = S3BlobStore::new(&c).expect("build the client");
+    let bytes = b"audio written with credentials the platform handed out".to_vec();
+    let hash = store.put_if_absent(bytes.clone()).await.expect("put");
+    assert_eq!(store.get(hash).await.expect("get"), Some(bytes));
+    let asked = seen.lock().expect("lock").clone();
+    assert!(
+        !asked.is_empty(),
+        "the store never asked the credentials endpoint"
+    );
+    assert!(
+        asked.iter().all(|a| a == "the-pod-token"),
+        "the endpoint was not given the token: {asked:?}"
+    );
+    let _ = std::fs::remove_file(token_file);
 }

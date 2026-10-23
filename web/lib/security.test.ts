@@ -2,7 +2,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import config from "../next.config.ts";
-import { contentSecurityPolicy, securityHeaders } from "./security.ts";
+import {
+  contentSecurityPolicy,
+  isDeployBuild,
+  missingDeploySettings,
+  securityHeaders,
+} from "./security.ts";
 
 const directive = (policy: string, name: string): string[] =>
   (
@@ -112,4 +117,42 @@ test("the site's configuration applies those headers to every path", async () =>
   const all = rules.find((r) => r.source === "/:path*");
   assert.ok(all, "a rule covers every path");
   assert.ok(all.headers.some((h) => h.key.toLowerCase() === "content-security-policy"));
+});
+
+// A deployed build with the build-time settings forgotten ships a site that looks fine and is broken
+// (no audio on chain pages, events going nowhere, a silent home page), so it must stop instead.
+test("a build for a deployment names every build-time setting it is missing", () => {
+  const complete = {
+    VERCEL_ENV: "production",
+    GRAFT_CONNECT_ORIGINS: "https://api.example.test,https://audio.example.test",
+    GRAFT_PUBLIC_API_URL: "https://api.example.test",
+    GRAFT_UPGRADE_INSECURE_REQUESTS: "on",
+  };
+  assert.deepEqual(missingDeploySettings(complete), []);
+  assert.deepEqual(missingDeploySettings({ VERCEL_ENV: "production" }), [
+    "GRAFT_CONNECT_ORIGINS",
+    "GRAFT_PUBLIC_API_URL",
+    "GRAFT_UPGRADE_INSECURE_REQUESTS",
+  ]);
+  for (const name of Object.keys(complete).filter((n) => n !== "VERCEL_ENV")) {
+    const without = { ...complete, [name]: "" };
+    assert.deepEqual(missingDeploySettings(without), [name], `${name} empty`);
+  }
+  // Turning the upgrade off is a decision, and is allowed when it is written down.
+  assert.deepEqual(
+    missingDeploySettings({ ...complete, GRAFT_UPGRADE_INSECURE_REQUESTS: "off" }),
+    [],
+  );
+  assert.deepEqual(missingDeploySettings({ ...complete, GRAFT_UPGRADE_INSECURE_REQUESTS: "yes" }), [
+    "GRAFT_UPGRADE_INSECURE_REQUESTS",
+  ]);
+});
+
+test("only a build for a deployment is held to them: a local build and the test builds are not", () => {
+  assert.deepEqual(missingDeploySettings({}), []);
+  assert.deepEqual(missingDeploySettings({ VERCEL_ENV: "development" }), []);
+  assert.equal(isDeployBuild({ VERCEL_ENV: "preview" }), true);
+  assert.equal(isDeployBuild({ VERCEL_ENV: "production" }), true);
+  assert.equal(isDeployBuild({ GRAFT_DEPLOY_BUILD: "on" }), true);
+  assert.equal(isDeployBuild({ GRAFT_DEPLOY_BUILD: "off" }), false);
 });

@@ -46,6 +46,9 @@ pub struct Config {
     /// The longest a request's body may take to arrive; past it the read fails and the request is
     /// answered with a timeout and freed. The handler's own work is never cancelled by it.
     pub request_timeout_secs: u64,
+    /// How long start-up waits for a database that is not answering yet (unreachable, or starting after
+    /// a pause) before giving up; 0 makes one attempt. A wrong password is never waited on.
+    pub db_startup_wait_secs: u64,
     /// How many of the allowed origins were given (a typo is refused at start-up, never dropped).
     /// The canonical renderer artefact the service loads at start-up.
     pub renderer_wasm: Option<std::path::PathBuf>,
@@ -540,15 +543,41 @@ impl Config {
         let s3 = match lookup("GRAFT_BLOB_S3_BUCKET") {
             None => None,
             Some(bucket) => {
-                let mut c = graft_storage::S3Config::new(
-                    lookup("GRAFT_BLOB_S3_ENDPOINT"),
-                    bucket,
-                    lookup("GRAFT_BLOB_S3_REGION").unwrap_or_else(|| "us-east-1".to_owned()),
-                    lookup("GRAFT_BLOB_S3_ACCESS_KEY_ID")
-                        .ok_or(ConfigError::Missing("GRAFT_BLOB_S3_ACCESS_KEY_ID"))?,
-                    lookup("GRAFT_BLOB_S3_SECRET_ACCESS_KEY")
-                        .ok_or(ConfigError::Missing("GRAFT_BLOB_S3_SECRET_ACCESS_KEY"))?,
-                );
+                let endpoint = lookup("GRAFT_BLOB_S3_ENDPOINT");
+                let region =
+                    lookup("GRAFT_BLOB_S3_REGION").unwrap_or_else(|| "us-east-1".to_owned());
+                let relative = lookup("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI");
+                let full = lookup("AWS_CONTAINER_CREDENTIALS_FULL_URI");
+                let mut c = match (
+                    lookup("GRAFT_BLOB_S3_ACCESS_KEY_ID"),
+                    lookup("GRAFT_BLOB_S3_SECRET_ACCESS_KEY"),
+                ) {
+                    // Keys given on purpose win over whatever the platform offers.
+                    (Some(key), Some(secret)) => {
+                        graft_storage::S3Config::new(endpoint, bucket, region, key, secret)
+                    }
+                    (Some(_), None) => {
+                        return Err(ConfigError::Missing("GRAFT_BLOB_S3_SECRET_ACCESS_KEY"));
+                    }
+                    (None, Some(_)) => {
+                        return Err(ConfigError::Missing("GRAFT_BLOB_S3_ACCESS_KEY_ID"));
+                    }
+                    // No keys: the platform's role, when it says where its credentials are. Without
+                    // either, the deployment forgot the keys: fail at start, not at the first upload.
+                    (None, None) if relative.is_some() || full.is_some() => {
+                        graft_storage::S3Config::container(
+                            endpoint,
+                            bucket,
+                            region,
+                            relative,
+                            full,
+                            lookup("AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE"),
+                        )
+                    }
+                    (None, None) => {
+                        return Err(ConfigError::Missing("GRAFT_BLOB_S3_ACCESS_KEY_ID"));
+                    }
+                };
                 c.allow_http = lookup("GRAFT_BLOB_S3_ALLOW_HTTP").is_some_and(|v| v == "true");
                 c.prefix = lookup("GRAFT_BLOB_S3_PREFIX");
                 c.refresh_after = std::time::Duration::from_secs(blob_refresh_secs);
@@ -576,6 +605,12 @@ impl Config {
                 reason: "must be at least 1".to_owned(),
             });
         }
+        let mut db_startup_wait_secs: u64 = 60;
+        number(
+            &lookup,
+            "GRAFT_DB_STARTUP_WAIT_SECS",
+            &mut db_startup_wait_secs,
+        )?;
         let mut request_timeout_secs: u64 = 30;
         number(
             &lookup,
@@ -636,6 +671,7 @@ impl Config {
             lock_wait_ms,
             max_concurrent_renders,
             request_timeout_secs,
+            db_startup_wait_secs,
             renderer_wasm: lookup("GRAFT_RENDERER_WASM").map(std::path::PathBuf::from),
             extra_deny_words,
             admin_secret,
@@ -864,6 +900,81 @@ mod tests {
                 "{refresh}/{grace}: {err:?}"
             );
         }
+    }
+
+    #[test]
+    fn s3_credentials_are_static_keys_or_the_containers_role_and_never_half_of_each() {
+        let base = [
+            ("GRAFT_DATABASE_URL", "postgres://x"),
+            ("GRAFT_BLOB_S3_BUCKET", "audio"),
+        ];
+        let with = |extra: &[(&'static str, &'static str)]| {
+            let mut all = base.to_vec();
+            all.extend_from_slice(extra);
+            Config::from_lookup(env(&all))
+        };
+        // Half a pair is a mistake, named by the half that is missing.
+        assert_eq!(
+            with(&[("GRAFT_BLOB_S3_ACCESS_KEY_ID", "k")]).expect_err("half"),
+            ConfigError::Missing("GRAFT_BLOB_S3_SECRET_ACCESS_KEY")
+        );
+        assert_eq!(
+            with(&[("GRAFT_BLOB_S3_SECRET_ACCESS_KEY", "s")]).expect_err("half"),
+            ConfigError::Missing("GRAFT_BLOB_S3_ACCESS_KEY_ID")
+        );
+        // Under ECS the platform names where the task role's credentials are; no keys are needed.
+        let role = with(&[(
+            "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+            "/v2/credentials/abc-123",
+        )])
+        .expect("a task role is enough");
+        assert!(matches!(
+            role.s3.as_ref().map(|s| &s.credentials),
+            Some(graft_storage::S3Credentials::Container { relative_uri: Some(u), .. }) if u == "/v2/credentials/abc-123"
+        ));
+        // Keys given on purpose win over whatever the platform offers.
+        let both = with(&[
+            ("GRAFT_BLOB_S3_ACCESS_KEY_ID", "k"),
+            ("GRAFT_BLOB_S3_SECRET_ACCESS_KEY", "s"),
+            (
+                "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+                "/v2/credentials/abc-123",
+            ),
+        ])
+        .expect("valid");
+        assert!(matches!(
+            both.s3.as_ref().map(|s| &s.credentials),
+            Some(graft_storage::S3Credentials::Static { .. })
+        ));
+        // The address of the role's credentials is as private as a key.
+        let printed = format!("{role:?} {role:#?}");
+        assert!(
+            !printed.contains("abc-123"),
+            "the credentials' address leaked: {printed}"
+        );
+    }
+
+    #[test]
+    fn the_wait_for_a_database_that_is_starting_defaults_to_a_minute_and_zero_means_one_attempt() {
+        let base = [("GRAFT_DATABASE_URL", "postgres://x")];
+        assert_eq!(
+            Config::from_lookup(env(&base))
+                .expect("valid")
+                .db_startup_wait_secs,
+            60
+        );
+        let zero = Config::from_lookup(env(&[
+            ("GRAFT_DATABASE_URL", "postgres://x"),
+            ("GRAFT_DB_STARTUP_WAIT_SECS", "0"),
+        ]))
+        .expect("zero is allowed");
+        assert_eq!(zero.db_startup_wait_secs, 0);
+        let bad = Config::from_lookup(env(&[
+            ("GRAFT_DATABASE_URL", "postgres://x"),
+            ("GRAFT_DB_STARTUP_WAIT_SECS", "soon"),
+        ]))
+        .expect_err("not a number");
+        assert!(matches!(bad, ConfigError::Invalid { .. }), "{bad:?}");
     }
 
     #[test]

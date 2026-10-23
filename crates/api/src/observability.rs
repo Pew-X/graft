@@ -92,8 +92,26 @@ pub fn scrubber(config: &Config) -> Scrubber {
     let mut secrets = vec![config.database_url.clone()];
     secrets.extend(config.admin_secret.clone());
     if let Some(s3) = &config.s3 {
-        secrets.push(s3.access_key_id.clone());
-        secrets.push(s3.secret_access_key.clone());
+        // The address of a role's credentials is as private as a key: anyone who can reach it can use them.
+        match &s3.credentials {
+            graft_storage::S3Credentials::Static {
+                access_key_id,
+                secret_access_key,
+            } => {
+                secrets.push(access_key_id.clone());
+                secrets.push(secret_access_key.clone());
+            }
+            graft_storage::S3Credentials::Container {
+                relative_uri,
+                full_uri,
+                token_file,
+            } => secrets.extend(
+                [relative_uri, full_uri, token_file]
+                    .into_iter()
+                    .flatten()
+                    .cloned(),
+            ),
+        }
     }
     secrets.extend(config.observability.error_tracker_dsn.clone());
     Scrubber::new(secrets)

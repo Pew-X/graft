@@ -18,7 +18,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .init();
     let config = Config::from_env()?;
-    let store = Store::connect(&config.database_url, 2).await?;
+    let store = Store::connect_waiting(
+        &config.database_url,
+        2,
+        std::time::Duration::from_secs(config.db_startup_wait_secs),
+    )
+    .await?;
     let blobs = build_blob_store(&config)?;
     let now = graft_storage::blob::now_ms();
     let report = remove_orphans(

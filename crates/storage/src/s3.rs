@@ -9,7 +9,7 @@
 use crate::blob::{BlobError, BlobInfo, BlobStore, BoxFuture, DEFAULT_REFRESH_AFTER, now_ms};
 use futures::TryStreamExt;
 use graft_domain::hash::Sha256Hash;
-use object_store::aws::{AmazonS3, AmazonS3Builder};
+use object_store::aws::{AmazonS3, AmazonS3Builder, AmazonS3ConfigKey};
 use object_store::path::Path;
 use object_store::signer::{Method, Signer};
 use object_store::{Error as ObjError, ObjectStore, ObjectStoreExt, PutMode};
@@ -25,16 +25,38 @@ pub struct S3Config {
     pub bucket: String,
     /// Region; `auto` for R2.
     pub region: String,
-    /// Access key id.
-    pub access_key_id: String,
-    /// Secret access key. Never printed.
-    pub secret_access_key: String,
+    /// Where the credentials come from. Never printed.
+    pub credentials: S3Credentials,
     /// Allow plain HTTP, for a local test server only.
     pub allow_http: bool,
     /// A key prefix inside the bucket, so several environments or tests can share one bucket.
     pub prefix: Option<String>,
     /// Refresh the time of blobs older than this when they are written again.
     pub refresh_after: Duration,
+}
+
+/// Where the client gets its credentials.
+#[derive(Clone)]
+pub enum S3Credentials {
+    /// A fixed key pair: local runs, tests and S3-compatible servers.
+    Static {
+        /// Access key id.
+        access_key_id: String,
+        /// Secret access key.
+        secret_access_key: String,
+    },
+    /// Short-lived credentials the platform hands to the running container (an ECS task role, or an
+    /// EKS pod identity): nothing long-lived is configured anywhere. The addresses are the ones the
+    /// platform puts in `AWS_CONTAINER_CREDENTIALS_RELATIVE_URI`, `AWS_CONTAINER_CREDENTIALS_FULL_URI`
+    /// and `AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE`.
+    Container {
+        /// ECS: a path on the task metadata address.
+        relative_uri: Option<String>,
+        /// EKS pod identity: a full address, used with `token_file`.
+        full_uri: Option<String>,
+        /// The file holding the bearer token for `full_uri`.
+        token_file: Option<String>,
+    },
 }
 
 impl S3Config {
@@ -51,8 +73,35 @@ impl S3Config {
             endpoint,
             bucket: bucket.into(),
             region: region.into(),
-            access_key_id: access_key_id.into(),
-            secret_access_key: secret_access_key.into(),
+            credentials: S3Credentials::Static {
+                access_key_id: access_key_id.into(),
+                secret_access_key: secret_access_key.into(),
+            },
+            allow_http: false,
+            prefix: None,
+            refresh_after: DEFAULT_REFRESH_AFTER,
+        }
+    }
+
+    /// A config whose credentials are the container's role, fetched and renewed by the client.
+    #[must_use]
+    pub fn container(
+        endpoint: Option<String>,
+        bucket: impl Into<String>,
+        region: impl Into<String>,
+        relative_uri: Option<String>,
+        full_uri: Option<String>,
+        token_file: Option<String>,
+    ) -> Self {
+        Self {
+            endpoint,
+            bucket: bucket.into(),
+            region: region.into(),
+            credentials: S3Credentials::Container {
+                relative_uri,
+                full_uri,
+                token_file,
+            },
             allow_http: false,
             prefix: None,
             refresh_after: DEFAULT_REFRESH_AFTER,
@@ -102,14 +151,41 @@ impl S3BlobStore {
         let mut builder = AmazonS3Builder::new()
             .with_bucket_name(&config.bucket)
             .with_region(&config.region)
-            .with_access_key_id(&config.access_key_id)
-            .with_secret_access_key(&config.secret_access_key)
             .with_allow_http(config.allow_http)
             // Path-style addressing works for every S3-compatible server; R2 and S3 accept it too.
             .with_virtual_hosted_style_request(false);
         if let Some(endpoint) = &config.endpoint {
             builder = builder.with_endpoint(endpoint);
         }
+        builder = match &config.credentials {
+            S3Credentials::Static {
+                access_key_id,
+                secret_access_key,
+            } => builder
+                .with_access_key_id(access_key_id)
+                .with_secret_access_key(secret_access_key),
+            S3Credentials::Container {
+                relative_uri,
+                full_uri,
+                token_file,
+            } => {
+                // The client fetches the credentials from the platform and renews them before they
+                // expire; a signed URL carries the session token of the credentials that signed it.
+                if let Some(uri) = relative_uri {
+                    builder = builder
+                        .with_config(AmazonS3ConfigKey::ContainerCredentialsRelativeUri, uri);
+                }
+                if let Some(uri) = full_uri {
+                    builder =
+                        builder.with_config(AmazonS3ConfigKey::ContainerCredentialsFullUri, uri);
+                }
+                if let Some(file) = token_file {
+                    builder = builder
+                        .with_config(AmazonS3ConfigKey::ContainerAuthorizationTokenFile, file);
+                }
+                builder
+            }
+        };
         let store = builder.build().map_err(|e| class(&e))?;
         Ok(Self {
             store,

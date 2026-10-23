@@ -35,12 +35,13 @@ export function SoundPicker({
   curated: readonly Sound[];
   flips: readonly Sound[];
   onChoose: (sound: Sound) => void;
-  /** Further ways to start, after the lists. */
+  /** Further ways to start, shown first: below thirteen rows a visitor never scrolls to them. */
   children?: ReactNode;
 }) {
   return (
     <div className="picker">
       <h2 className="picker-title">{copy.make.pick.heading}</h2>
+      {children}
       <section aria-labelledby="pick-curated">
         <h3 id="pick-curated" className="kicker">
           {copy.make.pick.curated}
@@ -63,7 +64,6 @@ export function SoundPicker({
           </ul>
         </section>
       )}
-      {children}
     </div>
   );
 }

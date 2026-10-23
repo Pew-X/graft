@@ -11,7 +11,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::from_env()?;
     // Held for the life of the process: dropping it flushes whatever is still to be exported.
     let _observability = graft_api::observability::init(&config)?;
-    let store = Store::connect(&config.database_url, 10).await?;
+    let store = Store::connect_waiting(
+        &config.database_url,
+        10,
+        std::time::Duration::from_secs(config.db_startup_wait_secs),
+    )
+    .await?;
     store.migrate().await?;
     let blobs = graft_api::blobs::build_blob_store(&config)?;
     let wasm_path = config

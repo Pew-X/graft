@@ -41,6 +41,17 @@ test("the picker offers the ten curated sources with their declared licence line
     await expect(page.getByRole("button", { name: `flip this sound: ${s.title}` })).toBeVisible();
 });
 
+// A visitor who came to use their own sound must find the way in without scrolling past thirteen
+// rows (the builder did not see it when it sat below them).
+test("recording or picking your own sound is on the first screen of the picker", async ({
+  page,
+}) => {
+  await page.goto("/make");
+  const record = page.getByRole("button", { name: "record with the microphone" });
+  await expect(record).toBeInViewport();
+  await expect(page.locator("label.file")).toBeInViewport();
+});
+
 test("choosing a sound opens the cut and the speed with a flip already sounding at a fifth up", async ({
   page,
 }) => {
