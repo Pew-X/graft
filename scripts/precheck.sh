@@ -14,7 +14,7 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 step "repository rules, crate graph, scripts"
 node scripts/check-repo.mjs
 node scripts/check-crate-graph.mjs
-node --test scripts/*.test.mjs >/dev/null
+node --test scripts/*.test.mjs loadtest/*.test.mjs >/dev/null
 step "OpenAPI document and the typed client match the service"
 cargo run -q -p graft-api --bin graft-openapi | diff -u openapi/openapi.json -
 (cd web && pnpm generate:api >/dev/null && git diff --exit-code -- lib/api/schema.d.ts)
