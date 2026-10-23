@@ -9,9 +9,19 @@ export function decodePcm16le(buffer: ArrayBuffer): Int16Array {
   return out;
 }
 
-/** Fetch a stage's audio. Static assets only: this never touches the API. */
+/** A fetch that answered with a status that is not success. */
+export class HttpError extends Error {
+  readonly status: number;
+  constructor(status: number) {
+    super(`the request was answered with ${status}`);
+    this.name = "HttpError";
+    this.status = status;
+  }
+}
+
+/** Fetch a stage's audio from a static path or an issued address. */
 export async function fetchPcm(path: string, signal?: AbortSignal): Promise<Int16Array> {
   const response = await fetch(path, signal ? { signal } : {});
-  if (!response.ok) throw new Error(`${path} could not be read (${response.status})`);
+  if (!response.ok) throw new HttpError(response.status);
   return decodePcm16le(await response.arrayBuffer());
 }

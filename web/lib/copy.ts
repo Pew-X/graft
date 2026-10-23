@@ -41,6 +41,31 @@ export const copy = {
     empty: "the roll ends on you. no sound here yet.",
     hover: "{n}. {title}",
   },
+  states: {
+    no_longer_here: "this sound is no longer here, but its credit is.",
+    held: "held: a stage it was built on is being looked at for rights, so this one is not served for now. its credit stays.",
+    unavailable: "this stage could not be read. the chain still names it.",
+    takedown:
+      "new requests for it are refused and issued links expire. copies already downloaded cannot be recalled.",
+    truncated: "the chain goes back further than this page follows.",
+    summaryOne: "one stage cannot be played here. its credit stays.",
+    summaryMany: "{n} stages cannot be played here. their credits stay.",
+    flippedNone: "not flipped yet",
+    flippedOnce: "flipped once",
+    flippedMany: "flipped {n} times",
+  },
+  notFound: {
+    title: "nothing here",
+    line: "this link does not lead to a sound. it may have been mistyped.",
+    home: "go to the first roll",
+  },
+  failed: {
+    title: "the roll could not be read",
+    line: "the service did not answer. nothing is lost; try again.",
+    retry: "try again",
+  },
+  offline: "you look to be offline. the sounds will load when you are back.",
+  retry: "try again",
   flip: {
     label: "flip this",
     closed: "making a flip is not open yet.",

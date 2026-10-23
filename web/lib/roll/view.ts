@@ -21,8 +21,9 @@ export interface StageInput {
   speed_p: number | null;
   speed_q: number | null;
   renderer: string;
-  frames: number;
-  /** Where the stage's audio is; null when it is not served. */
+  /** Length of the stage's audio in frames; null when it is not known yet (a chain read from the service). */
+  frames: number | null;
+  /** Where the stage's audio is; null when it is not served, or not carried with the block. */
   audio_path: string | null;
 }
 
@@ -47,8 +48,14 @@ export interface DetailRow {
   asTyped: boolean;
 }
 
+/** What a reader of the chain is told about a stage's availability. */
+export type StageState = "available" | "no_longer_here" | "held" | "unavailable";
+
 export interface Block {
   id: string;
+  state: StageState;
+  /** "flipped 3 times", for a stage that can be heard; null otherwise or when not known. */
+  flipped: string | null;
   /** Position in the chain, from 0 at the source. */
   index: number;
   /** 1-based, as printed. */
@@ -92,9 +99,11 @@ function details(stage: StageInput): DetailRow[] {
       ),
     );
   }
+  rows.push(row(detailLabels.renderer, stage.renderer, "computed"));
+  if (stage.frames !== null) {
+    rows.push(row(detailLabels.length, `${(stage.frames / SAMPLE_RATE).toFixed(1)} s`, "computed"));
+  }
   rows.push(
-    row(detailLabels.renderer, stage.renderer, "computed"),
-    row(detailLabels.length, `${(stage.frames / SAMPLE_RATE).toFixed(1)} s`, "computed"),
     row(detailLabels.stage, stage.id, "computed"),
     row(detailLabels.record, stage.record_id, "computed"),
     row(detailLabels.audio, stage.output_blob, "computed"),
@@ -102,31 +111,45 @@ function details(stage: StageInput): DetailRow[] {
   return rows;
 }
 
-export function buildBlocks(stages: readonly StageInput[]): Block[] {
-  return stages.map((stage, index) => ({
+/** The credit lines of a stage as printed on a block's face (the cut, speed and renderer go one level down). */
+export function faceLines(
+  lines: ReadonlyArray<{ role: string; value: string; honesty: string }>,
+): FaceLine[] {
+  return lines
+    .filter((line) => !DETAIL_ROLES.has(line.role))
+    .map((line): FaceLine => {
+      const state = honesty(line.honesty);
+      const known = roles[line.role];
+      return {
+        role: line.role,
+        word: known?.word ?? line.role,
+        gloss: known?.gloss ?? "",
+        value: line.value,
+        honesty: state,
+        state,
+        asTyped: state === "declared",
+      };
+    });
+}
+
+/** A stage that can be heard, as a block. */
+export function blockFor(stage: StageInput, index: number, flipped: string | null = null): Block {
+  return {
     id: stage.id,
+    state: "available",
+    flipped,
     index,
     numeral: String(index + 1),
     title: stage.title,
     kind: stage.kind,
     dye: (index % 4) as 0 | 1 | 2 | 3,
-    seconds: stage.frames / SAMPLE_RATE,
+    seconds: stage.frames === null ? 0 : stage.frames / SAMPLE_RATE,
     audioPath: stage.audio_path,
-    face: stage.lines
-      .filter((line) => !DETAIL_ROLES.has(line.role))
-      .map((line): FaceLine => {
-        const state = honesty(line.honesty);
-        const known = roles[line.role];
-        return {
-          role: line.role,
-          word: known?.word ?? line.role,
-          gloss: known?.gloss ?? "",
-          value: line.value,
-          honesty: state,
-          state,
-          asTyped: state === "declared",
-        };
-      }),
+    face: faceLines(stage.lines),
     details: details(stage),
-  }));
+  };
+}
+
+export function buildBlocks(stages: readonly StageInput[]): Block[] {
+  return stages.map((stage, index) => blockFor(stage, index));
 }

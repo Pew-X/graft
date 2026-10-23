@@ -63,6 +63,7 @@ export function CreditBlock({
       ref={nodeRef}
       className="block"
       data-dye={block.dye}
+      data-state={block.state}
       data-current={current}
       aria-current={current ? "step" : undefined}
     >
@@ -81,19 +82,28 @@ export function CreditBlock({
             </span>
           </button>
         </h2>
+        {block.state === "available" ? null : (
+          <div className="stage-note" data-state={block.state}>
+            <p>{copy.states[block.state]}</p>
+            {block.state === "unavailable" ? null : <p>{copy.states.takedown}</p>}
+          </div>
+        )}
         <dl className="face">
           {block.face.map((line) => (
             <Line key={`${line.role}-${line.value}`} line={line} />
           ))}
         </dl>
-        <details className="details">
-          <summary>{copy.details.summary}</summary>
-          <dl>
-            {block.details.map((row) => (
-              <Detail key={row.label} row={row} />
-            ))}
-          </dl>
-        </details>
+        {block.flipped ? <p className="flipped">{block.flipped}</p> : null}
+        {block.details.length === 0 ? null : (
+          <details className="details">
+            <summary>{copy.details.summary}</summary>
+            <dl>
+              {block.details.map((row) => (
+                <Detail key={row.label} row={row} />
+              ))}
+            </dl>
+          </details>
+        )}
         <button type="button" className="flip" onClick={onFlip}>
           {copy.flip.label}
         </button>

@@ -378,3 +378,43 @@ body {
     max-width: 90rem;
   }
 }
+
+.stage-note {
+  margin: 0.75rem 0 0;
+  padding: 0.5rem 0.75rem;
+  border: 2px dashed var(--line);
+  color: var(--ink);
+}
+.stage-note p {
+  margin: 0;
+}
+.stage-note p + p {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+.flipped {
+  margin: 0.5rem 0 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+.retry {
+  margin-top: 0.5rem;
+}
+
+.quiet {
+  padding-top: 2rem;
+  padding-bottom: 2rem;
+}
+.quiet h2 {
+  font:
+    800 clamp(1.8rem, 8vw, 3rem)/1.05 ui-serif,
+    Georgia,
+    serif;
+  margin: 0 0 0.5rem;
+}
+.quiet a {
+  display: inline-block;
+  min-height: 44px;
+  line-height: 44px;
+  color: inherit;
+}

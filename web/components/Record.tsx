@@ -27,6 +27,10 @@ export interface Live {
 
 interface Props {
   blocks: readonly Block[];
+  /** Length of each stage's audio in seconds (0 for a stage with none). */
+  lengths: readonly number[];
+  /** Whether each stage can be heard; the others are drawn but do nothing when touched. */
+  playable: readonly boolean[];
   /** The loudest sample in each slice of each stage, for the grooves. */
   peaks: readonly (readonly number[])[];
   /** Where the sound is right now, read every frame without re-rendering; null when nothing is current. */
@@ -70,6 +74,8 @@ function scope(peaks: readonly number[], hole: number): string {
  */
 export function Record({
   blocks,
+  lengths,
+  playable,
   peaks,
   live,
   playing,
@@ -79,7 +85,6 @@ export function Record({
 }: Props) {
   const stages = blocks.length;
   const geometry = useMemo(() => layout(stages), [stages]);
-  const lengths = useMemo(() => blocks.map((b) => b.seconds), [blocks]);
   const rows = useMemo(
     () => blocks.map((_, i) => resample(peaks[i] ?? [], POINTS)),
     [blocks, peaks],
@@ -172,7 +177,7 @@ export function Record({
   const onDown = (event: PointerEvent<SVGSVGElement>): void => {
     const point = locate(event);
     const hit = point && target(point.x, point.y);
-    if (!hit || hit.band >= stages) return; // the empty slot has no sound
+    if (!hit || hit.band >= stages || playable[hit.band] === false) return; // no sound there
     event.currentTarget.setPointerCapture(event.pointerId);
     held.current = hit.band;
     dragging.current = true;
@@ -187,6 +192,7 @@ export function Record({
     if (dragging.current) {
       if (!hit) return;
       const band = Math.min(hit.band, stages - 1);
+      if (playable[band] === false) return;
       held.current = band;
       setCursor({ stage: band, offset: hit.offset });
       onScrubMove(band, hit.offset);

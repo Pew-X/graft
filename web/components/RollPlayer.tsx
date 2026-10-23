@@ -14,7 +14,7 @@ import {
   type State,
 } from "../lib/playback/index.ts";
 import { peaksOf } from "../lib/record/geometry.ts";
-import { fetchPcm } from "../lib/roll/pcm.ts";
+import type { Loader } from "../lib/roll/audio.ts";
 import type { Block } from "../lib/roll/view.ts";
 import { CreditBlock, EndBlock } from "./CreditBlock.tsx";
 import { Record, type Live } from "./Record.tsx";
@@ -37,13 +37,22 @@ function audioConstructor(): AudioContextConstructor | undefined {
 
 /**
  * The roll: the chain's credit blocks and the controls, over the playback engine. Nothing sounds, and
- * no audio context exists, until the first tap. The audio is fetched as static files; the API is never
- * asked for the seeded chain.
+ * no audio context exists, until the first tap. Where the audio comes from is the caller's loader
+ * (static files for the home page; issued addresses for a chain read from the service).
  */
-export function RollPlayer({ blocks }: { blocks: readonly Block[] }) {
-  const [load, setLoad] = useState<Load>(() =>
-    blocks.some((b) => b.audioPath === null) ? "failed" : "loading",
-  );
+export function RollPlayer({
+  blocks,
+  load: loadAudio,
+  truncated = false,
+}: {
+  blocks: readonly Block[];
+  load: Loader;
+  /** The chain goes back further than the page follows. */
+  truncated?: boolean;
+}) {
+  const [load, setLoad] = useState<Load>("loading");
+  const [attempt, setAttempt] = useState(0);
+  const [lengths, setLengths] = useState<number[]>(() => blocks.map((b) => b.seconds));
   const [state, setState] = useState<State>(idle);
   const [notice, setNotice] = useState("");
   const [reduced, setReduced] = useState(false);
@@ -55,27 +64,44 @@ export function RollPlayer({ blocks }: { blocks: readonly Block[] }) {
   const cleanup = useRef<Array<() => void>>([]);
   const nodes = useRef<Array<HTMLElement | null>>([]);
 
-  const lengths = useMemo(() => blocks.map((b) => b.seconds), [blocks]);
+  const playable = useMemo(() => blocks.map((b) => b.state === "available"), [blocks]);
+  const unplayable = playable.filter((p) => !p).length;
+  const unplayableText =
+    unplayable === 0
+      ? ""
+      : unplayable === 1
+        ? copy.states.summaryOne
+        : fill(copy.states.summaryMany, { n: unplayable });
   const stages = blocks.length;
   const current = currentStage(state, stages);
   const playing = isSounding(state);
 
-  // Fetch every stage's audio as a static file. Nothing is decoded or played yet.
+  // Fetch every stage's audio. Nothing is decoded or played yet.
   useEffect(() => {
     const abort = new AbortController();
-    const paths = blocks.map((b) => b.audioPath);
-    if (paths.some((p) => p === null)) return;
-    Promise.all(paths.map((p) => fetchPcm(p as string, abort.signal)))
+    loadAudio(abort.signal)
       .then((pcm) => {
         audio.current = new LazyAudio(audioConstructor, pcm);
-        setPeaks(pcm.map((samples) => peaksOf(samples, 96)));
+        setLengths(pcm.map((samples) => (samples === null ? 0 : samples.length / 48_000)));
+        setPeaks(pcm.map((samples) => (samples === null ? [] : peaksOf(samples, 96))));
         setLoad("ready");
       })
       .catch(() => {
         if (!abort.signal.aborted) setLoad("failed");
       });
     return () => abort.abort();
-  }, [blocks]);
+  }, [loadAudio, attempt]);
+
+  // Back online after a failed load: try again by itself.
+  useEffect(() => {
+    if (load !== "failed") return;
+    const again = (): void => {
+      setLoad("loading");
+      setAttempt((n) => n + 1);
+    };
+    window.addEventListener("online", again);
+    return () => window.removeEventListener("online", again);
+  }, [load]);
 
   // Follow the system's reduced-motion setting.
   useEffect(() => {
@@ -158,9 +184,11 @@ export function RollPlayer({ blocks }: { blocks: readonly Block[] }) {
     (load === "loading"
       ? copy.hint.loading
       : load === "failed"
-        ? copy.hint.loadFailed
+        ? typeof navigator !== "undefined" && !navigator.onLine
+          ? copy.offline
+          : copy.hint.loadFailed
         : state.kind === "idle"
-          ? copy.hint.locked
+          ? [copy.hint.locked, unplayableText].filter(Boolean).join(" ")
           : "");
   const announcement =
     current === null || !playing
@@ -187,6 +215,19 @@ export function RollPlayer({ blocks }: { blocks: readonly Block[] }) {
         <p className="status" role="status">
           {status}
         </p>
+        {load === "failed" ? (
+          <button
+            type="button"
+            className="retry"
+            onClick={() => {
+              setLoad("loading");
+              setAttempt((n) => n + 1);
+            }}
+          >
+            {copy.retry}
+          </button>
+        ) : null}
+        {truncated ? <p className="hint">{copy.states.truncated}</p> : null}
         <p className="visually-hidden" role="status" aria-live="polite">
           {announcement}
         </p>
@@ -199,7 +240,7 @@ export function RollPlayer({ blocks }: { blocks: readonly Block[] }) {
               total={stages}
               current={current === block.index}
               playing={playing && state.kind === "auditioning" && state.stage === block.index}
-              disabled={disabled}
+              disabled={disabled || !playable[block.index]}
               onPlay={() => act((e) => e.tapStage(block.index))}
               onFlip={() => setNotice(copy.flip.closed)}
               nodeRef={(node) => {
@@ -215,6 +256,8 @@ export function RollPlayer({ blocks }: { blocks: readonly Block[] }) {
         {load === "ready" ? (
           <Record
             blocks={blocks}
+            lengths={lengths}
+            playable={playable}
             peaks={peaks}
             live={live}
             playing={playing}

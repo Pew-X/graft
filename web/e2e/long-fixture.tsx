@@ -4,7 +4,7 @@
  * part of the site.
  */
 import { createRoot } from "react-dom/client";
-import { RollPlayer } from "../components/RollPlayer.tsx";
+import { HomeRoll } from "../components/HomeRoll.tsx";
 import { buildBlocks, type StageInput } from "../lib/roll/view.ts";
 import snapshot from "../snapshot/chain.json";
 
@@ -14,4 +14,4 @@ const stages: StageInput[] = Array.from({ length: 12 }, (_, i) => {
   return { ...from, id: `long${i}`, title: `${i + 1} ${from.title}` };
 });
 
-createRoot(document.getElementById("root")!).render(<RollPlayer blocks={buildBlocks(stages)} />);
+createRoot(document.getElementById("root")!).render(<HomeRoll blocks={buildBlocks(stages)} />);

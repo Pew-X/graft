@@ -1,5 +1,5 @@
 import { Footer } from "../components/Footer.tsx";
-import { RollPlayer } from "../components/RollPlayer.tsx";
+import { HomeRoll } from "../components/HomeRoll.tsx";
 import { ThemeToggle } from "../components/ThemeToggle.tsx";
 import { copy } from "../lib/copy.ts";
 import { buildBlocks, type StageInput } from "../lib/roll/view.ts";
@@ -18,7 +18,7 @@ export default function Home() {
         <ThemeToggle />
       </header>
       <main>
-        <RollPlayer blocks={blocks} />
+        <HomeRoll blocks={blocks} />
       </main>
       <Footer />
     </>
