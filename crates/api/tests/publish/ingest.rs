@@ -402,3 +402,49 @@ async fn a_burst_of_event_batches_does_not_hold_up_a_publish() {
     assert_eq!(stored(&h).await.len(), 800);
     h.finish().await;
 }
+
+#[tokio::test]
+async fn a_batch_sent_as_plain_text_is_read_the_same_so_a_beacon_can_outlive_the_page() {
+    // A request that must finish while a page unloads cannot wait for a cross-origin preflight, and
+    // only a CORS-safelisted content type avoids one: text/plain. The body is still the same JSON.
+    let h = Harness::new().await;
+    let parent = source(&h).await;
+    let mut e = event(41, "roll_opened", &parent);
+    e["occurred_at_ms"] = json!(now_ms(&h));
+    let (status, _, res) = h
+        .post_raw(
+            "/v1/events",
+            batch(&[e]).to_string(),
+            "text/plain;charset=UTF-8",
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{res}");
+    assert_eq!(res["accepted"], 1);
+    assert_eq!(stored(&h).await.len(), 1);
+}
+
+#[tokio::test]
+async fn a_plain_text_body_is_held_to_the_same_rules_as_a_json_one() {
+    let h = Harness::new().await;
+    // Not JSON at all.
+    let (status, _, _) = h
+        .post_raw("/v1/events", "hello".into(), "text/plain;charset=UTF-8")
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    // A field the contract does not have.
+    let (status, _, _) = h
+        .post_raw(
+            "/v1/events",
+            json!({ "events": [], "extra": 1 }).to_string(),
+            "text/plain;charset=UTF-8",
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    // Over the size cap.
+    let huge = "x".repeat(17 * 1024);
+    let (status, _, _) = h
+        .post_raw("/v1/events", huge, "text/plain;charset=UTF-8")
+        .await;
+    assert_eq!(status, StatusCode::PAYLOAD_TOO_LARGE);
+    assert_eq!(stored(&h).await.len(), 0);
+}

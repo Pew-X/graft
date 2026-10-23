@@ -29,6 +29,16 @@ Written by ticket 01; rows for storage, events and api updated by ticket 05.
 - Only code, scripts, README.md, ARCHITECTURE.md and configuration are committed. Commit messages are plain conventional text with no trailers or addresses; `scripts/lint-commit-msg.mjs` enforces that in the local hook and in CI, on every commit and on the pull request title.
 - Branch flow: feature branch, then `dev` (squash), then `staging` and `main` by promotion pull requests (merge commit, so the branches stay aligned).
 
+### Where CI time goes
+
+Typical runs, from the last green ones: `rust` 4 to 10 minutes (the cold-cache end is the slow one; the browser tests against the real service add three or four when the site or the service changed), `cross-host vectors (ubuntu-24.04)` 3 to 5, `renderer` 2 to 6 (when its paths changed), `check image` about 4 (when its files changed), `web` about 1 (about 2 with the browser tests, when `web/` changed), and `supply chain`, `secret scan`, `repo hygiene` and `what changed` under a minute each. The macOS leg runs only when started by hand. A pull request that touches only documentation runs the cheap jobs and nothing else.
+
+What keeps it short: the `changes` job decides from the paths which of the slow jobs a pull request can affect (a skipped job counts as passing); a newer push to a pull request cancels the run before it; the browser tests run in the one job that already has the browsers, and the build is not repeated there; Chromium for the service tests is cached by Playwright version; `scripts/precheck.sh` runs the same lints, repository rules, API-contract check and web checks locally in under a minute, and `--full` adds the tests.
+
+**Every job has a time limit**, set to about three times the longest run seen, because a hung runner otherwise holds a job for six hours. The long cross-host runs seen twice (a 25 minute cancel in one pull request, a 15 minute cancel in the next) were both inside the container's `apt-get` step, waiting on the Ubuntu package mirror, and passed when the same commit was run again; an earlier one was a 503 from the same mirror. So the install is now given bounded retries and network timeouts and a five minute step limit, which makes a stalled mirror fail or recover in minutes, and the job limit of fifteen minutes is the backstop. Removing the install altogether (a prepared image) needs a registry the project does not have yet.
+
+**What is deliberately not split.** Formatting and lints stay in the required `rust` job, ahead of the tests. Moving them to a job of their own would save a minute or two of waiting, but branch protection would not require the new job, and a lint that cannot block a merge is not a lint; the saving is available if the new job is added to the required checks, which is the builder's setting to change.
+
 Written by ticket 01.
 
 ## Determinism contract
@@ -224,6 +234,7 @@ Written by ticket 05; later tickets add rows. Every value is read from the envir
 | `GRAFT_SERIALIZATION_RETRIES` | 5 | retries of a publish transaction that conflicted with concurrent work |
 | `GRAFT_DENY_WORDS` | empty | extra words refused in titles and names, beyond the built-in list |
 | `GRAFT_ADMIN_SECRET` | unset | the operator secret (at least 24 characters); when unset every admin request is refused |
+| `GRAFT_REQUEST_TIMEOUT_SECS` | 30 | the longest a request's body may be in arriving; past it the read fails and the request is answered with 408 and freed. Only the read is bounded: a handler that has started its work is never cancelled |
 | `GRAFT_MAX_CONCURRENT_RENDERS` | 4 | most renders running at once; a request that waits over 5 s for a turn gets 503 retry-later |
 | `GRAFT_LOCK_WAIT_MS` | 10000 | how long a publish or a flag change waits for the lock on its stage before answering 503 |
 | `GRAFT_PUBLISHING` | `on` | whether publishing is open until the operator sets the kill switch (`on` or `off`) |
@@ -249,6 +260,18 @@ Written by ticket 05; later tickets add rows. Every value is read from the envir
 
 Without a bucket or `GRAFT_BLOB_DIR` the service keeps audio in memory and says so in its log. The seed script refuses to seed into memory, and also reads `GRAFT_RENDERER_WASM` (the artefact, checked against the pins).
 
+### Site configuration
+
+The site (`web/`) reads these from the environment. Two are read when the site is built, and getting them wrong fails quietly in the browser, so they are named here.
+
+| Variable | Read | Meaning |
+|---|---|---|
+| `GRAFT_API_URL` | when a page is asked for | where the site's server reaches the service (default `http://127.0.0.1:8080`) |
+| `GRAFT_PUBLIC_API_URL` | when a page is asked for; **at build time for the home page** | where a browser reaches the service, when that differs; the home page reports best-effort counts only if this was set when the site was built |
+| `GRAFT_CONNECT_ORIGINS` | **at build time** | comma-separated origins the content security policy lets a page connect to besides itself: the service and the bucket audio is read from. A value that is not a plain origin stops the build. **If it is unset the policy is `connect-src 'self'`**: chain pages cannot load audio, events go nowhere and the operator's page cannot reach the service, all without an error on the page |
+
+For a deployment to work, three settings elsewhere must agree with those: the service's `GRAFT_CORS_ORIGINS` must include the site's origin (reading chains, sending events, the operator's header), and the bucket must allow cross-origin reads from the site's origin.
+
 ## Interface contract
 
 Written by ticket 05.
@@ -262,7 +285,7 @@ Written by ticket 05; ticket 16 deepens it.
 - Logs are JSON, one line per event, each inside a span that carries a per-request id (also returned as `x-request-id`); a test parses every line of a real request and checks the id, and that no connection string appears.
 - `GET /health` answers without touching the database; `GET /ready` pings it and returns 503 problem details when it fails, without echoing the connection string (tested against a closed pool).
 - `GET /metrics` serves the Prometheus text format: a request counter by method, route pattern and status, and a latency histogram by route pattern, so label cardinality stays bounded.
-- Every response carries `content-security-policy: default-src 'none'; frame-ancestors 'none'`, `x-content-type-options: nosniff`, `referrer-policy: no-referrer` and `cache-control: no-store`. CORS allows nothing unless origins are configured.
+- Every response carries `content-security-policy: default-src 'none'; frame-ancestors 'none'`, `strict-transport-security`, `x-content-type-options: nosniff`, `referrer-policy: no-referrer` and `cache-control: no-store`, and a request body that does not finish arriving within `GRAFT_REQUEST_TIMEOUT_SECS` is cut off. CORS allows nothing unless origins are configured. The review of all of this is in "Security".
 - Tests run through the public HTTP API against a real Postgres 16 (a fresh database per test; a service container in CI), with an in-memory blob store. Queries are runtime queries, so building needs no database and no offline query data.
 
 ## Observability and operations
@@ -468,6 +491,60 @@ Written by ticket 21. The code is in `web/lib/playback/`: a pure state machine (
 
 **Not tested here, by design.** Real iOS Safari: whether the context resumes on the first tap, and the behaviour with the silent switch on (Web Audio is muted by it on iOS). Phone performance. Headphones unplugged on a real device (the code pauses on the `devicechange` event and when the context is suspended or interrupted; only a device can show that those events fire in practice). These are manual checks for the builder's listening and cold-phone test, recorded as such.
 
+## The roll
+
+Written by ticket 23. The home page is the seeded chain as a roll of credit blocks over the playback engine. The code is in `web/`: `app/page.tsx` (a server page that reads the snapshot at build time), `components/` (the player, the credit blocks, the theme toggle, the footer), `lib/roll/` (the view-model, the speed wording, the audio decoder), `lib/copy.ts` (every string a visitor reads) and `lib/theme/tokens.ts` (the colours, defined once).
+
+**Opening needs no API.** The page and its four audio files are static: the audio is fetched as `/seed/<sha-256>.pcm` (cacheable for a year, immutable) and decoded by a 16-bit little-endian reader that does not depend on the machine's byte order. The audio context is created on the first tap, inside the gesture, and not before; until then the page says plainly what to tap. A browser test blocks every other origin and checks that the page asks the API for nothing.
+
+**The view-model.** `buildBlocks` turns a stage into a block: a numeral, a title, the credit lines for its face, and a details layer with the exact values (frame range, speed as a fraction with its percentage and nearest interval, length, renderer, stage and record identifiers, the audio hash). The details are derived from the numbers, and a test checks they agree with the lines the server wrote. A value the server marks with any state other than declared or computed is shown as unknown, the weakest claim. Dyes cycle by stage index and are always printed next to the numeral and the title.
+
+**Honesty is text.** Each line ends with its state in words (declared, computed, unknown), and a declared value also says "as typed". A browser test checks every line has its word, a copy test walks every string for the words the project does not use, and a contrast test works the WCAG ratio from the definition over the tokens, and a second one measures the rendered text in both themes.
+
+**Reduced motion and the keyboard.** With reduced motion the page does not scroll by itself, the cursor does not blink, and the main control reads "play all"; every block has a visible "play this stage" button in every mode. The keyboard runs the whole loop (a test does it). Controls are 44 px or larger (a test measures them).
+
+**What is not here yet.** The record (ticket 24), the chain route and every other state (27), the make flow behind "flip this" (28; the button says so), and the about page the footer links to (30). The type and slab styling is a first coat; ticket 25 owns the look. The first-visit hint for the needle arrives with the record.
+
+## The record
+
+Written by ticket 24. The record is the timeline: the band is the stage, the angle along a band is time within that stage, and the stylus is the cursor. It is an instrument first and a picture second: **the roll works without it**, and every action it offers has a plain equivalent in the labels and the controls (a test does the same thing both ways). The code is in `web/components/Record.tsx` and the pure parts in `web/lib/record/`.
+
+**Geometry, and why the old rule was replaced.** One band per stage, the source outermost, then one empty band for "the roll ends on you" (dashed, with no sound). Band thickness is the room between the label and the rim shared out evenly, so it scales with the chain length. The first rule asked for bands at least 60 px wide; a twelve-stage chain has thirteen rings, which would need about 780 px of radius on a phone, so the rule could not hold. Now the stylus snaps to the nearest band and changes band only once the pointer is a quarter of a band past the edge (a scripted path that shakes on an edge changes band once, in a test), and the precise selector is the label list and the stage controls, at 44 px or larger. The four dyes cycle by stage index and are always printed with the numeral and the title (the centre label shows the numeral, and the slider's spoken value gives the title), so colour never identifies a stage by itself. One turn of a band is the stage's whole output; the empty band and the label are not targets.
+
+**Touch, mouse, keyboard.** A tap sets the stylus down at that point and plays from there; a drag scrubs (the sound follows, as an audition) and releasing carries on from the release point. The mouse also hovers: the stage's name appears and a ghost ring marks its band; over the record the pointer is replaced by a stylus and returns to normal off it. The record is a focusable slider: left and right move a tenth of a second, up and down move between stages keeping the same share of the stage, home and end go to its ends, Enter or Space plays from the cursor, and the spoken value reads "stage 2 of 4, up a fifth, 0.1 of 0.6 seconds". "Drag the needle" shows once per visit and is not stored anywhere.
+
+**Drawing.** The grooves wobble with the stage's real waveform (the loudest sample in each of 96 slices of its audio), the played part of the groove is lit, the groove under the stylus gives way to it, and a small trace of the waveform sits on the centre label. The grooves are drawn once as SVG paths and kept; each animation frame moves only the stylus and the tonearm, lights the played part, and redraws the one groove under the stylus. Nothing re-renders per frame: the stylus reads the engine's `stagePosition` (a new, tested accessor: seconds into the current stage, frozen when paused, at the end of the groove in the gap between two repeats). A frame governor watches the median of the last 30 frame gaps; if it stays above 26 ms (under about 38 frames a second) the record goes back to the cached bands and stops redrawing the pushed groove for the rest of the visit, and says so in `data-record="cached"`. A browser test forces 70 ms frames and checks the switch. It does not spin at all, so reduced motion changes nothing in the record's drawing; the page's other reduced-motion rules apply.
+
+**Evidence and its limits.** Unit tests work the geometry by hand from the rule (bands, radii, snapping, angles, the wobble and the push), the key table, and the governor. Eight browser tests at a phone viewport cover tap, drag, keyboard, the twelve-stage chain (13 rings, every label 44 px or more, the shaking pointer), frame pacing during playback (the median and 95th percentile are recorded in the test report), the forced-slow-frames fallback, reduced motion, and the numeral. The twelve-stage chain is the real roll over twelve stages, bundled and served only by the test. Not measured here: 60 frames a second on a mid-range phone (a manual check on a real phone, for the builder's listening and cold-phone test; the CI browser only shows the median stays under 25 ms), and iOS, where audio unlocks on the release of a touch, so the record also asks for the unlock when a touch ends.
+
+## The chain route
+
+Written by ticket 27. A permanent link to any publication, `/p/<public id>`, opens that publication's chain in the roll and the record: the credits, the states and the audio come from the service, not from the static snapshot the home page uses. The code is in `web/app/p/[id]/`, `web/components/LiveRoll.tsx`, `web/lib/roll/live.ts` and `web/lib/roll/audio.ts`.
+
+**What the server renders, and what it does not.** The page is rendered on every request (`force-dynamic`, so `cache-control: no-store`): a hide or a withdrawal must show at once, and a cached page could keep saying a hidden stage is playable. It reads the chain from the service and renders the credits, the states and the link preview. It never writes an audio address into the page: those are short-lived and issued per stage that can be heard, so a hidden or held stage has none to leak. The browser reads the chain again from the service for the addresses (the service allows the site's origin through `GRAFT_CORS_ORIGINS`) and fetches the audio from the bucket directly. A test fetches the page for a chain with a stage hidden for rights and checks the response holds no bucket address, no signature, no `.pcm`, and not the hidden stage's audio hash.
+
+**Link preview.** The title is the final stage's title and the description is one plain line ("a sound and the 4 flips that came before it, rolled as credits."). The framework mirrors the pair into the other preview tags it knows (`twitter:card`, `twitter:title`, `twitter:description`); no tag names an image, and there is no generated poster, embed card or share template (a test lists the tags). A chain whose final stage cannot be read gets the site's name, not a made-up title.
+
+**States, each in the voice.** Not found: a quiet page with a 404 status and a way home (the page is rendered before anything streams, so the status is real; adding a route-level loading file would turn it into a 200). No longer here (withdrawn): the title and credit lines stay, the block says "this sound is no longer here, but its credit is.", its label is not pressable and its audio is never asked for; stages built on it stay playable. Held (a stage it was built on is hidden for rights): the same, with the explanation, and it plays again when the hide is lifted (a test hides, reads, lifts it and reads again). A parent that could not be read: the chain says so and is not shortened. A chain that goes back past the depth cap says so. Every hidden or held block says what a takedown does and does not do: new requests are refused, issued links expire, copies already downloaded cannot be recalled. The status line (polite, read aloud) says how many stages cannot be played. "Flipped N times" is shown for stages that can be heard, from publications data.
+
+**Audio that expires.** An issued address lasts five minutes. If a fetch of one answers 401, 403 or 410 the chain is read again for fresh addresses and that stage is tried once more; the visitor sees nothing (a test refuses the first fetch as an expired address would be and checks the page still becomes ready). Any other failure, or a second refusal, is an error with a "try again" button; going back online retries by itself. The roll passes through a stage with no audio in silence for the length of its step.
+
+**Bucket access from a browser.** The browser fetches issued addresses directly, so the bucket must allow the site's origin to read (cross-origin read access for GET); the test server does not send those headers, so the tests add them to its responses and say so. A deployment needs the real setting (ticket 34's checklist).
+
+**How it is tested.** `scripts/service-e2e.sh` starts a private database and a bucket prefix on the Postgres and S3-compatible server the other tests use, seeds the chain, starts the service, builds the site and runs Playwright with `GRAFT_SERVICE_E2E` set so the specs under `web/e2e/service` run. CI runs it as a step of the `rust` job (which already has both servers and the built service) when the site or the service changed; Chromium comes from a cache keyed on the Playwright version.
+
+## The operator's page
+
+Written by ticket 33. `/admin` is a small page for one person, usable on a phone, over the admin routes that already exist (reports, hide and lift, the kill switch, the rollups). It is not a product surface and has no accounts: the service decides, by the secret, whether to answer.
+
+**The gate.** The page is a form until the secret is typed. The secret is held in the page's memory and sent in the `x-graft-admin-secret` header of each call, straight from the browser to the service (which now lists that header in its CORS allowance, for the site's origin only; a test checks that another origin gets none). It is never in an address, a body or storage, a test finds it in none of them, and locking the page forgets it. Every refusal (a wrong secret, a missing one, too many tries) reads the same: "that was not accepted. wait a little before trying again." The page is sent with `x-robots-tag: noindex, nofollow, noarchive` and a robots tag, and no page links to it (a test looks on the home page and a chain page).
+
+**What it shows.** The reports, newest first, each with its publication's title and name as typed, the category, the note, when it was filed and the publication's state now (visible, hidden: withdrawn, hidden: rights), with "hide: withdrawn", "hide: rights" and "lift the hide", and a link to open its chain. The two switches: publishing (open or closed, with a button; it applies from the next request) and uploads (on or off, read only: it is set when the service starts, so `GET /admin/switch` now reports both). The event path: events by hour and kind, what is waiting to be delivered and how old the oldest is, what is waiting to be counted and how old.
+
+**What it says and does not say.** The events are labelled as best-effort counts of sessions, one session being one page load; the page never says visitors or people, and a test looks. Reports show no personal data because the service holds none: a report has a category, a note and a time. Everything the service sends is printed as text: the service refuses `<` in any public text, notes included, so markup cannot arrive at all; as the second layer a test files a note made of HTML entities and finds them printed as typed, with no element made from them.
+
+**Tested against the real service.** Wrong and right secrets; the secret's whereabouts; the indexing headers; a report listed with its state, hidden for rights from the page, the stage built on it shown held on its chain, then lifted and released; hide and lift from the page; the kill switch closed from the page making a real publish answer 503 and opened making it answer 201; the event view after a client event; and the page on a phone (every control 44 px, nothing scrolling sideways).
+
 ## Events and the outbox
 
 Written by ticket 13. The consumer, rollups and the operator's read are the next section (ticket 14); the client ingest endpoint is ticket 15.
@@ -499,6 +576,16 @@ Written by ticket 15.
 **Privacy.** The ledger has no column for an address or a user agent, and the handler stores only the event's own fields: a test sends a batch with a distinctive address, forwarding header and user agent and finds none of them in the row.
 
 **A stated bound, not a claim of scale.** A test sends 40 full batches at once while a flip is published and checks the publish finishes well inside ten seconds. It is a sanity check that event ingest does not hold up publishing, and it says nothing about load.
+
+### The browser's side (ticket 32)
+
+The code is in `web/lib/telemetry/`. The privacy design is the headline, and each part is a test.
+
+- **A session id that lives only in memory.** It is made on the first event of a page load, never written to storage or a cookie, and replaced after thirty minutes without an event, so it groups one visit and cannot link visits. A test with a controlled clock checks the same id within the window (which slides with activity) and a new one after thirty-one quiet minutes; a browser test checks that after a full session there are no cookies, nothing in local or session storage or IndexedDB, and neither the session id nor an event id anywhere in them.
+- **Two signals switch it all off.** If the browser sends Global Privacy Control or Do Not Track (in any of the spellings browsers have used; a browser object that cannot be read counts as signalling), nothing is queued, no timer is set, no page-hide listener is attached, and nothing is sent. A browser test sets each signal and both, plays a stage and leaves the page, and finds no request to the events address and none to anywhere but the site, the bucket and the chain read. The error tracker is behind the same gate: its code is loaded only when no signal is on and a tracker address is configured, and it starts with no stored address, no session replay, no default integrations or breadcrumbs, and a scrubber. **The tracker's SDK is not installed yet**: there is no tracker project (ticket 16 waits for the builder's account), so the seam is built and tested with a stand-in, and the page never loads one. The test that the SDK "is never loaded" is therefore a unit test of the gate, not a check of a global in the browser.
+- **What is sent.** `roll_opened` when a roll is ready, `stage_played` once per stage per visit however many times the roll goes round it, and `flip_started` when "flip this" is pressed. Each carries a 22-character random id (the dedupe key), the session id, the kind, the time and the publication id, and nothing else. Batches of ten, or five seconds after the first event; a request that fails is retried twice (a second, then three) with the same ids, so a repeat is stored once, and is then dropped. A 429 discards what is waiting and stays quiet for the time given; a 503 (the kill switch) stops sending for the rest of the page load; a 422 is dropped. At most a hundred events are held. Nothing throws into the page.
+- **Leaving the page.** On `pagehide`, and when the page goes to the background, what is waiting is sent with `fetch` and `keepalive`, with no cookies and no referrer. A cross-origin request that needs a preflight cannot finish while a page unloads, so the body is JSON sent as `text/plain` (the one type that needs no preflight), and the service reads the events route's body as JSON whatever its content type says, under the same size cap and field rules (tests for both). This makes the route postable from any site; that costs nothing here, because it is anonymous, stores no address, is limited per address and session, and its counts never become a public fact. A browser test navigates away from a page with a stage just played and finds the event in the ledger. The flush is also tested in Chromium, Firefox and WebKit with a stub endpoint (the engines differ here); the Firefox run is in CI only, because Playwright's Firefox does not start on the builder's macOS version.
+- **Not checkable yet.** The about page's privacy statements (ticket 30) will be cross-checked against this behaviour when that page exists; the opted-in manage key (ticket 29) is the only value that may ever be stored, and does not exist yet. The home page reports only if `GRAFT_PUBLIC_API_URL` was set when the site was built; without it opening the home page makes no request to the service at all.
 
 ## First open and the static snapshot
 
@@ -546,4 +633,64 @@ Written by ticket 14.
 
 ## Security
 
-_Not written yet. Tickets 17 onwards; consolidated by ticket 37._
+Written by ticket 17. The baseline (headers, CORS, validation, audit tools) came with ticket 5; this section is the review of the whole public surface once the write paths existed, what was found, and the threat model. Every claim below that is a test names the test file.
+
+### Threat model
+
+**Assets.** The audio and credits people publish (integrity: nobody can change or forge a stage). The manage key of a publication (the one capability a maker holds). The operator secret (everything under `/admin`). Storage and the publish budget (they cost money and can run out). The service's availability. What visitors do on the site (privacy). The renderer artefact (it decides the bytes of every stage).
+
+**Actors.** An ordinary visitor. Someone who publishes what they should not (a recording of a private conversation, music they have no right to share, something harmful). A spammer or flooder, from one address or many. Someone who has found or guessed a manage key. Someone who has found the operator secret. A rights holder asking for a takedown. A browser or a network in the middle. A hostile dependency. A privacy-minded visitor who wants to be sure nothing is measured.
+
+**Abuse cases, what answers them, and what is left.**
+
+| Case | What answers it | Where it is tested | What is left |
+|---|---|---|---|
+| Publishing what should not be published | A fixed rights declaration for uploads, uploads off by default, length and size caps, checks for silence and clipping, reports, hide for withdrawal or rights, held stages built on a hidden one, the kill switch | `sources.rs`, `moderation.rs`, `guardrails.rs` | graft cannot tell whose recording it is or whether a licence is real; a takedown refuses new requests and lets issued links expire, and cannot recall a copy already downloaded |
+| Flooding with flips or reports or events | Per-address limits, a global publish cap, a per-stage fork cap, a storage admission threshold, the kill switch | `guardrails.rs`, `ingest.rs`, `security.rs` (the limited routes answer 429 with a wait) | the per-address limits count in one process's memory; many addresses can share a window; the storage limit is a threshold with a stated overshoot bound |
+| Making the renderer misbehave | Only the pinned `.wasm` is ever run, with fuel and memory limits and an output cap; cut and speed are checked before any render; renders are limited to four at a time | `security.rs` (extreme numbers in cut and speed are refused), the render host tests | a valid request still costs a render, even when it reuses a retry key |
+| Stealing or guessing a manage key | A 256-bit random key shown once and stored only as a hash; compared in constant time; read from a header, never an address; not logged or echoed; a missing and a wrong key read the same | `security.rs` (every maker route, every kind of wrong key, identical answers), `key_logs.rs` | a key kept in the browser by the maker (ticket 29) is only as safe as that browser; losing a key means losing the ability to change that one publication, nothing more |
+| Finding the operator secret | At least 24 characters; constant-time compare of hashes; missing, empty, wrong, short and long all read the same; failed attempts are limited per address and counted before they are judged; never logged; the operator page keeps it in memory and sends it in a header | `security.rs` (every `/admin` route against six kinds of wrong secret), `admin_logs.rs`, `admin.spec.ts` | one shared secret, no record of which operator did what; rotating it means changing the setting and restarting |
+| Slow or stalled clients, and hostile bodies | A limit of 30 seconds on a request body arriving (a body that never finishes is answered with 408 and freed; the handler is never cancelled half way, which would release a render permit while the render goes on), a body cap on every route, strict fields, nesting that is too deep is refused | `security.rs` (a body stalled for ever on four routes; empty, null, array, huge number, truncated, invalid UTF-8, a nul byte, deep nesting, wrong content types: each refused as a problem document inside two seconds, nothing leaked, the service healthy after) | the service does not set a limit on how long a client may spend sending headers, and a flood of connections is for the platform in front of it (the load balancer's idle timeout and the host's own protection), not for the application |
+| Injecting markup, scripts, links, look-alikes or control characters through public text | The service refuses angle brackets, controls, invisible and direction-changing characters, characters outside an allowed set and words that mix scripts; removes links and handles; the page prints everything as text | `security.rs` (eighteen kinds of text in titles and names), `text.rs` unit tests, `admin.spec.ts` (entities stay entities) | a title can still say something rude or misleading in plain letters; that is for reports and hides |
+| Reading across origins, or framing the site | CORS allows only the configured origins (the admin header only for the site's origin); the site's policy allows connections only to itself, the service and the bucket, and forbids framing, plugins, a changed base address and forms sent elsewhere | `security.rs` (four look-alike origins get nothing), `security.test.ts`, `csp.spec.ts` | the policy allows inline scripts, see below |
+| A dependency with a known advisory | `cargo deny check` and `cargo audit` and `pnpm audit --audit-level high` fail CI; actions are pinned by commit; lockfiles are committed; build scripts of dependencies do not run | see "Supply chain" below | an advisory published after the last run is not seen until the next run; one reviewed exception is listed below |
+| A secret in the repository | `gitleaks` over the full history in CI, a narrow allowlist naming exactly two throwaway test credentials; configuration is read from the environment only (names, defaults and meanings are in "Configuration"); the configuration prints its secrets as redacted | CI `secret scan`, `config.rs` unit tests, a local run clean | none known |
+
+**Errors do not tell more than they should.** Every error is a problem document with only the documented fields. A test sends hostile input to every route and searches the answers for the things only a leak would contain (a panic message, a backtrace, a path, a connection string, a query, a library name, the operator secret, a variable name) and finds none. The service names neither itself nor its framework in a header.
+
+**The headers, on every response.** `content-security-policy: default-src 'none'; frame-ancestors 'none'`, `strict-transport-security: max-age=63072000; includeSubDomains` (ignored over plain HTTP, so safe behind a proxy that ends TLS), `x-content-type-options: nosniff`, `referrer-policy: no-referrer`, `cache-control: no-store` on errors and on everything but the health and document routes. A test walks every route in the interface document and the operator's routes (read from the router's source, so a new one fails the test until it has a row), and also an unknown path, a wrong method, a refused preflight and `TRACE`, and finds all of them on every answer. A found bug: a refused cross-origin preflight was answered outside the layer that adds them; the layers were reordered.
+
+**The site's headers.** Every page carries a content security policy, `strict-transport-security`, `nosniff`, no referrer, and a device policy that allows only the microphone (for the maker's own recording, later). The policy allows the page to connect to itself and to exactly the origins in `GRAFT_CONNECT_ORIGINS` (the service and the bucket; a value that is not a plain origin stops the build). It forbids framing, plugins, a changed base address and forms sent elsewhere. **Honest limit:** it allows inline scripts, because the framework's own start-up script is inline and a nonce per request would make the static home page dynamic. So the header is not what stands between a visitor and script injection; what does is that nothing the site prints is ever treated as markup (React escapes everything, and the service refuses angle brackets in all public text). Browser tests load the home page, a chain and the operator's page under the policy and find no violation; the policy is read back from a response and compared; and a page that tries to reach an unlisted origin or to frame the site is refused.
+
+### Supply chain
+
+The `supply chain` CI job runs `cargo deny check` (advisories, licences, banned and duplicate crates, sources) and `cargo audit`; the `web` job runs `pnpm audit --audit-level high`. Neither is advisory only: a finding fails the pull request. The list of reviewed exceptions is one entry, in `web/pnpm-workspace.yaml` with its reason: `braces` (runaway recursion on deeply nested glob patterns), which has no patched release and is reached only through the lint tooling's dependencies, never from input or the shipped bundle; remove it when a fix is published. The Rust list is empty.
+
+**Shown once, locally, so no CI round was spent on it.** On a copy of the tree, the same two commands CI runs, first clean and then with `time 0.1.45` (RUSTSEC-2020-0071) added to the API crate:
+
+```
+== clean tree ==                                  advisories ok, bans ok, licenses ok, sources ok
+== seeded: time 0.1.45 added to the api crate ==
+cargo deny check   ->  error[vulnerability]: Potential segfault in the time crate
+                       ID: RUSTSEC-2020-0071      advisories FAILED, ...      exit 1
+cargo audit        ->  Crate: time  Version: 0.1.45  ID: RUSTSEC-2020-0071
+                       Solution: Upgrade to >=0.2.23   error: 1 vulnerability found!   exit 1
+```
+
+and the same for the web manifest with `lodash 4.17.15` (high: prototype pollution; high: command injection): `pnpm audit --audit-level high` exits 1, where the clean manifest exits 0. **The audit also found something real while this was being written:** the clean baseline of that very demonstration was not clean. `ctutils 0.4.3`, a dependency of the Postgres driver, had received RUSTSEC-2026-0385 (a non-constant-time mask generation) since the last green run; `cargo update -p ctutils` moved it to 0.4.5, and both commands are clean again. That is the failure mode the job exists for, and it shows its limit: an advisory published tomorrow is seen tomorrow.
+
+### Privacy, in plain words
+
+graft stores no address, no user agent and no account in its own records. The event ledger has no column for any of them (a test searches the rows), the request logs carry a request id and no address (a test searches the logs), and the per-address limits keep an address in memory for one window and forget it. Hosting providers necessarily see addresses: the load balancer, the host of the site, the database host and the bucket will each process them under their own terms, and graft cannot promise what they do. The site's session id lives only in one page's memory, rotates after thirty quiet minutes, and is never written anywhere; Global Privacy Control and Do Not Track switch the client events and the error tracker off entirely, and the service ignores a batch that arrives with either header. Event counts are best-effort and never become a public fact.
+
+### What is not defended
+
+- **Distributed abuse.** A determined person with many addresses can use each address's allowance, fill the storage threshold up to its documented overshoot, and spend the global publish cap. The kill switch and the reports are the operator's answer, by hand.
+- **Volumetric attacks** on the network are the platform's to absorb, not the application's.
+- **Slow header attacks.** The application has a deadline for a body to arrive, but does not set its own timeout for the time a client spends sending headers; it relies on the load balancer.
+- **Per-process limits.** The per-address and per-session limits are in memory, per process; a second instance gives each visitor a second allowance. The global cap and the storage threshold are in the database.
+- **Rights.** graft does not check that a recording is the sender's or that a licence is genuine; it records what was declared, as declared. Copies already downloaded cannot be recalled.
+- **A malicious operator or a stolen laptop with the secret on it.** There is one shared secret and no audit trail of who used it.
+- **Script injection if the escaping rule were ever broken.** The policy allows inline scripts (above); the defences are the character rules and the escaping, not the header.
+- **The second layer of the policy for the audio origin** depends on the bucket allowing the site's origin to read; that setting belongs to deployment (ticket 34), and without it audio will not load rather than load insecurely.
+

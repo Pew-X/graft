@@ -6,11 +6,19 @@ graft is an independent experiment. It is not affiliated with or endorsed by any
 
 Every fact the project shows about a sound is one of three things: declared (said by a person), computed (produced by the system) or unknown (not established). The same applies to this repository: where a claim is measured, the test or number that backs it is named; where it is not, it says so.
 
-> Status: the backend runs end to end and is tested against real Postgres and a real S3-compatible object store: seed a source, publish a flip (rendered on the server by the canonical renderer), read the chain, manage your own publication with its key, report a sound, hide it as the operator, and serve audio through short-lived signed URLs. It also has the abuse limits and a runtime kill switch, the event path (a transactional outbox, a relay, an idempotent consumer and hourly rollups), a guarded client event endpoint, visitor source uploads (switched off by default), the seeded chain with its static snapshot, and traces, metrics and error reporting that send nothing personal. The web app has a tested playback engine and no screens yet; deployment is not built. Sections below are filled in by the work that owns them.
+> Status: the backend runs end to end and is tested against real Postgres and a real S3-compatible object store: seed a source, publish a flip (rendered on the server by the canonical renderer), read the chain, manage your own publication with its key, report a sound, hide it as the operator, and serve audio through short-lived signed URLs. It also has the abuse limits and a runtime kill switch, the event path (a transactional outbox, a relay, an idempotent consumer and hourly rollups), a guarded client event endpoint, visitor source uploads (switched off by default), the seeded chain with its static snapshot, and traces, metrics and error reporting that send nothing personal. The web app has a tested playback engine and the home page: the seeded chain as a roll of credit blocks with the record beside it (a timeline you can scrub), played from a static snapshot; any publication's link opens its chain with every state designed (removed, held, not found, offline); an operator's page at `/admin` (reports, hide and lift, the kill switch, the event path) behind the admin secret; the make flow is not built, and deployment is not built. Sections below are filled in by the work that owns them.
 
 ## What it is, and is not
 
 _Written by ticket 37 (docs consolidation)._
+
+## What is declared, computed and unknown
+
+Every statement the roll makes about a stage carries one of three states, written out in words next to it (colour never carries a state alone).
+
+- **Declared**: a person said it, and it is printed as typed: a title, a name, a licence line, a statement about the right to share. graft keeps the words and does not check them. The seeded chain's sound is declared as synthesized for graft, by the author of this repository.
+- **Computed**: the system produced it and can produce it again. The cut in frames, the speed as a fraction (shown as a percentage and the nearest musical interval), the length, the identifiers, the hash of the audio and the renderer's name are computed from the stored record. "Reproducible" is claimed only for the named renderer version and the published test vectors; a hash says which bytes, and nothing more.
+- **Unknown**: nothing establishes it. That is the default for who really made a sound and whether they hold the right to share it. graft does not verify a recording or a licence, so those lines say "unknown" or "not established", and the roll ends on an empty label marked "maker unknown".
 
 ## Run it
 

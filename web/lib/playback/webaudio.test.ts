@@ -181,3 +181,21 @@ test("a voice's end callback is the source's own", async () => {
   voice.onended?.();
   assert.equal(ended, 1);
 });
+
+test("a stage with no audio (hidden, held) is silent: its voice makes no sound and never ends by itself", () => {
+  FakeContext.created.length = 0;
+  const context = new FakeContext();
+  const graph = new WebAudioGraph(context, [Int16Array.from([1, 2, 3, 4]), null]);
+  assert.equal(context.buffers.length, 1, "no buffer is made for a stage without audio");
+  const before = context.calls.length;
+  const voice = graph.voice(1);
+  let ended = 0;
+  voice.onended = () => (ended += 1);
+  voice.start(0, ATTACK);
+  voice.stop(RELEASE);
+  assert.equal(context.calls.length, before, "nothing was scheduled on the context");
+  assert.equal(ended, 0);
+  // The stage next to it still sounds.
+  graph.voice(0).start(0, ATTACK);
+  assert.ok(context.calls.some((c) => c.startsWith("start@")));
+});

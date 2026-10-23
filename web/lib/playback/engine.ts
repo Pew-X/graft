@@ -94,6 +94,34 @@ export class Engine {
     return currentStage(this.#state, this.#lengths.length);
   }
 
+  /**
+   * Seconds into the current stage's output, for the stylus to ride: where the sound is, where it
+   * stopped if paused, the end of the groove in the gap between two repeats or after an audition
+   * ended. Null when nothing is current.
+   */
+  get stagePosition(): number | null {
+    const stage = this.currentStage;
+    if (stage === null) return null;
+    const length = this.#lengths[stage] ?? 0;
+    const state = this.#state;
+    const within = (elapsed: number): number => {
+      const cycle = length + REPEAT_GAP;
+      return Math.min(cycle > 0 ? elapsed % cycle : 0, length);
+    };
+    switch (state.kind) {
+      case "rolling":
+        return within(this.#position());
+      case "auditioning":
+        return state.ended ? length : this.#position();
+      case "paused":
+        return state.from.kind === "rolling"
+          ? within(state.from.elapsed)
+          : Math.min(state.from.offset, length);
+      default:
+        return null;
+    }
+  }
+
   /** The main play control. */
   play(): void {
     this.#send({ type: "play" });

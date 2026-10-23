@@ -77,14 +77,23 @@ export function createContext(Ctor: AudioContextConstructor): CreatedContext {
   }
 }
 
-/** The graph over a context and the stages' audio, as 48 kHz mono buffers. */
+/** A voice for a stage that has no audio to play (hidden, or held): it makes no sound and never ends by itself. */
+function silentVoice(): Voice {
+  return { onended: null, start: () => undefined, stop: () => undefined };
+}
+
+/**
+ * The graph over a context and the stages' audio, as 48 kHz mono buffers. A stage whose audio is
+ * not served is `null`: the roll passes through it in silence.
+ */
 export class WebAudioGraph implements AudioGraph {
   readonly #context: AudioContextLike;
-  readonly #buffers: BufferLike[];
+  readonly #buffers: Array<BufferLike | null>;
 
-  constructor(context: AudioContextLike, stages: readonly Int16Array[]) {
+  constructor(context: AudioContextLike, stages: ReadonlyArray<Int16Array | null>) {
     this.#context = context;
     this.#buffers = stages.map((pcm) => {
+      if (pcm === null) return null;
       const buffer = context.createBuffer(1, pcm.length, SAMPLE_RATE);
       buffer.copyToChannel(pcmToFloat(pcm), 0);
       return buffer;
@@ -92,6 +101,7 @@ export class WebAudioGraph implements AudioGraph {
   }
 
   voice(stage: number): Voice {
+    if ((this.#buffers[stage] ?? null) === null) return silentVoice();
     const context = this.#context;
     const source = context.createBufferSource();
     const gain = context.createGain();
@@ -137,10 +147,13 @@ export class WebAudioGraph implements AudioGraph {
  */
 export class LazyAudio {
   readonly #ctor: () => AudioContextConstructor | undefined;
-  readonly #stages: readonly Int16Array[];
+  readonly #stages: ReadonlyArray<Int16Array | null>;
   #created: (CreatedContext & { graph: WebAudioGraph }) | null = null;
 
-  constructor(ctor: () => AudioContextConstructor | undefined, stages: readonly Int16Array[]) {
+  constructor(
+    ctor: () => AudioContextConstructor | undefined,
+    stages: ReadonlyArray<Int16Array | null>,
+  ) {
     this.#ctor = ctor;
     this.#stages = stages;
   }

@@ -11,6 +11,8 @@ mod guardrails;
 mod ingest;
 #[path = "publish/metrics.rs"]
 mod metrics;
+#[path = "publish/security.rs"]
+mod security;
 #[path = "publish/sources.rs"]
 mod sources;
 

@@ -211,9 +211,53 @@ pub fn router(state: AppState, config: &Config) -> Router {
                 Problem::internal().into_response()
             },
         ))
-        .layer(middleware::from_fn_with_state(state.clone(), observe))
         .layer(cors(config))
+        .layer(middleware::from_fn_with_state(
+            std::time::Duration::from_secs(config.request_timeout_secs),
+            body_deadline,
+        ))
+        // Outermost, so every response (a refused preflight and a timeout included) is logged,
+        // counted and given the security headers.
+        .layer(middleware::from_fn_with_state(state.clone(), observe))
         .with_state(state)
+}
+
+/// Frees a request whose body does not arrive in time. Only the reading of the body is bounded:
+/// a client that connects and stops sending is cut off here (its read fails with `BodyTimedOut`,
+/// which the extractors answer with a timeout), instead of holding the request open for ever. The
+/// handler itself is never cancelled, because a publish dropped half way would release its render
+/// permit while the render goes on, or fall between taking a token and storing the result.
+async fn body_deadline(
+    State(limit): State<std::time::Duration>,
+    request: Request,
+    next: Next,
+) -> Response {
+    use futures::StreamExt;
+    let (parts, body) = request.into_parts();
+    let until = tokio::time::Instant::now() + limit;
+    // (the body's data, whether it has already ended in an error)
+    let stream = futures::stream::unfold(
+        (body.into_data_stream(), false),
+        move |(mut data, over)| async move {
+            if over {
+                return None;
+            }
+            match tokio::time::timeout_at(until, data.next()).await {
+                Ok(None) => None,
+                Ok(Some(Ok(bytes))) => Some((Ok(bytes), (data, false))),
+                Ok(Some(Err(e))) => Some((Err(Box::new(e) as axum::BoxError), (data, true))),
+                Err(_) => Some((
+                    Err(Box::new(crate::problem::BodyTimedOut) as axum::BoxError),
+                    (data, true),
+                )),
+            }
+        },
+    );
+    next.run(Request::from_parts(
+        parts,
+        axum::body::Body::from_stream(stream),
+    ))
+    .await
 }
 
 /// The operator routes. The secret is checked by a layer, before any query or body is parsed.
@@ -336,6 +380,8 @@ fn cors(config: &Config) -> CorsLayer {
         .allow_headers([
             header::CONTENT_TYPE,
             HeaderName::from_static("x-graft-manage-key"),
+            // The admin page sends the operator secret in a header from the browser.
+            HeaderName::from_static("x-graft-admin-secret"),
         ])
         .max_age(std::time::Duration::from_secs(600))
 }
@@ -423,6 +469,12 @@ async fn observe(State(state): State<AppState>, request: Request, next: Next) ->
     headers.insert(
         header::X_CONTENT_TYPE_OPTIONS,
         HeaderValue::from_static("nosniff"),
+    );
+    // Browsers hold to secure transport for two years once they have seen this over it; it is
+    // ignored over plain HTTP, so sending it always is safe behind a terminating proxy.
+    headers.insert(
+        header::STRICT_TRANSPORT_SECURITY,
+        HeaderValue::from_static("max-age=63072000; includeSubDomains"),
     );
     headers.insert(
         header::REFERRER_POLICY,

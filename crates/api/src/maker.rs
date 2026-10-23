@@ -122,10 +122,20 @@ pub async fn set_fork_permission(
     Path(id): Path<String>,
     uri: Uri,
     headers: HeaderMap,
-    body: axum::body::Bytes,
+    body: axum::body::Body,
 ) -> Result<Json<MakerState>, Problem> {
     let id = authorize(&state, &id, &headers, &uri).await?;
-    // The body is read only after the key is accepted, so a refusal never depends on it.
+    // The body is read only after the key is accepted, so a refusal never depends on it (and a
+    // body of any size gets the same answer as a body of none), and it is read to a bound.
+    let body = axum::body::to_bytes(body, MAX_BODY_BYTES)
+        .await
+        .map_err(|e| {
+            if crate::problem::body_timed_out(&e) {
+                Problem::request_timeout()
+            } else {
+                Problem::too_large()
+            }
+        })?;
     let request: ForkPermissionRequest = serde_json::from_slice(&body).map_err(|_| {
         Problem::bad_request("the body must be JSON with exactly the documented fields")
     })?;

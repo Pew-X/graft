@@ -1,12 +1,43 @@
 import { defineConfig } from "@playwright/test";
+import { existsSync } from "node:fs";
+
+// In CI the job has just built the site from this checkout, so it is not built a second time.
+const built = Boolean(process.env["CI"]) && existsSync(".next/BUILD_ID");
 
 // Full Chromium, not the stripped-down headless shell (which crashed in an earlier check).
 export default defineConfig({
   testDir: "e2e",
-  testMatch: "*.spec.ts",
+  testMatch: "**/*.spec.ts",
+  // The specs under e2e/service need the real service, a database and a bucket: scripts/service-e2e.sh
+  // starts them and sets GRAFT_SERVICE_E2E. Without it they are not part of the run.
+  testIgnore: process.env["GRAFT_SERVICE_E2E"] ? [] : ["**/service/**"],
   globalSetup: "./e2e/global-setup.ts",
   timeout: 60_000,
   workers: 1,
   reporter: [["list"]],
-  projects: [{ name: "chromium", use: { browserName: "chromium", channel: "chromium" } }],
+  projects: [
+    {
+      name: "chromium",
+      use: { browserName: "chromium", channel: "chromium", baseURL: "http://127.0.0.1:3100" },
+    },
+    // The page-hide flush is the one behaviour that differs between engines, so it alone runs in all three.
+    {
+      name: "firefox",
+      testMatch: "**/flush.spec.ts",
+      use: { browserName: "firefox", baseURL: "http://127.0.0.1:3100" },
+    },
+    {
+      name: "webkit",
+      testMatch: "**/flush.spec.ts",
+      use: { browserName: "webkit", baseURL: "http://127.0.0.1:3100" },
+    },
+  ],
+  // The roll specs drive the built site. The playback spec builds its own page and ignores this.
+  webServer: {
+    command: built ? "pnpm start --port 3100" : "pnpm build && pnpm start --port 3100",
+    url: "http://127.0.0.1:3100",
+    // A server left running from an earlier run would not know where the service is.
+    reuseExistingServer: !process.env["CI"] && !process.env["GRAFT_SERVICE_E2E"],
+    timeout: 240_000,
+  },
 });

@@ -25,9 +25,12 @@ jobs:
   changes:
     name: what changed
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     outputs:
       renderer: ${{ steps.f.outputs.renderer }}
       image: ${{ steps.f.outputs.image }}
+      web: ${{ steps.f.outputs.web }}
+      service: ${{ steps.f.outputs.service }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -38,15 +41,27 @@ jobs:
           BASE: ${{ github.base_ref }}
         run: |
           if [ "$EVENT" != "pull_request" ]; then
-            echo "renderer=true" >> "$GITHUB_OUTPUT"; echo "image=true" >> "$GITHUB_OUTPUT"; exit 0
+            echo "renderer=true" >> "$GITHUB_OUTPUT"; echo "image=true" >> "$GITHUB_OUTPUT"; echo "web=true" >> "$GITHUB_OUTPUT"; echo "service=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           changed=$(git diff --name-only "origin/$BASE...HEAD")
           printf '%s\n' "$changed"
-          # Anything that can change a renderer hash, the vector evidence, or the playback test.
-          if printf '%s\n' "$changed" | grep -E -q '^(crates/(render|render-host|vectors)/|fixtures/|tools/vectors/|scripts/|Cargo\.(toml|lock)|rust-toolchain\.toml|web/(lib/playback|e2e|package\.json|pnpm-lock\.yaml|playwright\.config\.ts)|\.github/workflows/ci\.yml)'; then
+          # Anything that can change a renderer hash or the vector evidence.
+          if printf '%s\n' "$changed" | grep -E -q '^(crates/(render|render-host|vectors)/|fixtures/|tools/vectors/|scripts/|Cargo\.(toml|lock)|rust-toolchain\.toml|\.github/workflows/ci\.yml)'; then
             echo "renderer=true" >> "$GITHUB_OUTPUT"
           else
             echo "renderer=false" >> "$GITHUB_OUTPUT"
+          fi
+          # The web app and its browser tests (the renderer's wasm is built by the test itself).
+          if printf '%s\n' "$changed" | grep -E -q '^(web/|openapi/|seed/|\.github/workflows/ci\.yml)'; then
+            echo "web=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "web=false" >> "$GITHUB_OUTPUT"
+          fi
+          # The browser tests that need the real service: anything the service or the site is made of.
+          if printf '%s\n' "$changed" | grep -E -q '^(web/|crates/|openapi/|seed/|scripts/|Cargo\.(toml|lock)|rust-toolchain\.toml|\.github/workflows/ci\.yml)'; then
+            echo "service=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "service=false" >> "$GITHUB_OUTPUT"
           fi
           # The throwaway check image and what it is built from.
           if printf '%s\n' "$changed" | grep -E -q '^(Dockerfile|\.dockerignore|crates/(host-check|render|render-host|vectors)/|fixtures/|Cargo\.(toml|lock)|rust-toolchain\.toml|\.github/workflows/ci\.yml)'; then
@@ -58,6 +73,7 @@ jobs:
   repo:
     name: repo hygiene and scripts
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -82,7 +98,9 @@ jobs:
 
   rust:
     name: rust
+    needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     # A fresh Postgres 16 per job: the HTTP seam and the store tests run against the real engine.
     services:
       postgres:
@@ -135,6 +153,32 @@ jobs:
         run: |
           cargo run -q -p graft-api --bin graft-openapi > "$RUNNER_TEMP/openapi.json"
           diff -u openapi/openapi.json "$RUNNER_TEMP/openapi.json"
+      # The site against the real service, database and bucket this job already has: a flip is
+      # published through the API, the operator hides and clears it, and Chromium opens the link.
+      # Chromium comes from a cache keyed on the Playwright version; only its system libraries are installed each run.
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        if: needs.changes.outputs.service == 'true'
+        with:
+          package_json_file: web/package.json
+      - name: Web dependencies and the Playwright version, for the service tests
+        if: needs.changes.outputs.service == 'true'
+        run: |
+          cd web
+          pnpm install --frozen-lockfile
+          echo "PLAYWRIGHT_VERSION=$(pnpm exec playwright --version | cut -d' ' -f2)" >> "$GITHUB_ENV"
+          command -v psql >/dev/null || (sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -qq && sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y -qq --no-install-recommends postgresql-client)
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        if: needs.changes.outputs.service == 'true'
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}
+      - name: Chromium and its system libraries
+        if: needs.changes.outputs.service == 'true'
+        working-directory: web
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Browser tests against the real service
+        if: needs.changes.outputs.service == 'true'
+        run: sh scripts/service-e2e.sh e2e/service
       - name: Crate dependency direction
         run: node scripts/check-crate-graph.mjs
 
@@ -143,6 +187,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.renderer == 'true'
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -185,14 +230,19 @@ jobs:
     needs: changes
     if: needs.changes.outputs.renderer == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 15
     # The image carries the browsers' system libraries, which otherwise take ~9 minutes to install.
     container:
       image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:7852dc5a7d72f5fe458a597d690f6c42fbc8e9e26ddfa95f8e6ef552558d9bbf
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Tools the container lacks (C linker, curl)
-        run: apt-get update -qq && apt-get install -y -qq --no-install-recommends build-essential curl ca-certificates git
+        # The package mirror has stalled this step for a quarter of an hour twice: retries and
+        # network timeouts make it fail or recover in minutes, and the step limit bounds the rest.
+        timeout-minutes: 5
+        run: |
+          apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -qq
+          apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y -qq --no-install-recommends build-essential curl ca-certificates git
       - name: Install the pinned toolchain (rustup 1.28.2, checksum pinned)
         run: |
           curl -sSfL -o /tmp/rustup-init https://static.rust-lang.org/rustup/archive/1.28.2/x86_64-unknown-linux-gnu/rustup-init
@@ -225,15 +275,6 @@ jobs:
           pnpm format:check
           pnpm audit --audit-level high
           pnpm test
-      # The playback engine in a real browser, in the container that already has Chromium: a stage
-      # plays through Web Audio and stops, measured at the output. The page and engine code live in web/.
-      - name: Playback engine in Chromium
-        working-directory: web
-        env:
-          HOME: /root
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm exec playwright test
 
   cross-host-macos:
     name: cross-host vectors (macos-15)
@@ -277,7 +318,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.image == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build the check image
@@ -303,6 +344,7 @@ jobs:
   supply-chain:
     name: supply chain
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2.87.30
@@ -314,6 +356,7 @@ jobs:
   secrets:
     name: secret scan
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -327,12 +370,23 @@ jobs:
 
   web:
     name: web
+    needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # The image carries Chromium and its system libraries; the browser tests (the playback engine
+    # over real Web Audio, the roll at a phone viewport) run here, only when web/ can have changed.
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:7852dc5a7d72f5fe458a597d690f6c42fbc8e9e26ddfa95f8e6ef552558d9bbf
+      env:
+        HOME: /root
     defaults:
       run:
         working-directory: web
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: git, for the typed-client drift check (the image may not carry it)
+        run: command -v git >/dev/null || (apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -qq && apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y -qq --no-install-recommends git)
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           package_json_file: web/package.json
@@ -351,5 +405,13 @@ jobs:
       - run: pnpm format:check
       - run: pnpm test
       - run: pnpm build
+      - name: Browser tests (Chromium)
+        if: needs.changes.outputs.web == 'true'
+        env:
+          CI: "true"
+          # GitHub points HOME at /github/home in a container step, and Firefox will not start as
+          # root there; the container-level setting does not reach the step.
+          HOME: /root
+        run: pnpm exec playwright test
       - name: Dependency audit
         run: pnpm audit --audit-level high
