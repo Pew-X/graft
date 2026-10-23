@@ -225,12 +225,18 @@ test("the disc keeps frames flowing while a stage plays", async ({ page }) => {
 // deepest chain (twelve stages, thirteen rings) plays. Measured on the builder's Mac, headless: the median
 // stayed at 16.7 ms up to 40x. This is a proxy, not a phone: the real-phone check stays manual and is named
 // as open in ARCHITECTURE.md. The record degrades to cached bands when the median of 30 frames passes 26 ms
-// (lib/record/frames.ts); the test below asserts what the visitor gets either way.
+// (lib/record/frames.ts).
+//
+// The numbers are GATES only when GRAFT_FRAME_BUDGET=strict (scripts/precheck.sh --full sets it, on a
+// machine nobody else is using): a shared CI runner renders in software and is noisy, and a threshold
+// calibrated on one laptop would fail there at random, which is worse than no gate. Everywhere else the
+// run records the numbers as annotations and asserts what the visitor gets whichever drawing it settled on.
+const strictBudget = process.env["GRAFT_FRAME_BUDGET"] === "strict";
 for (const [rate, medianMs, p95Ms] of [
   [4, 20, 34],
   [6, 26, 50],
 ] as const) {
-  test(`the thirteen-ring record plays at ${rate}x CPU slowdown with a median frame under ${medianMs} ms`, async ({
+  test(`the thirteen-ring record plays at ${rate}x CPU slowdown (strict budget: median under ${medianMs} ms)`, async ({
     page,
   }) => {
     const cdp = await page.context().newCDPSession(page);
@@ -261,9 +267,12 @@ for (const [rate, medianMs, p95Ms] of [
       type: `frame pacing at ${rate}x (ms)`,
       description: `median ${median.toFixed(1)}, p95 ${p95.toFixed(1)}, record ${mode}`,
     });
-    expect(median).toBeLessThan(medianMs);
-    expect(p95).toBeLessThan(p95Ms);
-    // Whichever drawing it settled on, it still answers.
+    if (strictBudget) {
+      expect(median).toBeLessThan(medianMs);
+      expect(p95).toBeLessThan(p95Ms);
+    }
+    // Whichever drawing it settled on, it is one of the two, and the sound never stopped.
+    expect(["live", "cached"]).toContain(mode);
     await expect(roll(page)).toHaveAttribute("data-sounding", "true");
   });
 }

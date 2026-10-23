@@ -29,6 +29,7 @@ if [ "${1:-}" = "--full" ]; then
   step "rust tests (Postgres and the object store must be running: see README.md)"
   cargo test --workspace --all-features
   step "playback test in Chromium"
-  (cd web && pnpm exec playwright test)
+  # The frame budget's numbers are gates only on a quiet machine; CI records them (see web/e2e/record.spec.ts).
+  (cd web && GRAFT_FRAME_BUDGET=strict pnpm exec playwright test)
 fi
 printf '\nall checks passed\n'

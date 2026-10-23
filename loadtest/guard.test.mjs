@@ -48,6 +48,14 @@ test("staging in a path, a query or a user name does not make a host staging", (
   no(["https://staging", "api.example.com/"].join("@"));
 });
 
+test("an address a browser would read differently from this guard is refused, not guessed at", () => {
+  no("https://api.example.com\\.staging.example.net/", undefined, /plain host/);
+  no("https://api.example.com%2e.staging.example.net/");
+  no("https://api.example.com .staging.example.net/");
+  no("https://staging.example.com:notaport/");
+  ok("https://staging.example.com:8443/path?x=1");
+});
+
 test("a lookalike host does not pass: the label must be the whole word", () => {
   no("https://restaging.example.com");
   no("https://stagingfoo.example.com");

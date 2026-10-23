@@ -32,7 +32,7 @@ export GRAFT_DATABASE_URL="${admin_url%/*}/$db"
 export GRAFT_RENDERER_WASM="$root/target/wasm32-unknown-unknown/wasm/graft_render.wasm"
 export GRAFT_BLOB_S3_BUCKET=graft-test GRAFT_BLOB_S3_PREFIX="load-$run" GRAFT_BLOB_S3_ENDPOINT="$s3" GRAFT_BLOB_S3_ALLOW_HTTP=true
 export GRAFT_BLOB_S3_ACCESS_KEY_ID=graftaccess GRAFT_BLOB_S3_SECRET_ACCESS_KEY=graftsecret12345
-export GRAFT_BIND="0.0.0.0:$port" GRAFT_ENVIRONMENT=loadtest-local
+export GRAFT_BIND="127.0.0.1:$port" GRAFT_ENVIRONMENT=loadtest-local
 # The limits are part of the system under test, but a dry run on one address would only meet them.
 # They are lifted here and the run says so; a staging run states which it used.
 export GRAFT_PUBLISH_PER_IP=1000000 GRAFT_REPORT_PER_IP=1000000 GRAFT_INGEST_PER_IP=1000000

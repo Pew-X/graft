@@ -22,7 +22,13 @@ export function checkTarget(baseUrl, env = {}) {
   const match = /^(https?):\/\/([^/?#]*)([/?#].*)?$/i.exec(String(baseUrl ?? ""));
   if (!match) return { ok: false, reason: `${baseUrl || "(empty)"} is not an http or https address` };
   const authority = match[2] ?? "";
-  if (authority.includes("@")) return { ok: false, reason: "an address with a user name is not accepted" };
+  // Only a plain host is read: letters, digits, dots and dashes, an optional port, or a bracketed IPv6
+  // literal. Anything else (a user name, a backslash, which a browser reads as a slash, a percent
+  // escape, a space) is refused rather than guessed at, so the host the guard judges is the host the
+  // client connects to.
+  if (!/^([A-Za-z0-9.-]+|\[[0-9A-Fa-f:]+\])(:\d{1,5})?$/.test(authority)) {
+    return { ok: false, reason: "the address is not a plain host name with an optional port" };
+  }
   // The host without its port (an IPv6 literal keeps its brackets).
   const host = authority.replace(/:\d+$/, "").toLowerCase();
   if (names(env.productionHosts).includes(host)) {

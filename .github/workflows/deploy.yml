@@ -12,7 +12,7 @@ name: deploy
 # previous task definition and fail the run.
 #
 # Environment variables each GitHub environment needs (names only):
-#   AWS_ROLE_ARN, AWS_REGION, ECR_REPOSITORY, ECS_CLUSTER, ECS_SERVICE, ECS_TASK_FAMILY,
+#   AWS_ROLE_ARN, AWS_REGION, ECR_REPOSITORY, ECS_CLUSTER, ECS_SERVICE,
 #   RELEASE_SUBNETS (comma-separated), RELEASE_SECURITY_GROUPS (comma-separated), SERVICE_URL
 # The secrets themselves (database URL, operator secret, error tracker address) live in the task
 # definition's secret references, in the platform's store, never here.
@@ -65,11 +65,12 @@ jobs:
           IMAGE: ${{ steps.image.outputs.image }}
           CLUSTER: ${{ vars.ECS_CLUSTER }}
           SERVICE: ${{ vars.ECS_SERVICE }}
-          FAMILY: ${{ vars.ECS_TASK_FAMILY }}
         run: |
           previous=$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" --query 'services[0].taskDefinition' --output text)
           echo "previous=$previous" >> "$GITHUB_OUTPUT"
-          aws ecs describe-task-definition --task-definition "$FAMILY" --query taskDefinition \
+          # Based on the revision the service is running, not the family's latest: a failed earlier deploy
+          # leaves a newer revision registered that nothing should inherit.
+          aws ecs describe-task-definition --task-definition "$previous" --query taskDefinition \
             | jq --arg image "$IMAGE" '.containerDefinitions[0].image = $image
                 | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
             > taskdef.json

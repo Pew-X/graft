@@ -15,17 +15,22 @@ fn url() -> String {
 
 #[tokio::test]
 async fn the_client_is_built_with_tls_and_asks_the_server_for_it() {
-    let required = format!("{}?sslmode=require", url());
-    let Err(err) = Store::connect(&required, 1).await else {
-        panic!("a server without TLS must be refused when TLS is required");
-    };
-    let said = err.to_string();
-    assert!(
-        !said.contains("without TLS support"),
-        "the client was built without TLS support, so it cannot reach a database that requires it: {said}"
-    );
-    assert!(
-        said.to_lowercase().contains("tls"),
-        "expected the refusal to be about TLS, got: {said}"
-    );
+    let base = url();
+    let joiner = if base.contains('?') { '&' } else { '?' };
+    let required = format!("{base}{joiner}sslmode=require");
+    match Store::connect(&required, 1).await {
+        // A server that offers TLS accepted it: the client can speak it, which is the point.
+        Ok(_) => {}
+        Err(err) => {
+            let said = err.to_string();
+            assert!(
+                !said.contains("without TLS support"),
+                "the client was built without TLS support, so it cannot reach a database that requires it: {said}"
+            );
+            assert!(
+                said.to_lowercase().contains("tls"),
+                "expected the refusal to be about TLS, got: {said}"
+            );
+        }
+    }
 }

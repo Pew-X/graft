@@ -151,13 +151,17 @@ function write(pool) {
   readBack(id);
   const roll = Math.random();
   if (roll < DUPLICATE_SHARE) {
+    // The same key and content: the answer must be the same publication. A refusal or a failure is
+    // already counted by `tally` and says nothing about idempotency.
     const again = postFlip(parent, key, speed, CUT);
-    if (tally(again) === "replay" && idOf(again) === id) return;
-    replayDiffers.add(1);
+    if (tally(again) === "replay" && idOf(again) !== id) replayDiffers.add(1);
   } else if (roll < DUPLICATE_SHARE + CONFLICT_SHARE) {
-    const other = postFlip(parent, key, speed, CUT - 100); // the same key, a different cut
-    if (tally(other) === "conflict") conflicts.add(1);
-    else conflictMissed.add(1);
+    // The same key, a different cut: it must be the named conflict. Succeeding (a new publication, or
+    // the old one) is the bug; a refusal or a failure is counted by `tally` and proves nothing.
+    const other = postFlip(parent, key, speed, CUT - 100);
+    const result = tally(other);
+    if (result === "conflict") conflicts.add(1);
+    else if (result === "created" || result === "replay") conflictMissed.add(1);
   }
 }
 

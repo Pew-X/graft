@@ -27,7 +27,9 @@ env_args="-e GRAFT_DATABASE_URL=postgres://postgres:graft@$host:55432/$db
  -e GRAFT_ADMIN_SECRET=image-check-secret-0123456789 -e GRAFT_ENVIRONMENT=image-check"
 
 echo "== the container runs as a non-root user"
-docker run --rm "$image" sh -c 'id -u' | grep -qv '^0$' && echo "ok"
+uid=$(docker run --rm "$image" sh -c 'id -u')
+if [ "$uid" = 0 ]; then echo "FAIL: the image runs as root"; exit 1; fi
+echo "ok (uid $uid)"
 echo "== release step: migrate, seed, and check the seeded chain against the committed snapshot"
 # shellcheck disable=SC2086
 docker run --rm $env_args "$image" graft-seed-chain --manifest seed/chain.json --check-snapshot web
@@ -39,6 +41,7 @@ echo "ready:    $(curl -fs "http://127.0.0.1:$port/ready")"
 echo "features: $(curl -fs "http://127.0.0.1:$port/v1/features")"
 leaf=$(node -e 'const s=JSON.parse(require("fs").readFileSync("web/snapshot/chain.json","utf8")).stages; console.log(s[s.length-1].id)')
 stages=$(curl -fs "http://127.0.0.1:$port/v1/chains/$leaf" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>console.log(JSON.parse(d).stages.length))')
-echo "the seeded chain reads back with $stages stages"
-[ "$stages" = 4 ]
+want=$(node -e 'console.log(JSON.parse(require("fs").readFileSync("web/snapshot/chain.json","utf8")).stages.length)')
+echo "the seeded chain reads back with $stages stages (the snapshot has $want)"
+if [ "$stages" != "$want" ]; then echo "FAIL: the service's chain differs from the snapshot's"; exit 1; fi
 echo "service image check passed"

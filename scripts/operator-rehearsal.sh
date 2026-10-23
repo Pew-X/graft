@@ -62,7 +62,8 @@ echo; echo "== runbook: rotate the operator secret (restart with a new one; the 
 stop; start "$secret_two"
 old=$(curl -s -o /dev/null -w "%{http_code}" -H "x-graft-admin-secret: $secret_one" "$api/admin/reports")
 new=$(curl -s -o /dev/null -w "%{http_code}" -H "x-graft-admin-secret: $secret_two" "$api/admin/reports")
-echo "old secret: $old   new secret: $new"; [ "$old" != 200 ] && [ "$new" = 200 ]
+echo "old secret: $old   new secret: $new"
+if [ "$old" = 200 ] || [ "$new" != 200 ]; then echo "FAIL: rotating the secret must stop the old one and accept the new one"; exit 1; fi
 
 echo; echo "== launch gate 3: the storage threshold (a limit 1 KB above the overshoot bound, then restored)"
 stop; export GRAFT_STORAGE_LIMIT_BYTES=61441000; start "$secret_two"
