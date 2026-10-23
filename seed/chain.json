@@ -3,7 +3,7 @@
     "key": "seed:jazz-rhodes:source",
     "title": "dm9 chord",
     "author": "graft",
-    "audio_file": "jazz-rhodes.pcm",
+    "audio_file": "sources/jazz-rhodes.pcm",
     "audio_sha256": "4e22bb6233c6783823d2f94fb1593dab34ee5a32816524de0ad019d6e4c6d38c",
     "licence": "own work, synthesized for graft",
     "work_title": "dm9 electric piano chord",

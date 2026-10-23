@@ -1,17 +1,20 @@
 //! Seeds the chain the roll opens on and writes or checks its static snapshot.
 //!
-//!   graft-seed-chain [--manifest seed/chain.json] [--write-snapshot web | --check-snapshot web]
+//!   graft-seed-chain [--manifest seed/chain.json] [--sources seed/sources.json] [--write-snapshot web | --check-snapshot web]
 //!
 //! The chain is seeded through the publish pipeline every visitor uses (see ARCHITECTURE.md, "First open and the static snapshot"), into
 //! the database and blob store the usual settings name, so it needs a renderer artefact too
 //! (`GRAFT_RENDERER_WASM`). Running it again changes nothing. `--check-snapshot` exits with an
 //! error naming the stage if the committed snapshot differs from what this database produced: point
 //! it at a freshly created database to ask whether the snapshot has drifted.
+//!
+//! It also seeds the curated sources (`seed/sources.json` beside the manifest, unless `--sources`
+//! names another file); the chain's own source is one of them, so it is not made twice.
 #![allow(clippy::print_stdout, clippy::print_stderr)] // a command-line tool: output is its interface
 
 use graft_api::config::Config;
 use graft_api::http::AppState;
-use graft_api::seed::{parse_manifest, seed_chain};
+use graft_api::seed::{parse_curated, parse_manifest, seed_chain, seed_curated};
 use graft_api::snapshot::{self, AUDIO_DIR, DATA_FILE};
 use graft_render_host::{Limits as HostLimits, RenderHost};
 use graft_storage::Store;
@@ -60,6 +63,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .collect::<Vec<_>>()
             .join(" ")
     );
+    let sources_path = a
+        .get("sources")
+        .map_or_else(|| dir.join("sources.json"), PathBuf::from);
+    if sources_path.exists() {
+        let curated = parse_curated(&std::fs::read_to_string(&sources_path)?)?;
+        let ids = seed_curated(&state, &curated, dir).await?;
+        println!("seeded {} curated sources", ids.len());
+    }
     let leaf = ids.last().ok_or("the manifest seeds nothing")?;
     let (fresh, files) = snapshot::build(&state, leaf).await?;
 

@@ -152,8 +152,16 @@ pub enum ChainSeedError {
     #[error("the seed manifest is not valid: {0}")]
     Manifest(String),
     /// The audio file does not match the hash the manifest names.
-    #[error("the audio file does not match the manifest's audio_sha256")]
-    AudioChanged,
+    #[error("the audio file does not match the manifest's audio_sha256 ({0})")]
+    AudioChanged(String),
+    /// An audio file the manifest names could not be read.
+    #[error("the audio file {file:?} could not be read: {detail}")]
+    Unreadable {
+        /// The file name in the manifest.
+        file: String,
+        /// What the operating system said.
+        detail: String,
+    },
     /// The source could not be seeded.
     #[error(transparent)]
     Source(#[from] SeedError),
@@ -188,41 +196,7 @@ pub async fn seed_chain(
     manifest: &Manifest,
     source_audio: Vec<u8>,
 ) -> Result<Vec<PublicationId>, ChainSeedError> {
-    if graft_domain::hash::Sha256Hash::of(&source_audio).to_hex() != manifest.source.audio_sha256 {
-        return Err(ChainSeedError::AudioChanged);
-    }
-    let identity = state.renderer.identity();
-    let renderer = RendererIdentity {
-        name: identity.name.to_owned(),
-        version: identity.version,
-        wasm_sha256: graft_domain::hash::Sha256Hash::parse(&identity.wasm_sha256)
-            .map_err(|e| ChainSeedError::Manifest(e.to_string()))?,
-    };
-    let source = &manifest.source;
-    let seeded = seed_source(
-        &state.store,
-        state.blobs.as_ref(),
-        &state.limits,
-        SeedSource {
-            key: source.key.clone(),
-            title: source.title.clone(),
-            author: source.author.clone(),
-            evidence: SourceEvidence {
-                licence: source.licence.clone(),
-                work_title: source.work_title.clone(),
-                work_author: source.work_author.clone(),
-                url: source.url.clone(),
-                declaration: None,
-            },
-            audio: source_audio,
-            renderer,
-        },
-    )
-    .await?;
-    let (Outcome::Created(stage) | Outcome::Existing(stage)) = seeded else {
-        return Err(SeedError::KeyConflict(source.key.clone()).into());
-    };
-    let mut ids = vec![stage.id.clone()];
+    let mut ids = vec![seed_manifest_source(state, &manifest.source, source_audio).await?];
     for flip in &manifest.flips {
         let parent = ids.last().map(ToString::to_string).unwrap_or_default();
         let request = crate::publish::PublishFlipRequest {
@@ -247,6 +221,105 @@ pub async fn seed_chain(
             });
         }
         ids.push(PublicationId::seeded(&flip.key));
+    }
+    Ok(ids)
+}
+
+/// Seed one manifest source from its audio, after checking the audio is the file the manifest names.
+async fn seed_manifest_source(
+    state: &crate::http::AppState,
+    source: &ManifestSource,
+    audio: Vec<u8>,
+) -> Result<PublicationId, ChainSeedError> {
+    check_audio(source, &audio)?;
+    let identity = state.renderer.identity();
+    let renderer = RendererIdentity {
+        name: identity.name.to_owned(),
+        version: identity.version,
+        wasm_sha256: graft_domain::hash::Sha256Hash::parse(&identity.wasm_sha256)
+            .map_err(|e| ChainSeedError::Manifest(e.to_string()))?,
+    };
+    let seeded = seed_source(
+        &state.store,
+        state.blobs.as_ref(),
+        &state.limits,
+        SeedSource {
+            key: source.key.clone(),
+            title: source.title.clone(),
+            author: source.author.clone(),
+            evidence: SourceEvidence {
+                licence: source.licence.clone(),
+                work_title: source.work_title.clone(),
+                work_author: source.work_author.clone(),
+                url: source.url.clone(),
+                declaration: None,
+            },
+            audio,
+            renderer,
+        },
+    )
+    .await?;
+    let (Outcome::Created(stage) | Outcome::Existing(stage)) = seeded else {
+        return Err(SeedError::KeyConflict(source.key.clone()).into());
+    };
+    Ok(stage.id)
+}
+
+fn check_audio(source: &ManifestSource, audio: &[u8]) -> Result<(), ChainSeedError> {
+    if graft_domain::hash::Sha256Hash::of(audio).to_hex() == source.audio_sha256 {
+        Ok(())
+    } else {
+        Err(ChainSeedError::AudioChanged(source.key.clone()))
+    }
+}
+
+/// The curated sources: the sounds a maker can start from, each a root publication with declared
+/// evidence. A separate file from the seeded chain, because the chain is one sound and its flips and
+/// this is a set of sounds; the chain's source is one of them.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CuratedManifest {
+    /// The sources, in the order a maker is shown them.
+    pub sources: Vec<ManifestSource>,
+}
+
+/// Parse the curated manifest.
+pub fn parse_curated(text: &str) -> Result<CuratedManifest, ChainSeedError> {
+    let manifest: CuratedManifest =
+        serde_json::from_str(text).map_err(|e| ChainSeedError::Manifest(e.to_string()))?;
+    let mut keys: Vec<&str> = manifest.sources.iter().map(|s| s.key.as_str()).collect();
+    keys.sort_unstable();
+    if let Some(pair) = keys.windows(2).find(|w| w[0] == w[1]) {
+        return Err(ChainSeedError::Manifest(format!(
+            "the retry key {:?} is listed twice",
+            pair[0]
+        )));
+    }
+    Ok(manifest)
+}
+
+/// Seed every curated source. Every file is read and checked against its recorded hash before any
+/// is stored, so a changed file seeds nothing. Running it twice changes nothing the second time.
+/// `dir` is where the manifest's audio files are. Returns the ids in the manifest's order.
+pub async fn seed_curated(
+    state: &crate::http::AppState,
+    manifest: &CuratedManifest,
+    dir: &std::path::Path,
+) -> Result<Vec<PublicationId>, ChainSeedError> {
+    let mut files = Vec::with_capacity(manifest.sources.len());
+    for source in &manifest.sources {
+        let audio = std::fs::read(dir.join(&source.audio_file)).map_err(|e| {
+            ChainSeedError::Unreadable {
+                file: source.audio_file.clone(),
+                detail: e.to_string(),
+            }
+        })?;
+        check_audio(source, &audio)?;
+        files.push(audio);
+    }
+    let mut ids = Vec::with_capacity(files.len());
+    for (source, audio) in manifest.sources.iter().zip(files) {
+        ids.push(seed_manifest_source(state, source, audio).await?);
     }
     Ok(ids)
 }

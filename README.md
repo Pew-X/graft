@@ -20,6 +20,10 @@ Every statement the roll makes about a stage carries one of three states, writte
 - **Computed**: the system produced it and can produce it again. The cut in frames, the speed as a fraction (shown as a percentage and the nearest musical interval), the length, the identifiers, the hash of the audio and the renderer's name are computed from the stored record. "Reproducible" is claimed only for the named renderer version and the published test vectors; a hash says which bytes, and nothing more.
 - **Unknown**: nothing establishes it. That is the default for who really made a sound and whether they hold the right to share it. graft does not verify a recording or a licence, so those lines say "unknown" or "not established", and the roll ends on an empty label marked "maker unknown".
 
+## The sounds a maker can start from
+
+Ten short sounds, all made for graft by `scripts/curated-sources.mjs` (a synthesizer in a script, no samples, no downloads): 808 sub, chip arpeggio, power up, saber hum, laser zap, metal clang, house stab, dm9 chord, upright bass and trap hats. Each is declared as "own work, synthesized for graft", which graft prints as typed and does not check, and each is stored as canonical audio in `seed/sources/` with its hash in `seed/sources.json`. There is nothing third-party in the set, so there is no licence page to link; if a downloaded sound is ever added it will carry its licence, its link and the date the licence was checked. `node scripts/curated-sources.mjs --check` remakes the files and says if any differs.
+
 ## Run it
 
 Needs the pinned Rust toolchain (installed from `rust-toolchain.toml` by rustup) and Node 24 with pnpm.

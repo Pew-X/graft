@@ -242,3 +242,96 @@ async fn the_snapshot_holds_no_manage_key_no_secret_and_no_time_that_varies() {
     assert_eq!(keyed, 0);
     h.finish().await;
 }
+
+// The curated sources: the set a maker can start from, seeded as root publications.
+
+fn curated() -> graft_api::seed::CuratedManifest {
+    let text = std::fs::read_to_string(root().join("seed/sources.json")).expect("sources.json");
+    graft_api::seed::parse_curated(&text).expect("a valid curated manifest")
+}
+
+#[tokio::test]
+async fn seeding_the_curated_set_twice_makes_no_duplicates() {
+    let h = Harness::new().await;
+    let set = curated();
+    let first = graft_api::seed::seed_curated(&h.state, &set, &root().join("seed"))
+        .await
+        .expect("seeded");
+    let second = graft_api::seed::seed_curated(&h.state, &set, &root().join("seed"))
+        .await
+        .expect("seeded again");
+    assert_eq!(first, second, "the same ids both times");
+    assert_eq!(first.len(), 10, "the ten sources the builder chose");
+    assert_eq!(h.count("publications").await, 10);
+    assert_eq!(h.count("content_records").await, 10);
+    assert_eq!(h.blobs.len(), 10, "each sound is stored once");
+    h.finish().await;
+}
+
+#[tokio::test]
+async fn every_curated_source_reads_back_through_the_api_as_a_source_with_its_declared_evidence() {
+    let h = Harness::new().await;
+    let set = curated();
+    let ids = graft_api::seed::seed_curated(&h.state, &set, &root().join("seed"))
+        .await
+        .expect("seeded");
+    for (entry, id) in set.sources.iter().zip(&ids) {
+        let (status, _, body) = h.get(&format!("/v1/chains/{id}")).await;
+        assert_eq!(status, axum::http::StatusCode::OK, "{}", entry.key);
+        let stages = body["stages"].as_array().expect("stages");
+        assert_eq!(stages.len(), 1, "{}: a source is a chain of one", entry.key);
+        let s = &stages[0];
+        assert_eq!(s["kind"], "source", "{}", entry.key);
+        assert_eq!(s["title"], entry.title.as_str());
+        assert_eq!(s["author"], entry.author.as_str());
+        let licence = s["lines"]
+            .as_array()
+            .expect("lines")
+            .iter()
+            .find(|l| l["role"] == "licence")
+            .unwrap_or_else(|| panic!("{}: a licence line", entry.key));
+        assert_eq!(licence["value"], "own work, synthesized for graft");
+        assert_eq!(
+            licence["honesty"], "declared",
+            "{}: said, not checked",
+            entry.key
+        );
+    }
+    h.finish().await;
+}
+
+#[tokio::test]
+async fn the_seeded_chains_source_is_one_of_the_curated_sources_not_a_second_copy() {
+    let h = Harness::new().await;
+    let (manifest, audio) = manifest();
+    let chain_ids = seed_chain(&h.state, &manifest, audio).await.expect("chain");
+    let ids = graft_api::seed::seed_curated(&h.state, &curated(), &root().join("seed"))
+        .await
+        .expect("curated");
+    assert!(
+        ids.contains(&chain_ids[0]),
+        "the chain's source is in the curated set"
+    );
+    assert_eq!(
+        h.count("publications").await,
+        4 + 9,
+        "three flips and ten sources, one of them already the chain's root"
+    );
+    h.finish().await;
+}
+
+#[tokio::test]
+async fn a_curated_file_that_differs_from_its_recorded_hash_is_refused() {
+    let h = Harness::new().await;
+    let mut set = curated();
+    set.sources[0].audio_sha256 = "0".repeat(64);
+    let err = graft_api::seed::seed_curated(&h.state, &set, &root().join("seed"))
+        .await
+        .expect_err("refused");
+    assert!(
+        err.to_string().contains("audio_sha256"),
+        "names the field: {err}"
+    );
+    assert_eq!(h.count("publications").await, 0, "nothing was seeded");
+    h.finish().await;
+}
