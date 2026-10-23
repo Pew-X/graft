@@ -34,7 +34,9 @@ sql "create database $db"
 wasm="$root/target/wasm32-unknown-unknown/wasm/graft_render.wasm"
 # Always built (a no-op when nothing changed): a stale artefact would test an old renderer.
 sh scripts/build-wasm.sh
-cargo build -q -p graft-api --bins
+# The same feature set the workspace tests build with, so their compiled dependencies are reused
+# instead of the whole tree (wasmtime included) being built a second time.
+cargo build -q --workspace --all-features --bins
 
 export GRAFT_DATABASE_URL="${admin_url%/*}/$db"
 export GRAFT_RENDERER_WASM="$wasm"
