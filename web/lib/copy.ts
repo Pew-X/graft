@@ -30,6 +30,7 @@ export const copy = {
   roll: {
     lead: "a sound has a past.",
     meta: "stage {n} of {total} · {meta}",
+    metaShort: "stage {n} of {total}",
     kicker: "no. {n} · {kind}",
     kickerYours: "no. {n} · yours",
     label: "the credits",

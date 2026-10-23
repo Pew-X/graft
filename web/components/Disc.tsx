@@ -117,7 +117,7 @@ export function Disc({
   }, []);
 
   const draw = useCallback(
-    (timestamp: number): void => {
+    (timestamp: number, sample: boolean): void => {
       const el = canvas.current;
       if (!el || size.w === 0) return;
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -128,7 +128,9 @@ export function Disc({
       }
       const ctx = el.getContext("2d");
       if (!ctx) return;
-      governor.current.frame(timestamp);
+      // Only the frames of the running loop say how slow drawing is; a redraw because the visitor
+      // pressed a key or moved the mouse is not a frame.
+      if (sample) governor.current.frame(timestamp);
       const slow = governor.current.degraded;
       if (slow) setMode((m) => (m === "cached" ? m : "cached"));
       const { cursor: at, focus: shown, playing: sounding } = latest.current;
@@ -188,36 +190,44 @@ export function Disc({
   // Draw once whenever something changes, and every frame while the disc is turning.
   useEffect(() => {
     let last = performance.now();
+    governor.current.pause(); // the loop starts afresh: the time since the last frame is not a frame
     const tick = (timestamp: number): void => {
       if (latest.current.playing) clock.current += Math.min(0.1, (timestamp - last) / 1000);
       last = timestamp;
-      draw(timestamp);
+      draw(timestamp, latest.current.playing);
       if (latest.current.playing || dragging.current) frame.current = requestAnimationFrame(tick);
     };
     frame.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame.current);
   }, [draw, playing, cursor, focus]);
 
+  // One redraw for a change the loop would not paint. While the disc is turning (or being dragged) the
+  // loop is running and paints every frame: cancelling it here would freeze the disc mid-sound.
   const redraw = (): void => {
+    if (latest.current.playing || dragging.current) return;
     cancelAnimationFrame(frame.current);
-    frame.current = requestAnimationFrame((t) => draw(t));
+    frame.current = requestAnimationFrame((t) => draw(t, false));
   };
 
   const locate = (event: PointerEvent): { x: number; y: number } | null => {
     const box = canvas.current?.getBoundingClientRect();
     return box ? { x: event.clientX - box.left, y: event.clientY - box.top } : null;
   };
-  const target = (x: number, y: number): { band: number; offset: number } | null => {
+  /** The stage under a point and the place in it; `empty` when it is the slot after the last stage (no sound). */
+  const target = (
+    x: number,
+    y: number,
+  ): { band: number; offset: number; empty: boolean } | null => {
     const h = hit(layout(size.w, size.h, stages), x, y, held.current);
     if (!h) return null;
     const band = Math.min(h.band, stages - 1);
-    return { band: h.band, offset: h.u * (lengths[band] ?? 0) };
+    return { band, offset: h.u * (lengths[band] ?? 0), empty: h.band >= stages };
   };
 
   const onDown = (event: PointerEvent<HTMLCanvasElement>): void => {
     const point = locate(event);
     const hitAt = point && target(point.x, point.y);
-    if (!hitAt || hitAt.band >= stages || playable[hitAt.band] === false) return; // no sound there
+    if (!hitAt || hitAt.empty || playable[hitAt.band] === false) return; // no sound there
     event.currentTarget.setPointerCapture(event.pointerId);
     held.current = hitAt.band;
     dragging.current = true;
@@ -233,13 +243,10 @@ export function Disc({
     if (dragging.current) {
       const hitAt = target(point.x, point.y);
       pointer.current = point;
-      if (hitAt) {
-        const band = Math.min(hitAt.band, stages - 1);
-        if (playable[band] !== false) {
-          held.current = band;
-          setCursor({ stage: band, offset: hitAt.offset });
-          onScrubMove(band, hitAt.offset);
-        }
+      if (hitAt && playable[hitAt.band] !== false) {
+        held.current = hitAt.band;
+        setCursor({ stage: hitAt.band, offset: hitAt.offset });
+        onScrubMove(hitAt.band, hitAt.offset);
       }
     } else if (event.pointerType === "mouse") {
       pointer.current = point;

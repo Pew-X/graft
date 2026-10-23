@@ -95,6 +95,8 @@ export function RollPlayer({
   const [moved, setMoved] = useState<{ index: number; during: number | null } | null>(null);
   const hero = moved && moved.during === current ? moved.index : (current ?? stages - 1);
   const [shift, setShift] = useState(0);
+  // The first placement is instant; only the moves after it slide.
+  const [placed, setPlaced] = useState(false);
   const sheet = useRef<HTMLDivElement>(null);
   const place = useCallback((): void => {
     const node = nodes.current[hero];
@@ -108,13 +110,21 @@ export function RollPlayer({
   }, [hero]);
   useLayoutEffect(() => {
     place();
+    const settle = requestAnimationFrame(() => setPlaced(true));
     const el = sheet.current;
-    if (!el) return;
+    if (!el) return () => cancelAnimationFrame(settle);
     // Fonts arriving, a stage's details opening, the window changing: the roll finds its place again.
     const watch = new ResizeObserver(place);
     watch.observe(el);
-    void document.fonts?.ready.then(place);
-    return () => watch.disconnect();
+    let alive = true;
+    void document.fonts?.ready.then(() => {
+      if (alive) place();
+    });
+    return () => {
+      alive = false;
+      cancelAnimationFrame(settle);
+      watch.disconnect();
+    };
   }, [place, load]);
 
   // Fetch every stage's audio. Nothing is decoded or played yet.
@@ -229,6 +239,18 @@ export function RollPlayer({
     [ensure],
   );
 
+  /** Run something on the engine when it exists, in order with what came before (no message to the visitor). */
+  const later = useCallback(
+    (run: (e: Engine) => void): void => {
+      ensure()
+        .then((e) => {
+          if (e) run(e);
+        })
+        .catch(() => undefined);
+    },
+    [ensure],
+  );
+
   // Read by the record every frame, so the stylus follows the sound without re-rendering the page.
   const live = useCallback((): Live | null => {
     const e = engineNow.current;
@@ -298,9 +320,11 @@ export function RollPlayer({
           reduced={reduced}
           focus={hero}
           onScrubStart={(stage, offset) => act((e) => e.scrubStart(stage, offset))}
-          onScrubMove={(stage, offset) => engineNow.current?.scrubMove(stage, offset)}
+          // The first touch may arrive before the audio engine exists; the move and the release wait
+          // for it, in order, instead of being lost.
+          onScrubMove={(stage, offset) => later((e) => e.scrubMove(stage, offset))}
           onScrubEnd={() => {
-            engineNow.current?.scrubEnd();
+            later((e) => e.scrubEnd());
             // Some phones only unlock audio on the release of a touch, not its start.
             void audio.current?.unlock().catch(() => undefined);
           }}
@@ -311,14 +335,23 @@ export function RollPlayer({
         <h1>{copy.site.name}</h1>
         <span className="meta" aria-hidden="true">
           {heroBlock
-            ? fill(copy.roll.meta, { n: hero + 1, total: stages, meta: heroBlock.meta })
+            ? fill(heroBlock.meta ? copy.roll.meta : copy.roll.metaShort, {
+                n: hero + 1,
+                total: stages,
+                meta: heroBlock.meta,
+              })
             : ""}
         </span>
         <ThemeToggle />
       </header>
 
       <div className="viewport">
-        <div className="sheet" ref={sheet} style={{ transform: `translateY(${shift}px)` }}>
+        <div
+          className="sheet"
+          data-placed={placed}
+          ref={sheet}
+          style={{ transform: `translateY(${shift}px)` }}
+        >
           <p className="lead">{copy.roll.lead}</p>
           <ol className="blocks" aria-label={copy.roll.label}>
             {blocks.map((block) => (

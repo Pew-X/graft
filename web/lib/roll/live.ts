@@ -42,8 +42,9 @@ export function blocksFromChain(chain: Chain): Block[] {
       case "held":
         return {
           id: entry.id,
-          lettering: "src",
-          meta: "",
+          // Not known for a stage that is not here: the kind is, and a flip gets the neutral lettering.
+          lettering: entry.kind === "source" ? "src" : "up",
+          meta: entry.kind === "source" ? "source" : "flip",
           cutFrames: null,
           state: entry.state,
           flipped: null,
@@ -61,7 +62,7 @@ export function blocksFromChain(chain: Chain): Block[] {
         return {
           id: entry.id,
           lettering: "src",
-          meta: "",
+          meta: "unavailable",
           cutFrames: null,
           state: "unavailable",
           flipped: null,

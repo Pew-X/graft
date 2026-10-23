@@ -293,3 +293,77 @@ test("a saved theme applies before the first paint, even on a page without the t
   const background = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   expect(background).toBe("rgb(239, 235, 227)"); // the light wall, not leader black
 });
+
+for (const [name, viewport] of [
+  ["a short landscape screen", { width: 1000, height: 420 }],
+  ["a phone", { width: 390, height: 844 }],
+] as const) {
+  test(`on ${name} the stage in view scrolls, so every line and "flip this" can be reached`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    await page.goto("/");
+    await ready(page);
+    // Let the roll finish sliding to its place before measuring anything.
+    await page.evaluate(() =>
+      Promise.all(
+        document
+          .getAnimations()
+          .filter((a) => a instanceof CSSTransition)
+          .map((a) => a.finished),
+      ),
+    );
+    const article = page.locator('.block[data-hero="true"] > article');
+    const flip = page.locator('.block[data-hero="true"] .flip');
+    // The stage in view is taller than the room it has, so it is its own scrolling region.
+    expect(await article.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+    // It stays above the controls (and, on a phone, above the record).
+    const box = (await article.boundingBox())!;
+    const controls = (await page.locator(".controls").boundingBox())!;
+    expect(box.y + box.height).toBeLessThanOrEqual(controls.y + 1);
+    // Its last control is reachable by pointer once scrolled to, and it answers.
+    await flip.scrollIntoViewIfNeeded();
+    await flip.click();
+    await expect(page.getByRole("status").first()).toContainText("making a flip is not open yet");
+  });
+}
+
+test("the roll opens already in place: the first placement does not slide through the whole chain", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1400, height: 800 });
+  await page.addInitScript(() => {
+    (window as unknown as { slides: number }).slides = 0;
+    document.addEventListener("transitionstart", (e) => {
+      if ((e.target as HTMLElement).classList?.contains("sheet"))
+        (window as unknown as { slides: number }).slides++;
+    });
+  });
+  await page.goto("/");
+  await ready(page);
+  await page.waitForTimeout(1200);
+  expect(await page.evaluate(() => (window as unknown as { slides: number }).slides)).toBe(0);
+});
+
+test("the disc keeps turning when the pointer leaves it while a stage plays", async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 800 });
+  await page.goto("/");
+  await ready(page);
+  await page.getByRole("button", { name: "play", exact: true }).click();
+  await expect(roll(page)).toHaveAttribute("data-sounding", "true");
+  // The mouse goes over the record, then off it onto the controls (which lie above the canvas).
+  await page.mouse.move(1100, 400);
+  await page.mouse.move(700, 850);
+  const sample = () =>
+    page.locator("canvas.disc").evaluate((c: HTMLCanvasElement) => {
+      const d = c
+        .getContext("2d")!
+        .getImageData(Math.round(c.width * 0.62), Math.round(c.height * 0.2), 300, 60).data;
+      let h = 0;
+      for (let i = 0; i < d.length; i += 11) h = (h * 31 + d[i]!) >>> 0;
+      return h;
+    });
+  const first = await sample();
+  await page.waitForTimeout(500);
+  expect(await sample(), "the disc is still being redrawn").not.toBe(first);
+});

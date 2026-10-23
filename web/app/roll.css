@@ -216,6 +216,9 @@ button:disabled {
   will-change: transform;
   transition: transform 0.7s cubic-bezier(0.22, 0.7, 0.2, 1);
 }
+.sheet[data-placed="false"] {
+  transition: none;
+}
 .lead {
   margin: 0 0 0 7vw;
   padding: 34vh 0 14vh;
@@ -258,6 +261,20 @@ button:disabled {
 .block[data-current="true"] > article,
 .block[data-hero="true"] > article {
   position: relative;
+}
+/* The stage in view is its own scrolling region, capped to the room it has: above the controls, and in
+   portrait above the record. However tall it is (a long chain's details open, a short screen, large
+   text) every line and "flip this" can be reached by touch, mouse and keyboard. */
+.block[data-hero="true"] > article {
+  /* the block starts at 72px (under the header) and has 12vh of padding above the article; keep 96px free for the controls */
+  max-height: calc(100dvh - 72px - 12vh - 96px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  pointer-events: auto;
+  /* room for the torn slab's rotated corners, which the scroll region would otherwise clip */
+  margin: 0 -14px;
+  padding: 0 14px;
 }
 .kicker {
   margin: 0 0 12px;
@@ -640,6 +657,10 @@ button:disabled {
   }
   .block {
     padding: 9vh 0;
+  }
+  .block[data-hero="true"] > article {
+    /* from where the article starts (the block's top, plus its 9vh of padding) down to just above the record */
+    max-height: calc(54dvh - max(12dvh, 96px) - 9vh);
   }
   /* Portrait: the stages around the one in view lie over the record, so only the one in view is touchable. */
   .block:not([data-hero="true"]) :is(button, summary, a) {

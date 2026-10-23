@@ -12,6 +12,7 @@ const config: NextConfig = {
         headers: securityHeaders({
           production: process.env["NODE_ENV"] === "production",
           connectOrigins: process.env["GRAFT_CONNECT_ORIGINS"],
+          upgradeInsecure: process.env["GRAFT_UPGRADE_INSECURE_REQUESTS"] === "on",
         }),
       },
       {

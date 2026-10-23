@@ -19,6 +19,14 @@ export class FrameGovernor {
     return this.#degraded;
   }
 
+  /**
+   * The loop of frames has stopped (or is about to start again): the next frame has no frame before
+   * it, so the time between them is not a frame's cost.
+   */
+  pause(): void {
+    this.#last = null;
+  }
+
   /** Call once per animation frame with the frame's timestamp in milliseconds. */
   frame(timestamp: number): void {
     if (this.#last !== null) {

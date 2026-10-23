@@ -141,24 +141,29 @@ export function faceLines(
 }
 
 /** "3/2 · +7.0 st": the ratio and the shift in semitones, signed. */
-function metaOf(p: number | null, q: number | null): string {
-  if (p === null || q === null) return "source";
+function metaOf(kind: string, p: number | null, q: number | null): string {
+  if (kind === "source") return "source";
+  if (p === null || q === null) return "flip";
   const semitones = 12 * Math.log2(p / q);
-  return `${p}/${q} · ${semitones >= 0 ? "+" : "-"}${Math.abs(semitones).toFixed(1)} st`;
+  const tenths = Math.round(Math.abs(semitones) * 10) / 10;
+  return `${p}/${q} · ${semitones < 0 && tenths > 0 ? "-" : "+"}${tenths.toFixed(1)} st`;
 }
 
 /** The lettering a stage's title gets. */
-export function letteringOf(speed: { p: number | null; q: number | null }): Lettering {
-  if (speed.p === null || speed.q === null) return "src";
-  return speed.p < speed.q ? "down" : "up";
+export function letteringOf(
+  kind: string,
+  speed: { p: number | null; q: number | null },
+): Lettering {
+  if (kind === "source") return "src";
+  return speed.p !== null && speed.q !== null && speed.p < speed.q ? "down" : "up";
 }
 
 /** A stage that can be heard, as a block. */
 export function blockFor(stage: StageInput, index: number, flipped: string | null = null): Block {
   return {
     id: stage.id,
-    lettering: letteringOf({ p: stage.speed_p, q: stage.speed_q }),
-    meta: metaOf(stage.speed_p, stage.speed_q),
+    lettering: letteringOf(stage.kind, { p: stage.speed_p, q: stage.speed_q }),
+    meta: metaOf(stage.kind, stage.speed_p, stage.speed_q),
     cutFrames: stage.kind === "flip" ? [stage.cut_start, stage.cut_end] : null,
     state: "available",
     flipped,

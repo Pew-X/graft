@@ -117,3 +117,15 @@ test("each block has a short line for the header: the ratio and the shift in sem
     ["source", "3/2 · +7.0 st", "2/3 · -7.0 st", "1/2 · -12.0 st"],
   );
 });
+
+test("what a stage is comes from its kind, not from whether its speed is known", () => {
+  const flipNoSpeed = buildBlocks([{ ...snapshot.stages[1]!, speed_p: null, speed_q: null }])[0]!;
+  assert.equal(flipNoSpeed.lettering, "up", "a flip is not lettered as a source");
+  assert.equal(flipNoSpeed.meta, "flip", "and does not call itself one");
+});
+
+test("a shift too small to show is written as plus zero, never minus zero", () => {
+  // 1048575/1048576 is a shift of about -0.0000017 semitones
+  const tiny = buildBlocks([{ ...snapshot.stages[1]!, speed_p: 1048575, speed_q: 1048576 }])[0]!;
+  assert.equal(tiny.meta, "1048575/1048576 · +0.0 st");
+});
