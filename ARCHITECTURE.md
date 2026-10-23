@@ -224,6 +224,7 @@ Written by ticket 05; later tickets add rows. Every value is read from the envir
 | `GRAFT_SERIALIZATION_RETRIES` | 5 | retries of a publish transaction that conflicted with concurrent work |
 | `GRAFT_DENY_WORDS` | empty | extra words refused in titles and names, beyond the built-in list |
 | `GRAFT_ADMIN_SECRET` | unset | the operator secret (at least 24 characters); when unset every admin request is refused |
+| `GRAFT_REQUEST_TIMEOUT_SECS` | 30 | the longest a request may last, from its first byte to its answer, a slow body included; past it the request is answered with 408 and freed |
 | `GRAFT_MAX_CONCURRENT_RENDERS` | 4 | most renders running at once; a request that waits over 5 s for a turn gets 503 retry-later |
 | `GRAFT_LOCK_WAIT_MS` | 10000 | how long a publish or a flag change waits for the lock on its stage before answering 503 |
 | `GRAFT_PUBLISHING` | `on` | whether publishing is open until the operator sets the kill switch (`on` or `off`) |
@@ -262,7 +263,7 @@ Written by ticket 05; ticket 16 deepens it.
 - Logs are JSON, one line per event, each inside a span that carries a per-request id (also returned as `x-request-id`); a test parses every line of a real request and checks the id, and that no connection string appears.
 - `GET /health` answers without touching the database; `GET /ready` pings it and returns 503 problem details when it fails, without echoing the connection string (tested against a closed pool).
 - `GET /metrics` serves the Prometheus text format: a request counter by method, route pattern and status, and a latency histogram by route pattern, so label cardinality stays bounded.
-- Every response carries `content-security-policy: default-src 'none'; frame-ancestors 'none'`, `x-content-type-options: nosniff`, `referrer-policy: no-referrer` and `cache-control: no-store`. CORS allows nothing unless origins are configured.
+- Every response carries `content-security-policy: default-src 'none'; frame-ancestors 'none'`, `strict-transport-security`, `x-content-type-options: nosniff`, `referrer-policy: no-referrer` and `cache-control: no-store`, and no request may run longer than `GRAFT_REQUEST_TIMEOUT_SECS`. CORS allows nothing unless origins are configured. The review of all of this is in "Security".
 - Tests run through the public HTTP API against a real Postgres 16 (a fresh database per test; a service container in CI), with an in-memory blob store. Queries are runtime queries, so building needs no database and no offline query data.
 
 ## Observability and operations
@@ -610,4 +611,64 @@ Written by ticket 14.
 
 ## Security
 
-_Not written yet. Tickets 17 onwards; consolidated by ticket 37._
+Written by ticket 17. The baseline (headers, CORS, validation, audit tools) came with ticket 5; this section is the review of the whole public surface once the write paths existed, what was found, and the threat model. Every claim below that is a test names the test file.
+
+### Threat model
+
+**Assets.** The audio and credits people publish (integrity: nobody can change or forge a stage). The manage key of a publication (the one capability a maker holds). The operator secret (everything under `/admin`). Storage and the publish budget (they cost money and can run out). The service's availability. What visitors do on the site (privacy). The renderer artefact (it decides the bytes of every stage).
+
+**Actors.** An ordinary visitor. Someone who publishes what they should not (a recording of a private conversation, music they have no right to share, something harmful). A spammer or flooder, from one address or many. Someone who has found or guessed a manage key. Someone who has found the operator secret. A rights holder asking for a takedown. A browser or a network in the middle. A hostile dependency. A privacy-minded visitor who wants to be sure nothing is measured.
+
+**Abuse cases, what answers them, and what is left.**
+
+| Case | What answers it | Where it is tested | What is left |
+|---|---|---|---|
+| Publishing what should not be published | A fixed rights declaration for uploads, uploads off by default, length and size caps, checks for silence and clipping, reports, hide for withdrawal or rights, held stages built on a hidden one, the kill switch | `sources.rs`, `moderation.rs`, `guardrails.rs` | graft cannot tell whose recording it is or whether a licence is real; a takedown refuses new requests and lets issued links expire, and cannot recall a copy already downloaded |
+| Flooding with flips or reports or events | Per-address limits, a global publish cap, a per-stage fork cap, a storage admission threshold, the kill switch | `guardrails.rs`, `ingest.rs`, `security.rs` (the limited routes answer 429 with a wait) | the per-address limits count in one process's memory; many addresses can share a window; the storage limit is a threshold with a stated overshoot bound |
+| Making the renderer misbehave | Only the pinned `.wasm` is ever run, with fuel and memory limits and an output cap; cut and speed are checked before any render; renders are limited to four at a time | `security.rs` (extreme numbers in cut and speed are refused), the render host tests | a valid request still costs a render, even when it reuses a retry key |
+| Stealing or guessing a manage key | A 256-bit random key shown once and stored only as a hash; compared in constant time; read from a header, never an address; not logged or echoed; a missing and a wrong key read the same | `security.rs` (every maker route, every kind of wrong key, identical answers), `key_logs.rs` | a key kept in the browser by the maker (ticket 29) is only as safe as that browser; losing a key means losing the ability to change that one publication, nothing more |
+| Finding the operator secret | At least 24 characters; constant-time compare of hashes; missing, empty, wrong, short and long all read the same; failed attempts are limited per address and counted before they are judged; never logged; the operator page keeps it in memory and sends it in a header | `security.rs` (every `/admin` route against six kinds of wrong secret), `admin_logs.rs`, `admin.spec.ts` | one shared secret, no record of which operator did what; rotating it means changing the setting and restarting |
+| Slow or stalled clients, and hostile bodies | A deadline of 30 seconds on every request (a body that never finishes arriving is answered with 408 and freed), a body cap on every route, strict fields, nesting that is too deep is refused | `security.rs` (a body stalled for ever on four routes; empty, null, array, huge number, truncated, invalid UTF-8, a nul byte, deep nesting, wrong content types: each refused as a problem document inside two seconds, nothing leaked, the service healthy after) | the service does not set a limit on how long a client may spend sending headers, and a flood of connections is for the platform in front of it (the load balancer's idle timeout and the host's own protection), not for the application |
+| Injecting markup, scripts, links, look-alikes or control characters through public text | The service refuses angle brackets, controls, invisible and direction-changing characters, characters outside an allowed set and words that mix scripts; removes links and handles; the page prints everything as text | `security.rs` (eighteen kinds of text in titles and names), `text.rs` unit tests, `admin.spec.ts` (entities stay entities) | a title can still say something rude or misleading in plain letters; that is for reports and hides |
+| Reading across origins, or framing the site | CORS allows only the configured origins (the admin header only for the site's origin); the site's policy allows connections only to itself, the service and the bucket, and forbids framing, plugins, a changed base address and forms sent elsewhere | `security.rs` (four look-alike origins get nothing), `security.test.ts`, `csp.spec.ts` | the policy allows inline scripts, see below |
+| A dependency with a known advisory | `cargo deny check` and `cargo audit` and `pnpm audit --audit-level high` fail CI; actions are pinned by commit; lockfiles are committed; build scripts of dependencies do not run | see "Supply chain" below | an advisory published after the last run is not seen until the next run; one reviewed exception is listed below |
+| A secret in the repository | `gitleaks` over the full history in CI, a narrow allowlist naming exactly two throwaway test credentials; configuration is read from the environment only (names, defaults and meanings are in "Configuration"); the configuration prints its secrets as redacted | CI `secret scan`, `config.rs` unit tests, a local run clean | none known |
+
+**Errors do not tell more than they should.** Every error is a problem document with only the documented fields. A test sends hostile input to every route and searches the answers for the things only a leak would contain (a panic message, a backtrace, a path, a connection string, a query, a library name, the operator secret, a variable name) and finds none. The service names neither itself nor its framework in a header.
+
+**The headers, on every response.** `content-security-policy: default-src 'none'; frame-ancestors 'none'`, `strict-transport-security: max-age=63072000; includeSubDomains` (ignored over plain HTTP, so safe behind a proxy that ends TLS), `x-content-type-options: nosniff`, `referrer-policy: no-referrer`, `cache-control: no-store` on errors and on everything but the health and document routes. A test walks every route in the interface document and the operator's routes (read from the router's source, so a new one fails the test until it has a row), and also an unknown path, a wrong method, a refused preflight and `TRACE`, and finds all of them on every answer. A found bug: a refused cross-origin preflight was answered outside the layer that adds them; the layers were reordered.
+
+**The site's headers.** Every page carries a content security policy, `strict-transport-security`, `nosniff`, no referrer, and a device policy that allows only the microphone (for the maker's own recording, later). The policy allows the page to connect to itself and to exactly the origins in `GRAFT_CONNECT_ORIGINS` (the service and the bucket; a value that is not a plain origin stops the build). It forbids framing, plugins, a changed base address and forms sent elsewhere. **Honest limit:** it allows inline scripts, because the framework's own start-up script is inline and a nonce per request would make the static home page dynamic. So the header is not what stands between a visitor and script injection; what does is that nothing the site prints is ever treated as markup (React escapes everything, and the service refuses angle brackets in all public text). Browser tests load the home page, a chain and the operator's page under the policy and find no violation; the policy is read back from a response and compared; and a page that tries to reach an unlisted origin or to frame the site is refused.
+
+### Supply chain
+
+The `supply chain` CI job runs `cargo deny check` (advisories, licences, banned and duplicate crates, sources) and `cargo audit`; the `web` job runs `pnpm audit --audit-level high`. Neither is advisory only: a finding fails the pull request. The list of reviewed exceptions is one entry, in `web/pnpm-workspace.yaml` with its reason: `braces` (runaway recursion on deeply nested glob patterns), which has no patched release and is reached only through the lint tooling's dependencies, never from input or the shipped bundle; remove it when a fix is published. The Rust list is empty.
+
+**Shown once, locally, so no CI round was spent on it.** On a copy of the tree, the same two commands CI runs, first clean and then with `time 0.1.45` (RUSTSEC-2020-0071) added to the API crate:
+
+```
+== clean tree ==                                  advisories ok, bans ok, licenses ok, sources ok
+== seeded: time 0.1.45 added to the api crate ==
+cargo deny check   ->  error[vulnerability]: Potential segfault in the time crate
+                       ID: RUSTSEC-2020-0071      advisories FAILED, ...      exit 1
+cargo audit        ->  Crate: time  Version: 0.1.45  ID: RUSTSEC-2020-0071
+                       Solution: Upgrade to >=0.2.23   error: 1 vulnerability found!   exit 1
+```
+
+and the same for the web manifest with `lodash 4.17.15` (high: prototype pollution; high: command injection): `pnpm audit --audit-level high` exits 1, where the clean manifest exits 0. **The audit also found something real while this was being written:** the clean baseline of that very demonstration was not clean. `ctutils 0.4.3`, a dependency of the Postgres driver, had received RUSTSEC-2026-0385 (a non-constant-time mask generation) since the last green run; `cargo update -p ctutils` moved it to 0.4.5, and both commands are clean again. That is the failure mode the job exists for, and it shows its limit: an advisory published tomorrow is seen tomorrow.
+
+### Privacy, in plain words
+
+graft stores no address, no user agent and no account in its own records. The event ledger has no column for any of them (a test searches the rows), the request logs carry a request id and no address (a test searches the logs), and the per-address limits keep an address in memory for one window and forget it. Hosting providers necessarily see addresses: the load balancer, the host of the site, the database host and the bucket will each process them under their own terms, and graft cannot promise what they do. The site's session id lives only in one page's memory, rotates after thirty quiet minutes, and is never written anywhere; Global Privacy Control and Do Not Track switch the client events and the error tracker off entirely, and the service ignores a batch that arrives with either header. Event counts are best-effort and never become a public fact.
+
+### What is not defended
+
+- **Distributed abuse.** A determined person with many addresses can use each address's allowance, fill the storage threshold up to its documented overshoot, and spend the global publish cap. The kill switch and the reports are the operator's answer, by hand.
+- **Volumetric attacks** on the network are the platform's to absorb, not the application's.
+- **Slow header attacks.** The application has a deadline for the whole request, but does not set its own timeout for the time a client spends sending headers; it relies on the load balancer.
+- **Per-process limits.** The per-address and per-session limits are in memory, per process; a second instance gives each visitor a second allowance. The global cap and the storage threshold are in the database.
+- **Rights.** graft does not check that a recording is the sender's or that a licence is genuine; it records what was declared, as declared. Copies already downloaded cannot be recalled.
+- **A malicious operator or a stolen laptop with the secret on it.** There is one shared secret and no audit trail of who used it.
+- **Script injection if the escaping rule were ever broken.** The policy allows inline scripts (above); the defences are the character rules and the escaping, not the header.
+- **The second layer of the policy for the audio origin** depends on the bucket allowing the site's origin to read; that setting belongs to deployment (ticket 34), and without it audio will not load rather than load insecurely.
+

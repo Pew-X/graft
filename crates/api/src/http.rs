@@ -211,9 +211,30 @@ pub fn router(state: AppState, config: &Config) -> Router {
                 Problem::internal().into_response()
             },
         ))
-        .layer(middleware::from_fn_with_state(state.clone(), observe))
         .layer(cors(config))
+        .layer(middleware::from_fn_with_state(
+            std::time::Duration::from_secs(config.request_timeout_secs),
+            deadline,
+        ))
+        // Outermost, so every response (a refused preflight and a timeout included) is logged,
+        // counted and given the security headers.
+        .layer(middleware::from_fn_with_state(state.clone(), observe))
         .with_state(state)
+}
+
+/// Frees a request that takes too long, from its first byte to its answer. The body is read inside
+/// the handler, so a client that connects and stops sending is cut off here too, instead of holding
+/// the request (and what it waits on) for ever. It sits inside the observing layer, so the timeout
+/// is counted, logged and given the usual security headers.
+async fn deadline(
+    State(limit): State<std::time::Duration>,
+    request: Request,
+    next: Next,
+) -> Response {
+    match tokio::time::timeout(limit, next.run(request)).await {
+        Ok(response) => response,
+        Err(_) => Problem::request_timeout().into_response(),
+    }
 }
 
 /// The operator routes. The secret is checked by a layer, before any query or body is parsed.
@@ -425,6 +446,12 @@ async fn observe(State(state): State<AppState>, request: Request, next: Next) ->
     headers.insert(
         header::X_CONTENT_TYPE_OPTIONS,
         HeaderValue::from_static("nosniff"),
+    );
+    // Browsers hold to secure transport for two years once they have seen this over it; it is
+    // ignored over plain HTTP, so sending it always is safe behind a terminating proxy.
+    headers.insert(
+        header::STRICT_TRANSPORT_SECURITY,
+        HeaderValue::from_static("max-age=63072000; includeSubDomains"),
     );
     headers.insert(
         header::REFERRER_POLICY,

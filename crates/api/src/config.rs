@@ -43,6 +43,9 @@ pub struct Config {
     pub lock_wait_ms: u64,
     /// Most renders running at once.
     pub max_concurrent_renders: usize,
+    /// The longest a request may take from its first byte to its answer, reading a slow body
+    /// included; past it the request is answered with a timeout and freed.
+    pub request_timeout_secs: u64,
     /// How many of the allowed origins were given (a typo is refused at start-up, never dropped).
     /// The canonical renderer artefact the service loads at start-up.
     pub renderer_wasm: Option<std::path::PathBuf>,
@@ -573,6 +576,18 @@ impl Config {
                 reason: "must be at least 1".to_owned(),
             });
         }
+        let mut request_timeout_secs: u64 = 30;
+        number(
+            &lookup,
+            "GRAFT_REQUEST_TIMEOUT_SECS",
+            &mut request_timeout_secs,
+        )?;
+        if request_timeout_secs == 0 {
+            return Err(ConfigError::Invalid {
+                name: "GRAFT_REQUEST_TIMEOUT_SECS",
+                reason: "must be at least 1".to_owned(),
+            });
+        }
         let mut max_concurrent_renders: usize = 4;
         number(
             &lookup,
@@ -620,6 +635,7 @@ impl Config {
             serialization_retries,
             lock_wait_ms,
             max_concurrent_renders,
+            request_timeout_secs,
             renderer_wasm: lookup("GRAFT_RENDERER_WASM").map(std::path::PathBuf::from),
             extra_deny_words,
             admin_secret,
@@ -718,6 +734,30 @@ mod tests {
             c.admin_secret.is_none(),
             "admin access is off unless a secret is configured"
         );
+    }
+
+    #[test]
+    fn a_request_may_take_thirty_seconds_unless_told_otherwise_and_never_none() {
+        let db = ("GRAFT_DATABASE_URL", "postgres://x");
+        let c = Config::from_lookup(env(&[db])).expect("valid");
+        assert_eq!(c.request_timeout_secs, 30);
+        let c =
+            Config::from_lookup(env(&[db, ("GRAFT_REQUEST_TIMEOUT_SECS", "5")])).expect("valid");
+        assert_eq!(c.request_timeout_secs, 5);
+        for bad in ["0", "-1", "soon", ""] {
+            let err = Config::from_lookup(env(&[db, ("GRAFT_REQUEST_TIMEOUT_SECS", bad)]))
+                .expect_err("a request needs a real deadline");
+            assert!(
+                matches!(
+                    err,
+                    ConfigError::Invalid {
+                        name: "GRAFT_REQUEST_TIMEOUT_SECS",
+                        ..
+                    }
+                ),
+                "{bad:?}: {err:?}"
+            );
+        }
     }
 
     #[test]

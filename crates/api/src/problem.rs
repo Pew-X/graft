@@ -53,6 +53,17 @@ impl Problem {
         Self::base("urn:graft:problem:not-found", "Not found", 404, detail)
     }
 
+    /// 408: the request took too long to arrive or to answer.
+    #[must_use]
+    pub fn request_timeout() -> Self {
+        Self::base(
+            "urn:graft:problem:request-timeout",
+            "Request timeout",
+            408,
+            "the request took too long; send it again",
+        )
+    }
+
     /// 400: the request could not be understood.
     #[must_use]
     pub fn bad_request(detail: impl Into<String>) -> Self {

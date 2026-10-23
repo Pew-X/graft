@@ -307,6 +307,52 @@ impl Harness {
         (parts.status, parts.headers, json)
     }
 
+    /// Any method, any bytes, any content type: for requests a well-behaved client would never make.
+    pub async fn send_bytes(
+        &self,
+        method: &str,
+        uri: &str,
+        headers: &[(&str, &str)],
+        content_type: Option<&str>,
+        body: Vec<u8>,
+    ) -> (StatusCode, axum::http::HeaderMap, Vec<u8>) {
+        let mut builder = Request::builder().method(method).uri(uri);
+        for (name, value) in headers {
+            builder = builder.header(*name, *value);
+        }
+        if let Some(content_type) = content_type {
+            builder = builder.header(header::CONTENT_TYPE, content_type);
+        }
+        let request = builder.body(Body::from(body)).expect("request");
+        let response = self.app.clone().oneshot(request).await.expect("response");
+        let (parts, body) = response.into_parts();
+        let bytes = body.collect().await.expect("body").to_bytes();
+        (parts.status, parts.headers, bytes.to_vec())
+    }
+
+    /// A request whose body never finishes arriving: a client that connects and goes quiet.
+    pub async fn send_stalled_body(
+        &self,
+        method: &str,
+        uri: &str,
+        headers: &[(&str, &str)],
+        content_type: &str,
+    ) -> (StatusCode, axum::http::HeaderMap, Vec<u8>) {
+        let stalled = futures::stream::pending::<Result<axum::body::Bytes, std::io::Error>>();
+        let mut builder = Request::builder()
+            .method(method)
+            .uri(uri)
+            .header(header::CONTENT_TYPE, content_type);
+        for (name, value) in headers {
+            builder = builder.header(*name, *value);
+        }
+        let request = builder.body(Body::from_stream(stalled)).expect("request");
+        let response = self.app.clone().oneshot(request).await.expect("response");
+        let (parts, body) = response.into_parts();
+        let bytes = body.collect().await.expect("body").to_bytes();
+        (parts.status, parts.headers, bytes.to_vec())
+    }
+
     pub async fn raw(&self, uri: &str) -> String {
         let request = Request::builder()
             .uri(uri)

@@ -69,6 +69,8 @@ done
 curl -fs "http://127.0.0.1:$api_port/ready" >/dev/null
 
 cd web
+# The site's content security policy lets pages talk to exactly these origins, besides themselves.
+export GRAFT_CONNECT_ORIGINS="http://127.0.0.1:$api_port,$s3"
 GRAFT_SERVICE_E2E=1 \
 GRAFT_API_URL="http://127.0.0.1:$api_port" \
 GRAFT_SERVICE_S3="$s3" \
