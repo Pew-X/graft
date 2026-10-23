@@ -5,6 +5,7 @@ import type { Refusal } from "./client.ts";
 
 const kinds: Refusal[] = [
   { kind: "publishingOff" },
+  { kind: "uploadsOff" },
   { kind: "storageFull" },
   { kind: "rateLimited", retryAfterSecs: 120 },
   { kind: "publishCap", retryAfterSecs: 3600 },

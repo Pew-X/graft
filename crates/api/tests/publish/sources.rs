@@ -389,3 +389,32 @@ async fn the_kill_switch_closes_uploads_and_flips_and_the_uploads_flag_closes_on
     );
     h.finish().await;
 }
+
+#[tokio::test]
+async fn anyone_can_read_whether_publishing_and_uploads_are_open_and_nothing_else() {
+    // Default: publishing open, uploads off. The page asks this before it offers an upload, so a
+    // maker is told uploads are closed without a recording having been sent anywhere.
+    let h = Harness::new().await;
+    let (status, headers, body) = h.get("/v1/features").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(!is_problem(&headers));
+    assert_eq!(body, json!({ "publishing": true, "uploads": false }));
+    h.finish().await;
+
+    let on = open().await;
+    let (_, _, body) = on.get("/v1/features").await;
+    assert_eq!(body, json!({ "publishing": true, "uploads": true }));
+    // The kill switch shows here too, so the page can say publishing is closed before anything is sent.
+    let (status, _, _) = on
+        .send(
+            "PUT",
+            "/admin/switch",
+            &[("x-graft-admin-secret", SECRET)],
+            Some(&json!({ "publishing": false })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let (_, _, body) = on.get("/v1/features").await;
+    assert_eq!(body, json!({ "publishing": false, "uploads": true }));
+    on.finish().await;
+}

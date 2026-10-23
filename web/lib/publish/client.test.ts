@@ -104,6 +104,13 @@ test("a refusal is final: nothing is retried automatically and the reason is kep
   assert.equal(sent.length, 1);
 });
 
+test("a switched-off upload door is a refusal, not a busy service: nothing is retried", async () => {
+  const { wire, sent } = script(problem("uploads-off", 503));
+  const out = await publishWithRetries(wire, body, options().opts);
+  assert.deepEqual(out, { kind: "refused", refusal: { kind: "uploadsOff" } });
+  assert.equal(sent.length, 1);
+});
+
 test("progress is reported before each attempt, so the page can say it is trying again", async () => {
   const { wire } = script("network", created());
   const seen: Array<[number, number]> = [];
@@ -134,6 +141,7 @@ test("each problem the service gives maps to its own refusal, with the numbers a
     refusalFrom(problem(type, status, extra));
   assert.equal(of("publishing-off", 503).kind, "publishingOff");
   assert.equal(of("storage-full", 507).kind, "storageFull");
+  assert.equal(of("uploads-off", 503).kind, "uploadsOff");
   assert.deepEqual(of("rate-limited", 429, { retry_after_secs: 90 }), {
     kind: "rateLimited",
     retryAfterSecs: 90,

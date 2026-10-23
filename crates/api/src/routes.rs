@@ -130,6 +130,18 @@ pub(crate) async fn publication_view(
     ))
 }
 
+/// What the service is open for right now: publishing (the kill switch) and visitors' own sources.
+/// Two booleans and nothing else, so a page can say a door is closed before anything is sent
+/// through it.
+#[utoipa::path(
+    get,
+    path = "/v1/features",
+    responses((status = 200, description = "Whether publishing and uploads are open", body = crate::moderation::SwitchView))
+)]
+pub async fn get_features(state: State<AppState>) -> axum::Json<crate::moderation::SwitchView> {
+    crate::moderation::get_switch(state).await
+}
+
 /// One publication.
 #[utoipa::path(
     get,

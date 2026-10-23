@@ -1,10 +1,10 @@
-import type { PublishBody, Wire, WireResult } from "./client.ts";
+import type { PublishBody, PublishSourceBody, Wire, WireResult } from "./client.ts";
 
 /** The real network: one POST to the service. A failure to get any answer throws, which the caller retries. */
-export function wireFor(apiUrl: string): Wire {
+export function wireFor(apiUrl: string, path = "/v1/publications"): Wire {
   return {
-    async post(body: PublishBody): Promise<WireResult> {
-      const response = await fetch(`${apiUrl}/v1/publications`, {
+    async post(body: PublishBody | PublishSourceBody): Promise<WireResult> {
+      const response = await fetch(`${apiUrl}${path}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),

@@ -7,6 +7,7 @@
 import type { components } from "../api/schema.d.ts";
 
 export type PublishBody = components["schemas"]["PublishFlipRequest"];
+export type PublishSourceBody = components["schemas"]["PublishSourceRequest"];
 
 /** What came back: a status and a parsed body. A failure to get any answer throws instead. */
 export interface WireResult {
@@ -14,13 +15,14 @@ export interface WireResult {
   body: unknown;
 }
 export interface Wire {
-  post(body: PublishBody): Promise<WireResult>;
+  post(body: PublishBody | PublishSourceBody): Promise<WireResult>;
 }
 
 export type Refusal =
   | {
       kind:
         | "publishingOff"
+        | "uploadsOff"
         | "storageFull"
         | "forkClosed"
         | "depthCap"
@@ -58,6 +60,8 @@ export function refusalFrom(result: WireResult): Refusal {
   switch (type) {
     case "publishing-off":
       return { kind: "publishingOff" };
+    case "uploads-off":
+      return { kind: "uploadsOff" };
     case "storage-full":
       return { kind: "storageFull" };
     case "rate-limited":
@@ -94,11 +98,7 @@ const RETRYABLE = new Set([408, 502, 503, 504]);
 function isBusy(result: WireResult): boolean {
   const type = String(record(result.body)["type"] ?? "");
   // 503 is also what a switched-off door answers; only `retry-later` (and a gateway's own) is a wait.
-  return (
-    RETRYABLE.has(result.status) &&
-    !type.endsWith("publishing-off") &&
-    !type.endsWith("storage-full")
-  );
+  return RETRYABLE.has(result.status) && !/(publishing-off|uploads-off|storage-full)$/.test(type);
 }
 
 export interface Options {
@@ -110,7 +110,7 @@ export interface Options {
 
 export async function publishWithRetries(
   wire: Wire,
-  body: PublishBody,
+  body: PublishBody | PublishSourceBody,
   { delays = BACKOFF_MS, sleep, onAttempt, signal }: Options,
 ): Promise<Outcome> {
   const total = delays.length + 1;

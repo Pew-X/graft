@@ -1,9 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { copy, fill } from "../lib/copy.ts";
-import type { Cut } from "../lib/make/cut.ts";
-import { type Outcome, type Refusal, publishWithRetries } from "../lib/publish/client.ts";
+import {
+  type Outcome,
+  type PublishBody,
+  type PublishSourceBody,
+  type Refusal,
+  publishWithRetries,
+} from "../lib/publish/client.ts";
 import { NAME_MAX, TITLE_MAX, hintFor } from "../lib/publish/hints.ts";
 import { keepKey } from "../lib/publish/keep.ts";
 import { newRetryKey } from "../lib/publish/retry-key.ts";
@@ -62,21 +67,37 @@ function Field({
  * public, and the publish. The same retry key goes out on every try of one attempt.
  */
 export function PublishStep({
-  parentId,
-  cut,
-  p,
-  q,
-  previewHash,
+  signature,
+  buildBody,
+  path = "/v1/publications",
+  heading: headingText = copy.publish.heading,
+  statement = copy.publish.public,
+  gate = true,
+  gateWhy = null,
   apiUrl,
   onClose,
+  onPublished,
+  children,
 }: {
-  parentId: string;
-  cut: Cut;
-  p: number;
-  q: number;
-  previewHash: string | null;
+  /** What is being published, as a string: a different thing is a different attempt, with its own key. */
+  signature: string;
+  buildBody: (fields: {
+    title: string;
+    author: string;
+    retryKey: string;
+  }) => PublishBody | PublishSourceBody;
+  path?: string;
+  heading?: string;
+  statement?: string;
+  /** Anything else that must be true before the button works (a declaration ticked). */
+  gate?: boolean;
+  /** Why the gate is closed, said beside the button. */
+  gateWhy?: string | null;
   apiUrl: string;
   onClose: () => void;
+  onPublished?: (id: string) => void;
+  /** Extra fields between the name and the button. */
+  children?: ReactNode;
 }) {
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
@@ -100,11 +121,10 @@ export function PublishStep({
   }, [name]);
 
   const empty = (value: string, max: number) => hintFor(value, max)?.kind === "empty";
-  const canSubmit = !empty(title, TITLE_MAX) && !empty(author, NAME_MAX);
+  const canSubmit = !empty(title, TITLE_MAX) && !empty(author, NAME_MAX) && gate;
 
   async function submit(fresh = false) {
     if (busy.current) return; // a second tap while one is in flight does nothing
-    const signature = `${parentId}:${cut.start}-${cut.end}:${p}/${q}`;
     if (fresh || attempt.current === null || attempt.current.signature !== signature) {
       attempt.current = { signature, key: newRetryKey() };
     }
@@ -112,23 +132,18 @@ export function PublishStep({
     setPhase({ name: "publishing", attempt: 1, of: 1 });
     try {
       const outcome = await publishWithRetries(
-        wireFor(apiUrl),
-        {
-          parent_id: parentId,
-          cut: { start: cut.start, end: cut.end },
-          speed: { p, q },
-          title,
-          author,
-          retry_key: attempt.current.key,
-          ...(previewHash ? { preview_hash: previewHash } : {}),
-        },
+        wireFor(apiUrl, path),
+        buildBody({ title, author, retryKey: attempt.current.key }),
         {
           sleep,
           onAttempt: (n, of) => setPhase({ name: "publishing", attempt: n, of }),
         },
       );
-      if (outcome.kind === "published") setPhase({ name: "done", outcome });
-      else if (outcome.kind === "refused") setPhase({ name: "refused", refusal: outcome.refusal });
+      if (outcome.kind === "published") {
+        setPhase({ name: "done", outcome });
+        onPublished?.(outcome.id);
+      } else if (outcome.kind === "refused")
+        setPhase({ name: "refused", refusal: outcome.refusal });
       else if (outcome.kind === "gaveUp") setPhase({ name: "gaveUp", outcome });
       else setPhase({ name: "form" });
     } finally {
@@ -240,9 +255,9 @@ export function PublishStep({
   return (
     <section className="publish" aria-labelledby="publish-heading">
       <h3 id="publish-heading" className="kicker">
-        {copy.publish.heading}
+        {headingText}
       </h3>
-      <p className="public">{copy.publish.public}</p>
+      <p className="public">{statement}</p>
       <p className="notice">{copy.publish.noAccount}</p>
       <form
         onSubmit={(e) => {
@@ -268,8 +283,14 @@ export function PublishStep({
           max={NAME_MAX}
           onChange={setAuthor}
         />
+        {children}
         <div className="actions">
-          <button type="submit" className="primary" disabled={!canSubmit || publishing}>
+          <button
+            type="submit"
+            className="primary"
+            disabled={!canSubmit || publishing}
+            aria-describedby="publish-why"
+          >
             {copy.publish.submit}
           </button>
           <button type="button" className="pill" onClick={onClose} disabled={publishing}>
@@ -277,6 +298,9 @@ export function PublishStep({
           </button>
         </div>
       </form>
+      <p id="publish-why" className="hint">
+        {gate ? "" : gateWhy}
+      </p>
       <p role="status" className="progress">
         {phase.name === "publishing"
           ? phase.attempt > 1

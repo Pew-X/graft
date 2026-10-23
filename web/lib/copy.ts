@@ -144,6 +144,8 @@ export const copy = {
     fresh: "start a fresh attempt",
     offline: "you look to be offline.",
     refusals: {
+      uploadsOff:
+        "uploading your own sounds is switched off for now. you can still flip the sounds that are here.",
       publishingOff:
         "publishing is switched off for now. your flip is still here: you can keep making and try again later.",
       storageFull:
@@ -169,8 +171,17 @@ export const copy = {
       character: "it has a character that is not allowed",
       mixed_scripts: "a word mixes letters from different scripts",
       denied_word: "it uses a word that is not allowed",
+      silent: "it is silent",
+      constant: "it is one flat tone with no change in it",
+      clipped: "it is clipped flat at full volume",
+      too_short: "it is too short",
+      odd_length: "it is not whole 16-bit audio",
+      encoding: "it could not be read as audio",
+      required: "it is missing",
+      statement: "it is not the statement that was shown",
+      basis: "the basis is not one that is offered",
     },
-    fields: { title: "title", author: "name" },
+    fields: { title: "title", author: "name", audio: "sound", declaration: "declaration" },
     when: {
       soon: "in a moment",
       seconds: "in about {n} seconds",
@@ -312,6 +323,47 @@ export const copy = {
       body: "each is declared as {licence}. there is nothing third-party in them. the declaration is printed as typed and is not checked.",
     },
     footerNote: "the independence line is in the footer of every page.",
+  },
+  own: {
+    heading: "your own sound",
+    gloss: "stays on this device until you publish it",
+    record: "record with the microphone",
+    stop: "stop recording",
+    recording: "recording. it stops by itself at 15 seconds.",
+    pick: "pick an audio file",
+    working: "reading the sound.",
+    denied:
+      "the microphone was not allowed. the sounds made for graft work without it, and you can pick a file instead.",
+    unavailable:
+      "this browser has no microphone it can use. the sounds made for graft work without it, and you can pick a file instead.",
+    tooBig: "that file is too large. the limit is 30 megabytes.",
+    unreadable: "that file could not be read as audio. try a wav, mp3, m4a or ogg file.",
+    empty: "that file holds no sound.",
+    channels:
+      "that file has more than two channels, which graft does not read. a mono or stereo file will work.",
+    tooLongToTrim: "that recording is over two minutes, too long to trim here. pick a shorter one.",
+    trimHeading: "pick the part to keep",
+    trimGloss: "a source is at most 15 seconds. the rest is left out.",
+    trimUse: "use this part",
+    trimTooLong: "that part is too long. a source is at most {max} frames, 15 seconds.",
+    trimWhy: "why this part cannot be used",
+    honesty:
+      "what is published is the sound as your browser read it, worked out here and shown to you. graft cannot tell whether a recording is what you say it is, and the same compressed file can come out slightly different in another browser.",
+    flipNote:
+      "you are working on your own sound. cut and flip it here; to publish a flip of it, publish the sound first.",
+    title: "your sound",
+    publishSource: "publish your sound",
+    sourceHeading: "publish your sound",
+    sourcePublic: "publishing your sound makes it public, and anyone can flip it.",
+    basis: "what you are saying",
+    basisOwn: "i made this sound",
+    basisRight: "i have the right to share it",
+    confirm: "i confirm: {statement}",
+    declared:
+      "this is printed with your sound as declared, as you wrote it. graft does not check it.",
+    off: "uploading your own sounds is switched off for now. your sound stays here: you can keep cutting and flipping it, and flip the sounds that are here.",
+    closed: "publishing is switched off for now. nothing can be published until it is back.",
+    sourceDone: "your sound is published. you can now publish the flip you made from it.",
   },
   make: {
     title: "make a flip",

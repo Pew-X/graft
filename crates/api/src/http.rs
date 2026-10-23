@@ -153,6 +153,7 @@ pub fn router(state: AppState, config: &Config) -> Router {
         .route("/metrics", get(metrics))
         .route("/openapi.json", get(routes::openapi))
         .route("/v1/chains/{id}", get(routes::get_chain))
+        .route("/v1/features", get(routes::get_features))
         .route("/v1/publications/{id}", get(routes::get_publication))
         .route(
             "/v1/publications/{id}/fork-permission",

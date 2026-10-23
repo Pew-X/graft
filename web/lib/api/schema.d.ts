@@ -38,6 +38,27 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/features": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What the service is open for right now: publishing (the kill switch) and visitors' own sources.
+     *     Two booleans and nothing else, so a page can say a door is closed before anything is sent
+     *     through it.
+     */
+    get: operations["get_features"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/publications": {
     parameters: {
       query?: never;
@@ -495,6 +516,16 @@ export interface components {
       /** @description Title as typed. */
       title: string;
     };
+    /**
+     * @description What the operator reads about the two switches, and what anyone may read at `/v1/features`. Publishing can be changed while the service
+     *     runs; uploads are set when it starts (`GRAFT_UPLOADS`), so this only reports them.
+     */
+    SwitchView: {
+      /** @description Whether publishing is open. */
+      publishing: boolean;
+      /** @description Whether visitors may publish their own sources. */
+      uploads: boolean;
+    };
   };
   responses: never;
   parameters: never;
@@ -583,6 +614,26 @@ export interface operations {
         };
         content: {
           "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  get_features: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Whether publishing and uploads are open */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SwitchView"];
         };
       };
     };

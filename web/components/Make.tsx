@@ -14,7 +14,11 @@ import { useAsync } from "../lib/make/use-async.ts";
 import { fetchPcm } from "../lib/roll/pcm.ts";
 import { describeSpeed } from "../lib/roll/speed.ts";
 import { CutEditor } from "./CutEditor.tsx";
+import { readFeatures } from "../lib/own/features.ts";
+import { type Basis, DECLARATION_TEXT, sourceBody } from "../lib/own/source.ts";
+import { OwnSound } from "./OwnSound.tsx";
 import { PublishStep } from "./PublishStep.tsx";
+import { TrimStep } from "./TrimStep.tsx";
 import { SoundPicker } from "./SoundPicker.tsx";
 
 /** The first thing heard is a flip, not the sound unchanged: up a fifth. */
@@ -76,6 +80,9 @@ export function Make({
     [curated, flips, from],
   );
   const [picked, setPicked] = useState<Sound | null>(null);
+  // The maker's own sound: in memory only. `toTrim` is one longer than a source may be.
+  const [own, setOwn] = useState<Int16Array | null>(null);
+  const [toTrim, setToTrim] = useState<Int16Array | null>(null);
   const origin: Origin | null = picked
     ? { kind: "shipped", sound: picked }
     : known
@@ -99,12 +106,39 @@ export function Make({
   return (
     <div className="make" data-testid="make">
       <p className="kicker">{copy.make.kicker}</p>
-      {origin === null ? (
-        <SoundPicker curated={curated} flips={flips} onChoose={setPicked} />
+      {origin === null && toTrim !== null ? (
+        <TrimStep
+          samples={toTrim}
+          onUse={(part) => {
+            setOwn(part);
+            setToTrim(null);
+          }}
+          onCancel={() => setToTrim(null)}
+        />
+      ) : origin === null && own !== null ? (
+        <Editor
+          key="own"
+          title={copy.own.title}
+          own
+          parentId={null}
+          apiUrl={apiUrl}
+          samples={own}
+          engine={engine.status === "ready" ? engine.value : null}
+          engineFailed={engine.status === "failed"}
+          start={start}
+          onChange={() => setOwn(null)}
+        />
+      ) : origin === null ? (
+        <SoundPicker curated={curated} flips={flips} onChoose={setPicked}>
+          <OwnSound
+            onSound={(samples, needsTrim) => (needsTrim ? setToTrim(samples) : setOwn(samples))}
+          />
+        </SoundPicker>
       ) : sound.status === "ready" ? (
         <Editor
           key={origin.kind === "shipped" ? origin.sound.id : origin.id}
           title={origin.kind === "shipped" ? origin.sound.title : null}
+          own={false}
           parentId={origin.kind === "shipped" ? origin.sound.id : origin.id}
           apiUrl={apiUrl}
           samples={sound.value}
@@ -135,6 +169,7 @@ class GoneError extends Error {}
 
 function Editor({
   title,
+  own,
   parentId,
   apiUrl,
   samples,
@@ -144,7 +179,9 @@ function Editor({
   onChange,
 }: {
   title: string | null;
-  parentId: string;
+  /** The maker's own sound, not yet published: it must be published as a source before it can be flipped. */
+  own: boolean;
+  parentId: string | null;
   apiUrl: string;
   samples: Int16Array;
   engine: Renderer | null;
@@ -162,6 +199,20 @@ function Editor({
   });
   const [listening, setListening] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [sourceId, setSourceId] = useState<string | null>(null);
+  const [publishingSource, setPublishingSource] = useState(false);
+  const [basis, setBasis] = useState<Basis>("own_recording");
+  const [confirmed, setConfirmed] = useState(false);
+  const features = useAsync(own ? "features" : null, (signal) => readFeatures(apiUrl, signal));
+  const flipParent = own ? sourceId : parentId;
+  const closedWhy =
+    features.status !== "ready"
+      ? null
+      : !features.value.publishing
+        ? copy.own.closed
+        : !features.value.uploads
+          ? copy.own.off
+          : null;
   const [previewer] = useState(
     () =>
       new Previewer(
@@ -302,12 +353,23 @@ function Editor({
           <button
             type="button"
             className="pill"
-            disabled={problem !== null || ready === null || publishing}
+            disabled={problem !== null || ready === null || publishing || flipParent === null}
             aria-describedby="why-not"
             onClick={() => setPublishing(true)}
           >
             {copy.publish.open}
           </button>
+          {own && sourceId === null ? (
+            <button
+              type="button"
+              className="pill"
+              disabled={publishingSource || closedWhy !== null}
+              aria-describedby="own-why"
+              onClick={() => setPublishingSource(true)}
+            >
+              {copy.own.publishSource}
+            </button>
+          ) : null}
           <p id="why-not" className="refusal" role="status">
             {problem
               ? refusal(problem)
@@ -320,6 +382,11 @@ function Editor({
                     : ""}
           </p>
         </div>
+        {own ? (
+          <p id="own-why" className="hint">
+            {closedWhy ?? (sourceId === null ? copy.own.flipNote : copy.own.sourceDone)}
+          </p>
+        ) : null}
         {ready ? (
           <details className="details">
             <summary>{copy.details.summary}</summary>
@@ -334,13 +401,58 @@ function Editor({
           </details>
         ) : null}
       </section>
-      {publishing && ready ? (
+      {own && publishingSource ? (
         <PublishStep
-          parentId={parentId}
-          cut={cut}
-          p={p}
-          q={q}
-          previewHash={ready.hash}
+          signature="source"
+          path="/v1/sources"
+          heading={copy.own.sourceHeading}
+          statement={copy.own.sourcePublic}
+          gate={confirmed}
+          gateWhy={copy.own.confirm.replace("{statement}", DECLARATION_TEXT)}
+          buildBody={({ title, author, retryKey }) =>
+            sourceBody({ samples, title, author, retryKey, basis })
+          }
+          apiUrl={apiUrl}
+          onClose={() => setPublishingSource(false)}
+          onPublished={setSourceId}
+        >
+          <fieldset className="declaration">
+            <legend>{copy.own.basis}</legend>
+            {(["own_recording", "right_to_share"] as const).map((b) => (
+              <label key={b} className="choice">
+                <input
+                  type="radio"
+                  name="basis"
+                  checked={basis === b}
+                  onChange={() => setBasis(b)}
+                />
+                <span>{b === "own_recording" ? copy.own.basisOwn : copy.own.basisRight}</span>
+              </label>
+            ))}
+            <label className="choice">
+              <input
+                type="checkbox"
+                checked={confirmed}
+                onChange={(e) => setConfirmed(e.target.checked)}
+              />
+              <span>{fill(copy.own.confirm, { statement: DECLARATION_TEXT })}</span>
+            </label>
+            <p className="hint">{copy.own.declared}</p>
+          </fieldset>
+        </PublishStep>
+      ) : null}
+      {publishing && ready && flipParent !== null ? (
+        <PublishStep
+          signature={`${flipParent}:${cut.start}-${cut.end}:${p}/${q}`}
+          buildBody={({ title, author, retryKey }) => ({
+            parent_id: flipParent,
+            cut: { start: cut.start, end: cut.end },
+            speed: { p, q },
+            title,
+            author,
+            retry_key: retryKey,
+            preview_hash: ready.hash,
+          })}
           apiUrl={apiUrl}
           onClose={() => setPublishing(false)}
         />

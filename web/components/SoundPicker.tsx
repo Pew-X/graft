@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { copy, fill } from "../lib/copy.ts";
 import type { Sound } from "../lib/make/sounds.ts";
 
@@ -29,10 +30,13 @@ export function SoundPicker({
   curated,
   flips,
   onChoose,
+  children,
 }: {
   curated: readonly Sound[];
   flips: readonly Sound[];
   onChoose: (sound: Sound) => void;
+  /** Further ways to start, after the lists. */
+  children?: ReactNode;
 }) {
   return (
     <div className="picker">
@@ -59,6 +63,7 @@ export function SoundPicker({
           </ul>
         </section>
       )}
+      {children}
     </div>
   );
 }
