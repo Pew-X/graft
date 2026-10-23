@@ -73,3 +73,34 @@ export function securityHeaders(options: PolicyOptions): Header[] {
     { key: "Permissions-Policy", value: "camera=(), geolocation=(), microphone=(self)" },
   ];
 }
+
+type Env = Record<string, string | undefined>;
+
+/**
+ * Whether this build is for a deployment: Vercel says so (`VERCEL_ENV` is `production` or `preview`),
+ * and any other host can say so with `GRAFT_DEPLOY_BUILD=on`. A local build and the test builds are not.
+ */
+export function isDeployBuild(env: Env): boolean {
+  return (
+    env["GRAFT_DEPLOY_BUILD"] === "on" ||
+    env["VERCEL_ENV"] === "production" ||
+    env["VERCEL_ENV"] === "preview"
+  );
+}
+
+/**
+ * The settings a deployed build must carry, because they are read when the site is built and leaving
+ * one out breaks the site without an error: no origin to connect to means chain pages cannot load
+ * audio and events go nowhere; no public service address means the home page reports nothing; and
+ * whether to upgrade requests to https is a decision to be made, not a default to be missed.
+ * Returns the names of the missing ones; empty for a build that is not for a deployment.
+ */
+export function missingDeploySettings(env: Env): string[] {
+  if (!isDeployBuild(env)) return [];
+  const missing: string[] = [];
+  if ((env["GRAFT_CONNECT_ORIGINS"] ?? "").trim() === "") missing.push("GRAFT_CONNECT_ORIGINS");
+  if ((env["GRAFT_PUBLIC_API_URL"] ?? "").trim() === "") missing.push("GRAFT_PUBLIC_API_URL");
+  const upgrade = env["GRAFT_UPGRADE_INSECURE_REQUESTS"];
+  if (upgrade !== "on" && upgrade !== "off") missing.push("GRAFT_UPGRADE_INSECURE_REQUESTS");
+  return missing;
+}

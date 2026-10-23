@@ -1,5 +1,14 @@
 import type { NextConfig } from "next";
-import { securityHeaders } from "./lib/security.ts";
+import { missingDeploySettings, securityHeaders } from "./lib/security.ts";
+
+// A deployed build that forgot a build-time setting stops here, with the names, instead of shipping a
+// site that loads and quietly cannot play audio or report anything.
+const missing = missingDeploySettings(process.env);
+if (missing.length > 0) {
+  throw new Error(
+    `this build is for a deployment and is missing: ${missing.join(", ")} (see ARCHITECTURE.md, "Site configuration")`,
+  );
+}
 
 const config: NextConfig = {
   reactStrictMode: true,
