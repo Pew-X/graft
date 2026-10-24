@@ -470,6 +470,15 @@ export const copy = {
     about: "about",
     how: "how it works",
   },
+  /** Marking a part of a stage on the record, to flip just that part. */
+  mark: {
+    toggle: "cut on the record",
+    stop: "stop cutting",
+    drag: "drag along a ring to mark the part you want. on a keyboard, press [ and ] on the record.",
+    flipPart: "flip this part",
+    clear: "clear",
+    seconds: "{n} s",
+  },
   /** The first-visit coach: three short notes, drawn over the real screen, shown once. */
   coach: {
     label: "how it works",
@@ -488,7 +497,7 @@ export const copy = {
     },
     make: {
       title: "make your own.",
-      body: "pick a stage, cut a part of it, change its speed and hear it. publish it and the chain grows by one.",
+      body: "pick a stage, cut a part of it, change its speed and hear it. you can mark the part right on the record. publish it and the chain grows by one.",
     },
   },
 } as const;

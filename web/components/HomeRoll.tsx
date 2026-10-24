@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo } from "react";
+import { makeAddress } from "../lib/record/mark.ts";
 import { staticLoader } from "../lib/roll/audio.ts";
 import type { Block } from "../lib/roll/view.ts";
 import { RollPlayer } from "./RollPlayer.tsx";
@@ -25,7 +26,7 @@ export function HomeRoll({
       load={load}
       reportTo={reportTo}
       apiUrl={apiUrl}
-      openMake={(id) => router.push(`/make?from=${encodeURIComponent(id)}`)}
+      openMake={(id, cut) => router.push(makeAddress(id, cut))}
     />
   );
 }

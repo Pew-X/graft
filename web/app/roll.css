@@ -1076,3 +1076,70 @@ button:disabled {
     animation: none;
   }
 }
+
+/* the stage's two ways to flip: the whole stage, or a part marked on the record */
+.flip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.mark-toggle {
+  min-height: 44px;
+  margin: 0.5rem 0 0;
+  padding: 0 1.2rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font:
+    500 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.mark-toggle[aria-pressed="true"] {
+  border-color: var(--focus);
+  background: var(--focus);
+  color: var(--bg);
+}
+/* the marked part's action: above the controls, and in portrait just under the stage so it never
+   sits on the brackets it belongs to */
+.mark-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 84px;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+}
+@media (max-aspect-ratio: 9/10) {
+  .mark-bar {
+    bottom: auto;
+    top: 58%;
+  }
+}
+.mark-bar button {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--ink);
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+.mark-bar .primary {
+  border-color: var(--focus);
+  background: var(--focus);
+  color: var(--bg);
+}

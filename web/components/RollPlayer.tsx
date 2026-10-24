@@ -15,6 +15,7 @@ import {
 } from "../lib/playback/index.ts";
 import { coachSeen } from "../lib/coach/seen.ts";
 import { peaksOf } from "../lib/record/disc.ts";
+import { type Mark, markFrames, markSeconds } from "../lib/record/mark.ts";
 import { startTelemetry } from "../lib/telemetry/browser.ts";
 import type { Telemetry } from "../lib/telemetry/telemetry.ts";
 import type { Loader } from "../lib/roll/audio.ts";
@@ -63,7 +64,7 @@ export function RollPlayer({
   /** Where to send best-effort counts (the service's events address); none, no counts. */
   reportTo?: string | undefined;
   /** Go to the make flow for a stage. Absent where the roll is shown without the site around it. */
-  openMake?: ((id: string) => void) | undefined;
+  openMake?: ((id: string, cut?: { start: number; end: number }) => void) | undefined;
   /** Where the bar's make a flip link goes; none, no link. */
   makeHref?: string | undefined;
   /** Where the service is, for reports. Without it there is nowhere to send one, so no report control is shown. */
@@ -113,6 +114,9 @@ export function RollPlayer({
   const viewportEl = useRef<HTMLDivElement>(null);
   const notesEl = useRef<HTMLDivElement>(null);
   // the first-visit coach: shown once to a browser that has not seen it, and again on request
+  // marking a part of a stage on the record, to flip just that part
+  const [marking, setMarking] = useState(false);
+  const [mark, setMark] = useState<Mark | null>(null);
   const [coachOpen, setCoachOpen] = useState(false);
   const coachChecked = useRef(false);
   const place = useCallback((): void => {
@@ -335,8 +339,16 @@ export function RollPlayer({
     return stage === null || position === null ? null : { stage, position };
   }, []);
 
+  const markCut = mark ? markFrames(mark, (lengths[mark.stage] ?? 0) * 48_000) : null;
+  const markLabel =
+    mark && markCut
+      ? fill(copy.mark.seconds, {
+          n: markSeconds(mark, (lengths[mark.stage] ?? 0) * 48_000).toFixed(2),
+        })
+      : undefined;
   const status =
     notice ||
+    (marking && !markCut ? copy.mark.drag : "") ||
     (load === "loading"
       ? copy.hint.loading
       : load === "failed"
@@ -372,6 +384,22 @@ export function RollPlayer({
     },
     [blocks, lastId, openMake],
   );
+  const toggleMarking = useCallback(() => {
+    setMarking((on) => !on);
+    setMark(null);
+  }, []);
+  // escape leaves marking and clears the part
+  useEffect(() => {
+    if (!marking) return undefined;
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === "Escape") {
+        setMarking(false);
+        setMark(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [marking]);
   const [reporting, setReporting] = useState<{ id: string; title: string } | null>(null);
   const onReport = useCallback(
     (index: number) => {
@@ -423,6 +451,9 @@ export function RollPlayer({
             // Some phones only unlock audio on the release of a touch, not its start.
             void audio.current?.unlock().catch(() => undefined);
           }}
+          marking={marking}
+          mark={mark ? { ...mark, ...(markLabel ? { label: markLabel } : {}) } : null}
+          onMark={setMark}
         />
       ) : null}
 
@@ -478,6 +509,8 @@ export function RollPlayer({
                 onPlay={onPlay}
                 onFlip={onFlip}
                 onReport={apiUrl ? onReport : undefined}
+                onMark={openMake ? toggleMarking : undefined}
+                marking={marking}
                 register={register}
                 onFocusBlock={onFocusBlock}
               />
@@ -494,8 +527,12 @@ export function RollPlayer({
       </div>
 
       <div className="notes" ref={notesEl}>
-        <p className="status" role="status" data-empty={status === ""}>
-          {status}
+        <p
+          className="status"
+          role="status"
+          data-empty={status === "" || (marking && markCut !== null)}
+        >
+          {marking && markCut ? "" : status}
         </p>
         {load === "failed" ? (
           <button
@@ -514,6 +551,24 @@ export function RollPlayer({
           {announcement}
         </p>
       </div>
+
+      {marking && markCut && mark ? (
+        <div className="mark-bar" role="group" aria-label={copy.mark.toggle}>
+          <button
+            type="button"
+            className="primary"
+            onClick={() => {
+              const id = blocks[mark.stage]?.id;
+              if (id) openMake?.(id, markCut);
+            }}
+          >
+            {copy.mark.flipPart} · {markLabel}
+          </button>
+          <button type="button" onClick={() => setMark(null)}>
+            {copy.mark.clear}
+          </button>
+        </div>
+      ) : null}
 
       <div className="controls" role="group" aria-label={copy.controls.label}>
         <button type="button" disabled={disabled} onClick={() => act((e) => e.previous())}>

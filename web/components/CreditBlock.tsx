@@ -50,6 +50,9 @@ interface Props {
   onFlip: (index: number) => void;
   /** Absent where reports cannot be sent (no service to send them to). */
   onReport?: ((index: number) => void) | undefined;
+  /** Mark a part of this stage on the record to flip; absent where the roll has no way to make. */
+  onMark?: (() => void) | undefined;
+  marking?: boolean;
   register: (index: number, node: HTMLLIElement | null) => void;
   onFocusBlock: (index: number) => void;
 }
@@ -71,6 +74,8 @@ export const CreditBlock = memo(function CreditBlock({
   register,
   onFocusBlock,
   onReport,
+  onMark,
+  marking = false,
 }: Props) {
   const heading = `stage-${block.id}`;
   return (
@@ -114,9 +119,16 @@ export const CreditBlock = memo(function CreditBlock({
           </div>
         )}
         {/* The action comes straight after the title, where it is on the first screen; the facts follow. */}
-        <button type="button" className="flip primary" onClick={() => onFlip(block.index)}>
-          {copy.flip.label}
-        </button>
+        <div className="flip-row">
+          <button type="button" className="flip primary" onClick={() => onFlip(block.index)}>
+            {copy.flip.label}
+          </button>
+          {onMark && hero && block.state === "available" && !disabled ? (
+            <button type="button" className="mark-toggle" aria-pressed={marking} onClick={onMark}>
+              {marking ? copy.mark.stop : copy.mark.toggle}
+            </button>
+          ) : null}
+        </div>
         <dl className="face">
           {block.face.map((line) => (
             <Line key={`${line.role}-${line.value}`} line={line} />

@@ -14,6 +14,7 @@
  * drawn once and reused.
  */
 import { bandOuter, layout, needleAt, hit, type DiscLayout } from "./disc.ts";
+import type { Mark } from "./mark.ts";
 
 export interface StageLook {
   /** The stage's dye, `#rrggbb`. */
@@ -41,6 +42,8 @@ export interface Scene {
   reduced: boolean;
   /** Draw the plain version: no turning, no push. */
   cached?: boolean;
+  /** A part of a stage being marked for a flip, with the words to show beside it. */
+  mark?: (Mark & { label?: string }) | null;
 }
 
 const TAU = Math.PI * 2;
@@ -201,6 +204,75 @@ function paintBeam(ctx: CanvasRenderingContext2D, l: DiscLayout, s: Scene, disc:
 }
 
 /** The lacquer sheen, the rim, the tonearm and stylus, and the hover: what is drawn over the grooves. */
+/**
+ * Where a marked part lies on the record: the two radii it spans (the outer one is where it starts, as
+ * time runs inward) and the angle it is drawn around, which is where the needle sits: to the left of the
+ * centre in landscape, above it in portrait.
+ */
+export function markSector(
+  l: DiscLayout,
+  m: Mark,
+): { rOuter: number; rInner: number; centre: number; spread: number } {
+  const top = bandOuter(l, m.stage);
+  return {
+    rOuter: top - m.from * l.slotW,
+    rInner: top - m.to * l.slotW,
+    centre: l.portrait ? -Math.PI / 2 : Math.PI,
+    spread: 0.32,
+  };
+}
+
+/** The marked part, drawn as a viewfinder: the part lit, and a bracket in each corner. */
+function paintMark(
+  ctx: CanvasRenderingContext2D,
+  l: DiscLayout,
+  m: Mark & { label?: string },
+): void {
+  const { rOuter, rInner, centre, spread } = markSector(l, m);
+  const a0 = centre - spread;
+  const a1 = centre + spread;
+  ctx.fillStyle = "rgba(168,255,184,0.2)";
+  ctx.beginPath();
+  ctx.arc(l.cx, l.cy, rOuter, a0, a1);
+  ctx.arc(l.cx, l.cy, rInner, a1, a0, true);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = PHOSPHOR;
+  ctx.lineWidth = 3;
+  ctx.lineCap = "square";
+  const arm = Math.max(4, Math.min(14, rOuter - rInner));
+  for (const [r, toward] of [
+    [rOuter, -1],
+    [rInner, 1],
+  ] as const) {
+    for (const [a, along] of [
+      [a0, 0.07],
+      [a1, -0.07],
+    ] as const) {
+      ctx.beginPath();
+      ctx.arc(l.cx, l.cy, r, a, a + along, along < 0);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(l.cx + r * Math.cos(a), l.cy + r * Math.sin(a));
+      ctx.lineTo(l.cx + (r + toward * arm) * Math.cos(a), l.cy + (r + toward * arm) * Math.sin(a));
+      ctx.stroke();
+    }
+  }
+  if (m.label) {
+    ctx.font = "500 12px ui-monospace, monospace";
+    ctx.fillStyle = PHOSPHOR;
+    ctx.shadowColor = "rgba(0,0,0,.9)";
+    ctx.shadowBlur = 4;
+    ctx.textAlign = l.portrait ? "center" : "right";
+    ctx.fillText(
+      m.label,
+      l.portrait ? l.cx : l.cx - rOuter - 12,
+      l.portrait ? l.cy - rOuter - 12 : l.cy + 4,
+    );
+    ctx.shadowBlur = 0;
+  }
+}
+
 export function paintOverlay(ctx: CanvasRenderingContext2D, s: Scene): void {
   const l = layout(s.width, s.height, s.stages.length);
   const th = THEME[s.theme];
@@ -232,6 +304,8 @@ export function paintOverlay(ctx: CanvasRenderingContext2D, s: Scene): void {
   ctx.beginPath();
   ctx.arc(cx, cy, l.R, 0, TAU);
   ctx.stroke();
+
+  if (s.mark) paintMark(ctx, l, s.mark);
 
   // The tonearm, from its pivot to the stylus.
   const P = l.pivot;
