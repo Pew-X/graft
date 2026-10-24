@@ -317,6 +317,42 @@ async fn an_address_that_keeps_failing_the_admin_secret_waits_even_with_the_righ
 }
 
 #[tokio::test]
+async fn metrics_need_the_operator_secret_and_share_its_lockout_with_the_admin_routes() {
+    let h = with_secret(|c| c.guardrails.admin_failures_per_ip.count = 3).await;
+    let right = [(ADMIN, SECRET)];
+    let (status, _, page) = h
+        .send_from("203.0.113.90", "GET", "/metrics", &right, None)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        page.to_string().contains("graft_http_requests_total"),
+        "{page}"
+    );
+    for headers in [vec![], vec![(ADMIN, "a-wrong-secret-0123456789abc")]] {
+        let (status, _, body) = h
+            .send_from("203.0.113.91", "GET", "/metrics", &headers, None)
+            .await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{headers:?}");
+        assert!(
+            !body.to_string().contains("graft_"),
+            "a refusal shows no metrics"
+        );
+    }
+    // Wrong guesses at /metrics and at an admin route draw on one allowance per address.
+    let wrong = [(ADMIN, "a-wrong-secret-0123456789abc")];
+    for uri in ["/metrics", "/admin/reports", "/metrics"] {
+        let (status, _, _) = h.send_from("203.0.113.92", "GET", uri, &wrong, None).await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+    }
+    for uri in ["/metrics", "/admin/reports"] {
+        let (status, headers, _) = h.send_from("203.0.113.92", "GET", uri, &right, None).await;
+        assert_eq!(status, StatusCode::TOO_MANY_REQUESTS, "{uri}");
+        assert!(headers.contains_key("retry-after"));
+    }
+    h.finish().await;
+}
+
+#[tokio::test]
 async fn reports_have_their_own_limit_per_address() {
     let h = with_secret(|c| c.guardrails.report_per_ip.count = 2).await;
     let parent = source(&h).await;

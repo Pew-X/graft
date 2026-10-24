@@ -40,6 +40,10 @@ pub fn host() -> Arc<RenderHost> {
     .clone()
 }
 
+/// The operator secret every harness is built with unless a test sets its own or removes it: the
+/// operator's routes, `/metrics` among them, refuse everything when none is configured.
+pub const HARNESS_OPERATOR_SECRET: &str = "a-harness-operator-secret-0123456789";
+
 pub struct Harness {
     pub db: TestDb,
     pub blobs: Arc<MemoryBlobStore>,
@@ -50,6 +54,8 @@ pub struct Harness {
     pub clock: Arc<graft_api::guard::ManualClock>,
     /// The state the router was built from, for tests that call the service's functions directly.
     pub state: AppState,
+    /// The operator secret the service was configured with, if any.
+    pub operator_secret: Option<String>,
 }
 
 pub fn renderer() -> RendererIdentity {
@@ -118,7 +124,9 @@ impl Harness {
         // ...and so is the storage threshold: the limit sits above the overshoot bound of that burst.
         config.guardrails.storage_limit_bytes =
             config.guardrails.overshoot_bound_bytes(&config.limits) + 8_000_000_000;
+        config.admin_secret = Some(HARNESS_OPERATOR_SECRET.to_owned());
         tweak(&mut config);
+        let operator_secret = config.admin_secret.clone();
         let limits = config.limits.clone();
         let renderer: Arc<dyn Render> = host();
         let store = db.store.clone().with_gate(gate(db.store.pool().clone()));
@@ -136,6 +144,7 @@ impl Harness {
             metrics,
             clock,
             state,
+            operator_secret,
         }
     }
 
@@ -351,6 +360,33 @@ impl Harness {
         let (parts, body) = response.into_parts();
         let bytes = body.collect().await.expect("body").to_bytes();
         (parts.status, parts.headers, bytes.to_vec())
+    }
+
+    /// What the operator's scraper reads from `/metrics`: the page, with the operator secret the
+    /// service was configured with.
+    pub async fn scrape(&self) -> String {
+        let mut request = Request::builder().uri("/metrics");
+        if let Some(secret) = &self.operator_secret {
+            request = request.header("x-graft-admin-secret", secret.as_str());
+        }
+        let response = self
+            .app
+            .clone()
+            .oneshot(request.body(Body::empty()).expect("request"))
+            .await
+            .expect("response");
+        assert_eq!(
+            response.status(),
+            StatusCode::OK,
+            "the operator may read /metrics"
+        );
+        let bytes = response
+            .into_body()
+            .collect()
+            .await
+            .expect("body")
+            .to_bytes();
+        String::from_utf8_lossy(&bytes).into_owned()
     }
 
     pub async fn raw(&self, uri: &str) -> String {

@@ -1,5 +1,16 @@
 name: deploy
 
+# NOT READY TO ENABLE. Three known gaps, found by review after the first deploy was done by script
+# (scripts/aws-dev.sh, whose `redeploy` is the tested path):
+#   1. Architecture: the service runs on ARM64, and this builds on an x86 runner with no --platform, so
+#      the image would not start. It needs an ARM64 build (an arm runner, or buildx with emulation).
+#   2. The image tag is the commit, and the repository's tags are immutable: a re-run for the same
+#      commit cannot push. It needs a tag that differs per attempt, or a skip when the tag exists.
+#   3. The roll uses plain `update-service`; the service is ECS Express, updated with
+#      `update-express-gateway-service --task-definition-arn`, and an Express roll takes ten minutes or
+#      more with two tasks, so the wait must be for the new revision to be primary and complete.
+# Also unproven: nothing here has run. Rework and run it once on dev before DEPLOY_ENABLED is set.
+#
 # WRITTEN, NEVER RUN. It is inert until the repository variable DEPLOY_ENABLED is "true" and each GitHub
 # environment (dev, staging, production) holds the variables listed below, so a push today only shows
 # a skipped job. Nothing here is a secret: the role is assumed through GitHub's OIDC token and
@@ -66,7 +77,9 @@ jobs:
           CLUSTER: ${{ vars.ECS_CLUSTER }}
           SERVICE: ${{ vars.ECS_SERVICE }}
         run: |
-          previous=$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" --query 'services[0].taskDefinition' --output text)
+          # An Express service has no task definition on the service itself; the running revision is the
+          # primary deployment's (the service's own field reads None, found on the first deploy).
+          previous=$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" --query "services[0].deployments[?status=='PRIMARY'].taskDefinition | [0]" --output text)
           echo "previous=$previous" >> "$GITHUB_OUTPUT"
           # Based on the revision the service is running, not the family's latest: a failed earlier deploy
           # leaves a newer revision registered that nothing should inherit.

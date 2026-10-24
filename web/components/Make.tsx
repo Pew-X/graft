@@ -10,16 +10,17 @@ import { Previewer } from "../lib/make/preview.ts";
 import { RENDERER_PATH, loadRenderer, type Renderer } from "../lib/make/renderer.ts";
 import type { Sound } from "../lib/make/sounds.ts";
 import { entryAt, indexOf, parseSpeed, step, STOPS } from "../lib/make/speed.ts";
-import { useAsync } from "../lib/make/use-async.ts";
+import { type Async, useAsync } from "../lib/make/use-async.ts";
 import { fetchPcm } from "../lib/roll/pcm.ts";
 import { describeSpeed } from "../lib/roll/speed.ts";
 import { CutEditor } from "./CutEditor.tsx";
-import { readFeatures } from "../lib/own/features.ts";
+import { type Features, readFeatures } from "../lib/own/features.ts";
 import { type Basis, DECLARATION_TEXT, sourceBody } from "../lib/own/source.ts";
 import { OwnSound } from "./OwnSound.tsx";
 import { PublishStep } from "./PublishStep.tsx";
 import { TrimStep } from "./TrimStep.tsx";
 import { SoundPicker } from "./SoundPicker.tsx";
+import { Steps } from "./Steps.tsx";
 
 /** The first thing heard is a flip, not the sound unchanged: up a fifth. */
 const DEFAULT_SPEED = { p: 3, q: 2 };
@@ -90,6 +91,16 @@ export function Make({
         ? { kind: "live", id: from }
         : null;
 
+  // Asked when the page opens at the picker (a page opened on a stage, `?from=`, has no own-sound block
+  // and asks nothing), so the own-sound block can say up front whether publishing a sound of one's own
+  // is open and the editor can use the same answer: nothing more than this one read leaves the device
+  // before a publish. If that read failed, choosing a sound of one's own asks once more. A service that
+  // cannot be asked says nothing.
+  const [featuresTry, setFeaturesTry] = useState(0);
+  const features = useAsync(from === null ? `features:${featuresTry}` : null, (signal) =>
+    readFeatures(apiUrl, signal),
+  );
+
   const [engineTry, setEngineTry] = useState(0);
   const engine = useAsync(`renderer:${engineTry}`, renderer);
 
@@ -106,6 +117,15 @@ export function Make({
   return (
     <div className="make" data-testid="make">
       <p className="kicker">{copy.make.kicker}</p>
+      {(origin === null && own !== null && toTrim === null) ||
+      (origin !== null && sound.status === "ready") ? null : (
+        <Steps current={origin === null ? 1 : 2} />
+      )}
+      {origin === null && own === null && toTrim === null ? (
+        <p className="lede" data-testid="make-intro">
+          {copy.make.intro}
+        </p>
+      ) : null}
       {origin === null && toTrim !== null ? (
         <TrimStep
           samples={toTrim}
@@ -120,6 +140,7 @@ export function Make({
           key="own"
           title={copy.own.title}
           own
+          features={features}
           parentId={null}
           apiUrl={apiUrl}
           samples={own}
@@ -132,7 +153,12 @@ export function Make({
       ) : origin === null ? (
         <SoundPicker curated={curated} flips={flips} onChoose={setPicked}>
           <OwnSound
-            onSound={(samples, needsTrim) => (needsTrim ? setToTrim(samples) : setOwn(samples))}
+            uploads={features.status === "ready" ? features.value.uploads : null}
+            onSound={(samples, needsTrim) => {
+              if (features.status === "failed") setFeaturesTry((n) => n + 1);
+              if (needsTrim) setToTrim(samples);
+              else setOwn(samples);
+            }}
           />
         </SoundPicker>
       ) : sound.status === "ready" ? (
@@ -140,6 +166,7 @@ export function Make({
           key={origin.kind === "shipped" ? origin.sound.id : origin.id}
           title={origin.kind === "shipped" ? origin.sound.title : null}
           own={false}
+          features={features}
           parentId={origin.kind === "shipped" ? origin.sound.id : origin.id}
           apiUrl={apiUrl}
           samples={sound.value}
@@ -193,6 +220,7 @@ class GoneError extends Error {}
 function Editor({
   title,
   own,
+  features,
   parentId,
   apiUrl,
   samples,
@@ -205,6 +233,8 @@ function Editor({
   title: string | null;
   /** The maker's own sound, not yet published: it must be published as a source before it can be flipped. */
   own: boolean;
+  /** What the service said is open, asked once by the page; it is only acted on for a sound of one's own. */
+  features: Async<Features>;
   parentId: string | null;
   apiUrl: string;
   samples: Int16Array;
@@ -228,10 +258,9 @@ function Editor({
   const [publishingSource, setPublishingSource] = useState(false);
   const [basis, setBasis] = useState<Basis>("own_recording");
   const [confirmed, setConfirmed] = useState(false);
-  const features = useAsync(own ? "features" : null, (signal) => readFeatures(apiUrl, signal));
   const flipParent = own ? sourceId : parentId;
   const closedWhy =
-    features.status !== "ready"
+    !own || features.status !== "ready"
       ? null
       : !features.value.publishing
         ? copy.own.closed
@@ -287,6 +316,7 @@ function Editor({
 
   return (
     <>
+      <Steps current={publishing || publishingSource ? 3 : 2} />
       <div className="stage-head">
         {title ? (
           <h2 className="slab" data-k="src" data-dye="0">

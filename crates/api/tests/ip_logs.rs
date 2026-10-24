@@ -97,7 +97,7 @@ async fn no_address_appears_in_any_stored_row_log_line_or_metric() {
         )
         .await;
     }
-    let metrics = h.raw("/metrics").await;
+    let metrics = h.scrape().await;
     let logs = String::from_utf8(capture.0.lock().expect("lock").clone()).expect("utf-8");
     assert!(
         logs.contains("request finished"),

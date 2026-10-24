@@ -29,6 +29,7 @@ export function LiveRoll({
   const router = useRouter();
   return (
     <RollPlayer
+      makeHref="/make"
       blocks={blocks}
       load={load}
       truncated={truncated}

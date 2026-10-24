@@ -39,6 +39,12 @@ docker run -d --name "$name" $env_args -e GRAFT_CORS_ORIGINS=http://127.0.0.1:31
 for _ in $(seq 1 40); do curl -fs "http://127.0.0.1:$port/ready" >/dev/null 2>&1 && break; docker ps -q -f name="$name" | grep -q . || { docker logs "$name" | tail -5; exit 1; }; sleep 1; done
 echo "ready:    $(curl -fs "http://127.0.0.1:$port/ready")"
 echo "features: $(curl -fs "http://127.0.0.1:$port/v1/features")"
+# /metrics is the operator's: no secret and a wrong secret are refused, the right one is let in.
+none=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/metrics")
+wrong=$(curl -s -o /dev/null -w '%{http_code}' -H 'x-graft-admin-secret: not-the-secret' "http://127.0.0.1:$port/metrics")
+right=$(curl -s -o /dev/null -w '%{http_code}' -H 'x-graft-admin-secret: image-check-secret-0123456789' "http://127.0.0.1:$port/metrics")
+echo "metrics:  no secret $none, wrong secret $wrong, right secret $right"
+if [ "$none" != 403 ] || [ "$wrong" != 403 ] || [ "$right" != 200 ]; then echo "FAIL: /metrics is not protected as it should be"; exit 1; fi
 leaf=$(node -e 'const s=JSON.parse(require("fs").readFileSync("web/snapshot/chain.json","utf8")).stages; console.log(s[s.length-1].id)')
 stages=$(curl -fs "http://127.0.0.1:$port/v1/chains/$leaf" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>console.log(JSON.parse(d).stages.length))')
 want=$(node -e 'console.log(JSON.parse(require("fs").readFileSync("web/snapshot/chain.json","utf8")).stages.length)')

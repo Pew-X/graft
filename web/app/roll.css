@@ -131,10 +131,14 @@ button:disabled {
   outline: 3px solid var(--focus);
   outline-offset: -3px;
 }
+/* until the first play the two plain lines already say to drag the needle, so the caption waits */
+.roll[data-playback="idle"] .record-caption {
+  display: none;
+}
 .record-caption {
   position: absolute;
   right: 3vw;
-  bottom: 84px;
+  bottom: 112px;
   margin: 0;
   font:
     500 11px var(--f-mono),
@@ -174,6 +178,10 @@ button:disabled {
 }
 .bar .meta {
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   text-align: center;
   font:
     500 11px var(--f-mono),
@@ -183,9 +191,35 @@ button:disabled {
   text-transform: uppercase;
   color: var(--muted);
 }
-.bar .theme {
+.bar .make-link {
   pointer-events: auto;
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 1.1rem;
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  font:
+    600 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.bar .make-link:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+.bar .theme {
+  white-space: nowrap;
+  pointer-events: auto;
+  margin-left: 0;
+  min-height: 44px;
   font:
     500 11px var(--f-mono),
     ui-monospace,
@@ -239,7 +273,8 @@ button:disabled {
   position: relative;
   margin: 0 0 0 7vw;
   max-width: min(520px, calc(100vw - var(--R) - 11vw));
-  padding: 12vh 0;
+  /* a shorter gap above (the stage starts nearer the header), the full gap below (the next stage stays where it was) */
+  padding: min(12vh, 64px) 0 12vh;
   /* The text does not catch the pointer, so the record under it stays touchable; its controls do. */
   pointer-events: none;
   transition: opacity 0.6s;
@@ -267,8 +302,8 @@ button:disabled {
    portrait above the record. However tall it is (a long chain's details open, a short screen, large
    text) every line and "flip this" can be reached by touch, mouse and keyboard. */
 .block[data-hero="true"] > article {
-  /* the block starts at 72px (under the header) and has 12vh of padding above the article; keep 96px free for the controls */
-  max-height: calc(100dvh - 72px - 12vh - 96px);
+  /* the block starts at 72px (under the header) and has 12vh of padding above the article; stop above the status text and the two plain lines, whose real height the page measures (--notes-h), so nothing is drawn over the stage's text or buttons */
+  max-height: calc(100dvh - 72px - min(12vh, 64px) - 84px - var(--notes-h, 140px) - 16px);
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
@@ -524,6 +559,14 @@ button:disabled {
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
+.flip.primary {
+  min-height: 44px;
+  padding: 0 1.4rem;
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+  font-weight: 600;
+}
 .cursor {
   display: inline-block;
   width: 2px;
@@ -572,6 +615,26 @@ button:disabled {
     monospace;
   letter-spacing: 0.1em;
   text-transform: uppercase;
+  color: var(--muted);
+}
+/* what to do, in two lines, until the first play: on its own backing so it reads over the record */
+.notes .how {
+  margin: 0.25rem 0 0;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: var(--bg);
+  font:
+    400 12px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+.notes .how p {
+  margin: 0;
+}
+.notes .how p + p {
+  margin-top: 0.3rem;
   color: var(--muted);
 }
 .notes .retry {
@@ -697,6 +760,11 @@ button:disabled {
   .notes .hint {
     display: none;
   }
+  .notes .how {
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+  }
   .record-caption {
     right: auto;
     left: 22px;
@@ -706,7 +774,7 @@ button:disabled {
     left: 22px;
     right: 22px;
     bottom: auto;
-    top: 48px;
+    top: 70px;
     max-width: none;
     padding: 0;
     border-radius: 0;
@@ -843,4 +911,17 @@ button:disabled {
   padding: 0.25rem 0.5rem;
   text-align: left;
   white-space: nowrap;
+}
+
+/* a narrow screen: the two header buttons share the width, so their lettering is tighter and neither wraps */
+@media (max-width: 420px) {
+  .bar {
+    padding: 8px 14px;
+    gap: 0.5rem;
+  }
+  .bar .make-link,
+  .bar .theme {
+    padding: 0 0.8rem;
+    letter-spacing: 0.06em;
+  }
 }

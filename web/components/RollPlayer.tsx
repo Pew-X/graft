@@ -51,6 +51,7 @@ export function RollPlayer({
   truncated = false,
   reportTo,
   openMake,
+  makeHref,
   apiUrl,
 }: {
   blocks: readonly Block[];
@@ -61,6 +62,8 @@ export function RollPlayer({
   reportTo?: string | undefined;
   /** Go to the make flow for a stage. Absent where the roll is shown without the site around it. */
   openMake?: ((id: string) => void) | undefined;
+  /** Where the bar's make a flip link goes; none, no link. */
+  makeHref?: string | undefined;
   /** Where the service is, for reports. Without it there is nowhere to send one, so no report control is shown. */
   apiUrl?: string | undefined;
 }) {
@@ -105,6 +108,8 @@ export function RollPlayer({
   // The first placement is instant; only the moves after it slide.
   const [placed, setPlaced] = useState(false);
   const sheet = useRef<HTMLDivElement>(null);
+  const viewportEl = useRef<HTMLDivElement>(null);
+  const notesEl = useRef<HTMLDivElement>(null);
   const place = useCallback((): void => {
     const node = nodes.current[hero];
     if (!node) return;
@@ -112,9 +117,35 @@ export function RollPlayer({
     const portrait = window.innerWidth < h * 0.9;
     // Landscape: the stage is centred a little above the middle. Portrait: it starts below the header.
     // A tall stage starts just under the header instead of being pushed up out of sight.
-    const top = portrait ? Math.max(h * 0.12, 96) : Math.max(72, h * 0.46 - node.offsetHeight / 2);
+    // Landscape also never lets the stage run under the status text: the latest top that keeps its
+    // last line (the block's bottom padding is empty) above the notes, with a little air.
+    const notesH = notesEl.current?.getBoundingClientRect().height ?? 0;
+    const padBottom = Number.parseFloat(getComputedStyle(node).paddingBottom) || 0;
+    const latest = h - 92 - notesH - node.offsetHeight + padBottom;
+    const top = portrait
+      ? Math.max(h * 0.12, 96)
+      : Math.max(72, Math.min(h * 0.46 - node.offsetHeight / 2, latest));
     setShift(Math.round(top - node.offsetTop));
   }, [hero]);
+  // The status text and the two plain lines sit over the bottom of the left column. Their real height
+  // is published (on the viewport, not on the root, whose attributes are the page's observable state)
+  // so the stage in view stops above them, whatever they say and however they wrap.
+  useLayoutEffect(() => {
+    const viewport = viewportEl.current;
+    const notes = notesEl.current;
+    if (!viewport || !notes) return undefined;
+    const publish = (): void => {
+      viewport.style.setProperty(
+        "--notes-h",
+        `${Math.ceil(notes.getBoundingClientRect().height)}px`,
+      );
+    };
+    publish();
+    if (typeof ResizeObserver === "undefined") return undefined;
+    const watch = new ResizeObserver(publish);
+    watch.observe(notes);
+    return () => watch.disconnect();
+  }, [place]);
   useLayoutEffect(() => {
     place();
     const settle = requestAnimationFrame(() => setPlaced(true));
@@ -364,10 +395,16 @@ export function RollPlayer({
               })
             : ""}
         </span>
+        {makeHref ? (
+          // A plain link, not Next's: this component is also bundled by the browser tests outside Next.
+          <a href={makeHref} className="make-link">
+            {copy.flip.makeLink}
+          </a>
+        ) : null}
         <ThemeToggle />
       </header>
 
-      <div className="viewport">
+      <div className="viewport" ref={viewportEl}>
         <div
           className="sheet"
           data-placed={placed}
@@ -403,7 +440,7 @@ export function RollPlayer({
         </div>
       </div>
 
-      <div className="notes">
+      <div className="notes" ref={notesEl}>
         <p className="status" role="status" data-empty={status === ""}>
           {status}
         </p>
@@ -419,7 +456,12 @@ export function RollPlayer({
             {copy.retry}
           </button>
         ) : null}
-        {state.kind === "idle" ? <p className="hint">{copy.hint.order}</p> : null}
+        {state.kind === "idle" ? (
+          <div className="how" data-testid="how-it-works">
+            <p>{copy.hint.how1}</p>
+            <p>{makeHref ? copy.hint.how2 : copy.hint.how2Plain}</p>
+          </div>
+        ) : null}
         {truncated ? <p className="hint">{copy.states.truncated}</p> : null}
         <p className="visually-hidden" role="status" aria-live="polite">
           {announcement}

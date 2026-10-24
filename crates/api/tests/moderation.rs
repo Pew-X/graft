@@ -249,7 +249,7 @@ async fn the_admin_lists_reports_newest_first_with_each_publications_current_sta
 async fn a_wrong_missing_or_unconfigured_secret_gets_the_identical_refusal_and_changes_nothing() {
     let h = harness().await;
     let ids = chain_of_four(&h).await;
-    let unconfigured = Harness::new().await; // no admin secret at all
+    let unconfigured = Harness::configured(|c| c.admin_secret = None).await; // no admin secret at all
     let wrong = "w".repeat(30);
     let mut bodies = Vec::new();
     for (harness, secret) in [

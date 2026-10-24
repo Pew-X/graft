@@ -150,7 +150,6 @@ pub fn router(state: AppState, config: &Config) -> Router {
     Router::new()
         .route("/health", get(health))
         .route("/ready", get(ready))
-        .route("/metrics", get(metrics))
         .route("/openapi.json", get(routes::openapi))
         .route("/v1/chains/{id}", get(routes::get_chain))
         .route("/v1/features", get(routes::get_features))
@@ -262,8 +261,12 @@ async fn body_deadline(
 }
 
 /// The operator routes. The secret is checked by a layer, before any query or body is parsed.
+/// `/metrics` is one of them: it shows how the service is doing, and its ledger-lag line runs a
+/// database query on every read, so an open address would let anyone make the service query for
+/// them. With no secret configured every one of these refuses, `/metrics` included.
 fn admin_routes(state: AppState) -> Router<AppState> {
     Router::new()
+        .route("/metrics", get(metrics))
         .route("/admin/reports", get(moderation::list_reports))
         .route("/admin/rollups", get(crate::events::get_rollups))
         .route(
@@ -529,6 +532,37 @@ mod tests {
             .expect("valid config")
     }
 
+    const OPERATOR_SECRET: &str = "a-unit-test-operator-secret-0123456789";
+
+    /// A router whose configuration names an operator secret (`None`: none at all).
+    fn app_with_secret(secret: Option<&str>) -> Router {
+        let mut cfg = config();
+        cfg.admin_secret = secret.map(str::to_owned);
+        let store = Store::connect_lazy("postgres://u:p@127.0.0.1:1/none", 1).expect("lazy store");
+        let state = AppState::new(
+            &cfg,
+            store,
+            Arc::new(graft_storage::MemoryBlobStore::default()),
+            Arc::new(NoRenderer),
+        );
+        router(state, &cfg)
+    }
+
+    async fn scrape(app: &Router, secret: Option<&str>) -> (StatusCode, String) {
+        let mut request = Request::builder().method("GET").uri("/metrics");
+        if let Some(secret) = secret {
+            request = request.header("x-graft-admin-secret", secret);
+        }
+        let response = app
+            .clone()
+            .oneshot(request.body(Body::empty()).expect("request"))
+            .await
+            .expect("response");
+        let (parts, body) = response.into_parts();
+        let bytes = body.collect().await.expect("body").to_bytes();
+        (parts.status, String::from_utf8_lossy(&bytes).into_owned())
+    }
+
     /// A renderer that is never called: these tests are about the HTTP shell, not publishing.
     struct NoRenderer;
 
@@ -654,22 +688,34 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn the_metrics_endpoint_exposes_request_count_and_latency_by_route() {
-        let (app, _) = app(Arc::new(Ok_));
+    async fn the_metrics_endpoint_exposes_request_count_and_latency_by_route_to_the_operator() {
+        let app = app_with_secret(Some(OPERATOR_SECRET));
         call(&app, "GET", "/health").await;
         call(&app, "GET", "/health").await;
-        let (status, headers, body) = call(&app, "GET", "/metrics").await;
+        let (status, body) = scrape(&app, Some(OPERATOR_SECRET)).await;
         assert_eq!(status, StatusCode::OK);
-        assert!(
-            headers[header::CONTENT_TYPE]
-                .to_str()
-                .expect("ascii")
-                .starts_with("text/plain")
-        );
         assert!(body.contains(
             "graft_http_requests_total{method=\"GET\",route=\"/health\",status=\"200\"} 2"
         ));
         assert!(body.contains("graft_http_request_duration_seconds_count{route=\"/health\"} 2"));
+    }
+
+    #[tokio::test]
+    async fn the_metrics_endpoint_shows_nothing_without_the_operator_secret_or_when_none_is_configured()
+     {
+        let configured = app_with_secret(Some(OPERATOR_SECRET));
+        for secret in [None, Some(""), Some("a-wrong-secret-0123456789abc")] {
+            let (status, body) = scrape(&configured, secret).await;
+            assert_eq!(status, StatusCode::FORBIDDEN, "{secret:?}");
+            assert!(!body.contains("graft_"), "a refusal shows no metrics");
+        }
+        // No secret configured: nothing is let in, not even an empty or a guessed value.
+        let unconfigured = app_with_secret(None);
+        for secret in [None, Some(""), Some(OPERATOR_SECRET)] {
+            let (status, body) = scrape(&unconfigured, secret).await;
+            assert_eq!(status, StatusCode::FORBIDDEN, "unconfigured, {secret:?}");
+            assert!(!body.contains("graft_"));
+        }
     }
 
     #[tokio::test]

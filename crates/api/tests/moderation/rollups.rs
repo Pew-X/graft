@@ -171,7 +171,7 @@ async fn the_metrics_expose_the_relay_backlog_and_the_consumer_lag() {
         .append_events(&[client(1, EventKind::RollOpened, now - 90_000, "pub-a")])
         .await
         .expect("append");
-    let text = h.raw("/metrics").await;
+    let text = h.scrape().await;
     assert!(text.contains("graft_relay_backlog 1"), "{text}");
     assert!(text.contains("graft_consumer_lag_seconds 90"), "{text}");
     assert!(text.contains("graft_events_applied_total 0"), "{text}");
