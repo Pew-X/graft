@@ -31,6 +31,8 @@ PREFIX=graft-dev
 CIDR=10.42.0.0/16
 PUB_A_CIDR=10.42.0.0/24; PUB_B_CIDR=10.42.1.0/24; PRIV_A_CIDR=10.42.10.0/24; PRIV_B_CIDR=10.42.11.0/24
 ENGINE_VERSION=16.15
+# Graviton: native to the builder's machine, so the image builds without emulation, and cheaper on Fargate.
+ARCH=ARM64
 MAX_ACU=1
 LOG_GROUP=/$PREFIX/service
 TAGS_KV="Key=Project,Value=graft Key=Env,Value=dev Key=ManagedBy,Value=claude-cli"
@@ -367,7 +369,7 @@ phase_release() {
   cat > "$def" <<EOF
 {"family":"$PREFIX-release","networkMode":"awsvpc","requiresCompatibilities":["FARGATE"],"cpu":"512","memory":"1024",
  "executionRoleArn":"$(role_arn exec)","taskRoleArn":"$(role_arn task)",
- "runtimePlatform":{"cpuArchitecture":"X86_64","operatingSystemFamily":"LINUX"},
+ "runtimePlatform":{"cpuArchitecture":"$ARCH","operatingSystemFamily":"LINUX"},
  "containerDefinitions":[{"name":"graft","image":"$image","essential":true,
   "command":["graft-seed-chain","--manifest","seed/chain.json","--check-snapshot","web"],
   "environment":$(container_env "$origin"),"secrets":$(container_secrets),
@@ -399,16 +401,22 @@ phase_service() {
   cost="BILLS BY THE HOUR while up: an application load balancer (about 0.03 USD/h with its capacity units), 3 public IPv4 addresses (0.005 USD/h each), one 0.5 vCPU / 1 GB Fargate task (about 0.03 USD/h). Roughly 2 USD a day plus the database. Unverified estimate; run status, and teardown when idle."
   ensure_cluster
   pub_a=$(subnet_id public-a); pub_b=$(subnet_id public-b)
-  primary=$(mktmp)
-  cat > "$primary" <<EOF
-{"image":"$image","containerPort":8080,
- "awsLogsConfiguration":{"logGroup":"$LOG_GROUP","logStreamPrefix":"service"},
- "environment":$(container_env "$origin"),"secrets":$(container_secrets)}
+  def=$(mktmp)
+  cat > "$def" <<EOF
+{"family":"$PREFIX-service","networkMode":"awsvpc","requiresCompatibilities":["FARGATE"],"cpu":"512","memory":"1024",
+ "executionRoleArn":"$(role_arn exec)","taskRoleArn":"$(role_arn task)",
+ "runtimePlatform":{"cpuArchitecture":"$ARCH","operatingSystemFamily":"LINUX"},
+ "containerDefinitions":[{"name":"Main","image":"$image","essential":true,
+  "portMappings":[{"containerPort":8080,"name":"http","protocol":"tcp"}],
+  "environment":$(container_env "$origin"),"secrets":$(container_secrets),
+  "logConfiguration":{"logDriver":"awslogs","options":{"awslogs-group":"$LOG_GROUP","awslogs-region":"$REGION","awslogs-stream-prefix":"service"}}}],
+ "tags":[{"key":"Project","value":"graft"},{"key":"Env","value":"dev"},{"key":"ManagedBy","value":"claude-cli"}]}
 EOF
+  td=$(mut "register the service task definition (ARM64, 0.5 vCPU, 1 GB)" ecs register-task-definition --cli-input-json "file://$def" --query taskDefinition.taskDefinitionArn --output text)
   mut "create the Express service $PREFIX: one task, /ready" ecs create-express-gateway-service --service-name "$PREFIX" --cluster "$PREFIX" \
-    --execution-role-arn "$(role_arn exec)" --task-role-arn "$(role_arn task)" --infrastructure-role-arn "$(role_arn infra)" \
-    --health-check-path /ready --cpu 512 --memory 1024 --scaling-target minTaskCount=1,maxTaskCount=1,autoScalingMetric=AVERAGE_CPU \
-    --network-configuration "subnets=$pub_a,$pub_b" --primary-container "file://$primary" \
+    --infrastructure-role-arn "$(role_arn infra)" --task-definition-arn "$td" \
+    --health-check-path /ready --scaling-target minTaskCount=1,maxTaskCount=1,autoScalingMetric=AVERAGE_CPU \
+    --network-configuration "subnets=$pub_a,$pub_b" \
     --tags '[{"key":"Project","value":"graft"},{"key":"Env","value":"dev"},{"key":"ManagedBy","value":"claude-cli"}]' --output json >/dev/null
   [ -z "${DRY_RUN:-}" ] || return 0
   arn="arn:aws:ecs:$REGION:$ACCOUNT:service/$PREFIX/$PREFIX"

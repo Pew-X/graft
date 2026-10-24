@@ -174,18 +174,29 @@ test("a real run puts the generated password in the secret and nowhere else", ()
   assert.doesNotMatch(s.calls().join("\n"), new RegExp(password), "never on a command line");
 });
 
-test("the service is one small task, checked on /ready, in graft's own public subnets", () => {
+test("the service is one small ARM task, checked on /ready, in graft's own public subnets", () => {
   const s = sandbox();
   const out = plan(s.run(["service", "--origin", "https://example.test", "--image", "img:tag"], { DRY_RUN: "1" }));
+  assert.match(out, /register-task-definition/);
+  assert.match(out, /"cpuArchitecture":"ARM64"/);
+  assert.match(out, /"name":"Main"/, "Express requires the container to be named Main");
+  assert.match(out, /"containerPort":8080,"name":"http"/);
+  assert.match(out, /"cpu":"512","memory":"1024"/);
   assert.match(out, /create-express-gateway-service/);
+  assert.match(out, /--task-definition-arn/);
   assert.match(out, /minTaskCount=1,maxTaskCount=1/);
   assert.match(out, /--health-check-path \/ready/);
-  assert.match(out, /--cpu 512 --memory 1024/);
   assert.match(out, /GRAFT_CORS_ORIGINS/);
   assert.match(out, /https:\/\/example\.test/);
   assert.doesNotMatch(out, /GRAFT_UPLOADS/, "uploads stay off");
   const refused = s.run(["service", "--image", "img:tag"], { DRY_RUN: "1" });
   assert.notEqual(refused.status, 0, "the site's origin is required");
+});
+
+test("the release task runs on the same architecture as the service", () => {
+  const out = plan(sandbox().run(["release", "--origin", "https://example.test", "--image", "img:tag"], { DRY_RUN: "1" }));
+  assert.match(out, /"cpuArchitecture":"ARM64"/);
+  assert.match(out, /graft-seed-chain/);
 });
 
 test("a real run records what it created in the ledger, with the id and the cost note", () => {
