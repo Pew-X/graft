@@ -1,0 +1,188 @@
+{
+  "date": "2026-10-24",
+  "repository_commit": "6778d75",
+  "service_image": "built from the service code at dev c45c573 (the commit before the deploy tooling), ARM64",
+  "region": "ap-south-1",
+  "instance": {
+    "service": "ECS Express Mode, Fargate ARM64, 0.5 vCPU, 1 GB, exactly one task",
+    "database": "Aurora Serverless v2, PostgreSQL 16.15, minimum 0, maximum 1 unit (one run at 4), private subnets, TLS required",
+    "load_balancer": "ECS Express Mode application load balancer, shared with the live service"
+  },
+  "dataset": "a clean copy: a second database inside the same cluster, seeded with the 4-stage chain and 10 sources; k6 builds chains of depth 8 and 12 (the cap) in setup; no live data touched",
+  "limits_used": "per-address and global publish limits, report and ingest limits, the storage threshold and the per-stage fork limit were LIFTED on the copy so a single client would measure the service and not the limiter; everything else as deployed; uploads off",
+  "client": "k6 1.0.0 (pinned image) on a laptop over a home connection, one client address; latencies include that network path",
+  "runs": {
+    "smoke": {
+      "profile": "smoke: 8 s per scenario, a check that the script works",
+      "database_maximum": "1 unit",
+      "duration_s": 49.4,
+      "http_requests": 684,
+      "http_failed_rate": 0,
+      "flips_created": 102,
+      "flips_replayed": 11,
+      "key_conflicts_named": 6,
+      "polite_refusals": 1,
+      "true_errors": 0,
+      "accepted_but_unreadable": 0,
+      "publish_ms": {
+        "median": 82.4,
+        "p90": 117,
+        "p95": 121.9,
+        "p99": 167,
+        "max": 178.8
+      },
+      "chain_read_ms": {
+        "median": 14.4,
+        "p90": 22.5,
+        "p95": 26.1,
+        "p99": 39,
+        "max": 53.2
+      },
+      "server_counted": {
+        "created": 102,
+        "replayed": 11,
+        "refused": 7,
+        "database_flipped_count_delta": 102
+      },
+      "counts_reconcile": true
+    },
+    "full": {
+      "profile": "full: 60 s per scenario; 60 reads/s, 6 flips/s (two scenarios), 60 mixed/s (20% flips), a ramp to 12 flips/s",
+      "database_maximum": "1 unit",
+      "duration_s": 309.1,
+      "http_requests": 17121,
+      "http_failed_rate": 0,
+      "flips_created": 1843,
+      "flips_replayed": 263,
+      "key_conflicts_named": 209,
+      "polite_refusals": 1,
+      "true_errors": 0,
+      "accepted_but_unreadable": 0,
+      "publish_ms": {
+        "median": 78.7,
+        "p90": 90.1,
+        "p95": 99,
+        "p99": 132.3,
+        "max": 311
+      },
+      "chain_read_ms": {
+        "median": 11.8,
+        "p90": 14.6,
+        "p95": 15.9,
+        "p99": 26,
+        "max": 312
+      },
+      "server_counted": {
+        "created": 1843,
+        "replayed": 263,
+        "refused": 210,
+        "database_flipped_count_delta": 1843
+      },
+      "counts_reconcile": true
+    },
+    "stress_1_unit": {
+      "profile": "stress: 250 reads/s, 20 flips/s, 250 mixed/s, a ramp to 80 flips/s",
+      "database_maximum": "1 unit",
+      "duration_s": 310.1,
+      "http_requests": 39345,
+      "http_failed_rate": 0,
+      "flips_created": 5130,
+      "flips_replayed": 732,
+      "key_conflicts_named": 536,
+      "polite_refusals": 65,
+      "true_errors": 0,
+      "accepted_but_unreadable": 0,
+      "publish_ms": {
+        "median": 84.7,
+        "p90": 3205.6,
+        "p95": 5383.6,
+        "p99": 5712.2,
+        "max": 6360.1
+      },
+      "chain_read_ms": {
+        "median": 289,
+        "p90": 360.1,
+        "p95": 380.1,
+        "p99": 467,
+        "max": 623.1
+      },
+      "server_counted": {
+        "created": 5130,
+        "replayed": 732,
+        "refused": 601,
+        "database_flipped_count_delta": 5130
+      },
+      "counts_reconcile": true
+    },
+    "stress_4_units": {
+      "profile": "the same stress, database maximum raised to 4 units for this run only",
+      "database_maximum": "4 units (reached about 3.3)",
+      "duration_s": 309.5,
+      "http_requests": 54226,
+      "http_failed_rate": 0,
+      "flips_created": 6039,
+      "flips_replayed": 918,
+      "key_conflicts_named": 592,
+      "polite_refusals": 130,
+      "true_errors": 0,
+      "accepted_but_unreadable": 0,
+      "publish_ms": {
+        "median": 88.6,
+        "p90": 1690.9,
+        "p95": 5520.8,
+        "p99": 6003.5,
+        "max": 7180.9
+      },
+      "chain_read_ms": {
+        "median": 12.7,
+        "p90": 92.6,
+        "p95": 162.2,
+        "p99": 326.2,
+        "max": 586
+      },
+      "server_counted": {
+        "created": 6039,
+        "replayed": 918,
+        "refused": 722,
+        "database_flipped_count_delta": 6039
+      },
+      "counts_reconcile": true
+    }
+  },
+  "resource_observations": {
+    "stress_1_unit": {
+      "task_cpu_percent_of_0_5_vcpu": "average 3 to 19 per minute, maximum 28",
+      "task_memory_percent_max": 2,
+      "database": "capacity pinned at its 1.0-unit maximum and database CPU 100% for the whole run"
+    },
+    "stress_4_units": {
+      "database_capacity_units_peak": "about 3.3",
+      "load_balancer_target_p95_seconds_per_minute": [
+        0.008,
+        0.059,
+        0.089,
+        5.335,
+        1.647
+      ],
+      "load_balancer_target_5xx_over_two_minutes": 126,
+      "note": "the 5xx are the service's named 503 retry-later refusals, counted by k6 as polite refusals, not errors"
+    },
+    "service_counters_after_all_runs": {
+      "flips_created": 13114,
+      "retry_later": 193,
+      "render_failures": 0,
+      "render_calls": 16403,
+      "render_mean_ms": 0.14
+    }
+  },
+  "not_covered": [
+    "no multi-region run",
+    "no cold database: the database was awake throughout",
+    "no sustained hours: the longest run is about 5 minutes",
+    "no real mobile network and no browser: only the service HTTP interface",
+    "no uploads (off)",
+    "one task only: no scale-out",
+    "the live service shared the database's capacity during these runs",
+    "no claim about a number of users: none is extrapolated"
+  ]
+}

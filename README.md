@@ -58,7 +58,7 @@ It serves `GET /v1/chains/{id}` and `GET /v1/publications/{id}`, `POST /v1/publi
 
 ## Deployment
 
-Not deployed yet. The plan: the site on Vercel, the service as one container on AWS (ECS on Fargate), deployed by GitHub Actions through an OIDC role with no AWS keys stored. `Dockerfile.service` builds the service image; `.github/workflows/deploy.yml` is written and has never run (it does nothing until a repository variable switches it on). ARCHITECTURE.md, "Hosting and environments", says what is written, what is checked and what is not.
+A dev environment is deployed: the site on Vercel and the service as one container on AWS (ECS Express Mode on Fargate ARM64, Aurora Serverless v2 and S3, in Mumbai). It was created by `scripts/aws-dev.sh`, which names only `graft-dev-*` resources, records every change, and can remove them all. The GitHub deploy workflow (`.github/workflows/deploy.yml`) is written and has never run. There is no staging or production environment. ARCHITECTURE.md, "Hosting and environments", says what was shown and what was not; "Measured numbers" has the first load measurement and its limits.
 
 Secrets, by name only (they live in the platform's store, never in this repository): `GRAFT_DATABASE_URL`, `GRAFT_ADMIN_SECRET`, optionally `GRAFT_ERROR_TRACKER_DSN`, and `GRAFT_BLOB_S3_ACCESS_KEY_ID` with `GRAFT_BLOB_S3_SECRET_ACCESS_KEY` only when the bucket is not reached through the container's role. Visitor uploads are off in every environment until the launch gate decides otherwise.
 

@@ -700,16 +700,19 @@ Written by ticket 34 (the agent's part). **Nothing here has been deployed.** The
 
 **An open risk in that plan: the database may never pause while the service is running.** AWS documents that an Aurora Serverless v2 instance at minimum capacity 0 pauses after a period without user-initiated connections, and names a proxy or any open connection among the things that prevent it. The service keeps a pool of connections and its event relay queries the database every second (`GRAFT_RELAY_INTERVAL_MS`), and AWS's pages do not say whether either counts as activity. So the saving is **unproven**: it is real only if the database does pause with the service up, and otherwise the database idles at its floor while the service runs. The first deploy decides it: with the service idle, read the cluster's `ServerlessDatabaseCapacity` metric over a few hours. If it never reaches 0, the ways to get a pause are to park the service (no running task, no connections) or to switch the event pipeline off (`GRAFT_EVENT_PIPELINE=off`) for a demo period; neither is built or tested here, and the ECS commands for parking depend on how Express Mode is configured, so none are written. The code works with the database and bucket choices above and, unchanged, with the alternatives (any TLS PostgreSQL, any S3-compatible bucket).
 
+**Measured at the first deploy (2026-10-24): the database does not pause while the service runs.** With nothing connected it fell to 0 units within about ten minutes. With the service up it held 0.5 units and three open connections (the pool and the event relay) continuously. So the saving is real only while the service is parked: `scripts/aws-dev.sh park` stops the one task, the database pauses after five idle minutes, and the load balancer with its two public addresses still bills while parked.
+
 **What is written.**
 
 | Piece | What it is | State |
 |---|---|---|
 | `Dockerfile.service` | the service, the renderer artefact and the release tools in one image; non-root; certificates installed; health check path `/ready` | built; `scripts/service-image-check.sh` ran it on this machine: non-root, the release step (migrate, seed, snapshot check) passed, the service answered `/ready`, uploads reported off, and the seeded chain read back with four stages. Running it found one defect, fixed: the snapshot check compares the committed audio files too, which the first image lacked, so the first deploy's release step would have failed |
 | `.github/workflows/deploy.yml` | build and push; release task (migrate, seed, check the seeded chain against the committed snapshot); point the service at the new task definition; wait for it to settle and for `/ready`; put the previous one back if any of that fails | **written, never run**; inert until `DEPLOY_ENABLED` is set; its rollback has not been shown once, which the ticket requires |
-| Bucket access from the container's role | no static keys; see Configuration | tested against a stand-in credentials endpoint and a local S3 server, **not against AWS** |
-| TLS to the database | `sslmode=require` or `verify-full` with a root certificate | tested against a throwaway server that offers TLS |
+| Bucket access from the container's role | no static keys; see Configuration | tested against a stand-in credentials endpoint and a local S3 server, then run on AWS (2026-10-24): the release task wrote 13 audio objects through the task role and a browser fetched signed addresses from the bucket |
+| TLS to the database | `sslmode=require` or `verify-full` with a root certificate | tested against a throwaway server that offers TLS; the release task and the service connect to Aurora with `sslmode=require` |
 | Build-time guard for the site | a deployment build stops if `GRAFT_CONNECT_ORIGINS`, `GRAFT_PUBLIC_API_URL` or the https-upgrade choice is missing | tested, and a bare production build was run once and refused |
-| Load test and its workflow | see "Measured numbers" | harness done, no measurement yet |
+| `scripts/aws-dev.sh` | the dev deployment one phase at a time: network, registry, bucket, roles, database, release task, service; a read-only status sweep; park and unpark; a clean copy for the load test; a teardown. It refuses the wrong account, role or region before any change and records every change | ran: it created the dev environment; 20 tests against a stand-in command, mutation-checked |
+| Load test and its workflow | see "Measured numbers" | measured once on a clean copy of dev (2026-10-24) |
 
 **Settings a deployment must get right** (each one fails quietly if wrong):
 
@@ -721,7 +724,7 @@ Written by ticket 34 (the agent's part). **Nothing here has been deployed.** The
 
 **Secrets, by name only.** In the platform's store: `GRAFT_DATABASE_URL`, `GRAFT_ADMIN_SECRET`, `GRAFT_ERROR_TRACKER_DSN` (optional), and `GRAFT_BLOB_S3_ACCESS_KEY_ID` with `GRAFT_BLOB_S3_SECRET_ACCESS_KEY` only if the bucket is not reached through the container's role. In the repository's variables, not secrets: the role to assume and the names of the cluster, service and repository and the service's address. A scan runs over the whole history in CI (`gitleaks`).
 
-**Not done, and not claimed.** The environments do not exist. No deploy has run, so there is no readiness gate shown to block a bad release, no rollback shown, no check that the deployed seeded chain equals the snapshot, no migration rehearsed on a deployed database, no request showing uploads are off in a deployed environment, and no kill-switch toggle on staging. The monthly cost estimate waits for the choices above. The hosting-plan facts the spec left to verify (Neon's pooled and direct endpoints and its caps, whether R2 asks for a card, task memory sizing and price) wait for the same choices, and are recorded in the ticket when they are checked.
+**State on 2026-10-24, and what is not claimed.** One environment exists, dev, in ap-south-1: the site on Vercel and the service on ECS Express Mode (ARM64, one 0.5 vCPU task) at an address AWS provides. There is no staging or production environment, by choice. On it these were shown: the release task (migrate, seed, check the seeded chain against the snapshot) passes on a Fargate ARM64 host; `/ready` answers; uploads are off by request; the kill switch closes the write routes and reopens without a redeploy; rotating the operator secret and forcing a new deployment works. Not shown: the GitHub deploy workflow has not run, so no automatic rollback and no readiness block have been shown; no migration was rehearsed on a database that held data; the cost is an estimate, not a bill (no budget alarm is set and the account's billing view was not available): about 4 USD a day while everything runs and about 1.3 USD a day with the service parked. `GET /metrics` is readable by anyone who can reach the service and runs a database query on every scrape; that needs a decision.
 
 ## Operator runbook
 
@@ -757,7 +760,24 @@ The operator's secret travels in one header, `x-graft-admin-secret`. The operato
 
 ## Measured numbers
 
-Written by ticket 35 (the harness; the measurement itself waits for a staging environment). **There are no numbers here yet, on purpose.** A number from a laptop says nothing about a deployment, so none is quoted.
+Written by ticket 35. **First measurement: 2026-10-24**, against a clean copy of the dev environment in ap-south-1: one Fargate ARM64 task of 0.5 vCPU and 1 GB, and Aurora Serverless v2 capped at 1 unit (one run at 4). The raw results are in `loadtest/results/2026-10-24-dev-arm64.json` with the limits used and what was not covered. Read the numbers with those caps: they describe this small, cheap setup, and none is extrapolated to a number of users. The per-address limits were lifted on the copy so that one client measures the service and not the limiter; the client was one laptop on a home connection, so latencies include that path.
+
+| Run | Load | Flips created | True errors | Publish median, p95, p99 | Chain read median, p95, p99 |
+|---|---|---|---|---|---|
+| smoke | 8 s per scenario | 102 | 0 | 82, 122, 167 ms | 14, 26, 39 ms |
+| full | 60 reads/s; 6 flips/s in two scenarios; 60 mixed/s (20% flips); a ramp to 12 flips/s; 60 s each | 1,843 | 0 | 79, 99, 132 ms | 12, 16, 26 ms |
+| stress, database at 1 unit | 250 reads/s; 20 flips/s; 250 mixed/s; a ramp to 80 flips/s | 5,130 | 0 | 85 ms, 5.4 s, 5.7 s | 289, 380, 467 ms |
+| stress, database at 4 units | the same | 6,039 | 0 | 89 ms, 5.5 s, 6.0 s | 13, 162, 326 ms |
+
+"True errors" are failures that are not a named refusal. In all four runs the client's counts, the service's own counters and the database's flipped counts agreed exactly (the reconcile step), every accepted flip was readable at once, and every repeated key returned the same publication.
+
+**What held.** Correctness at every rate, and the full profile comfortably: publish p99 132 ms and chain reads p99 26 ms.
+
+**What bent, and what is known about it.** First, reads slowed when the database sat at its 1-unit cap: its CPU read 100% for the whole run while the task peaked at 28% CPU of its 0.5 vCPU and 2% memory. With the cap raised to 4 units (it reached about 3.3) the chain read median fell from 289 ms to 13 ms. That slowdown was the database cap, a cost choice, and not the service. Second, publish tails of about 5.5 s did not change with more database. They began in the mixed phase, at roughly 50 flips a second alongside the reads, where the load balancer saw 126 target 5xx responses in two minutes: these are the service's named `retry-later` refusals, counted apart from errors, answered after a wait of about 5 s.
+
+**Hypothesis, not tested.** The service runs at most 4 renders at once (`GRAFT_MAX_CONCURRENT_RENDERS`, default 4) and a flip holds its permit for about 80 ms, the median publish time, mostly database round trips and not CPU. By Little's law four permits held for 80 ms allow about 50 flips a second, which is where the tail began. If that is right, the ceiling is a setting and not the hardware. One more run on a clean copy with a higher setting would show it. Until then no flips-per-second ceiling is claimed.
+
+**Ruled out.** Rendering itself (the service's render timer: mean 0.14 ms over 16,403 renders, none failed), the task's CPU and memory, and the database cap as the cause of the publish tail.
 
 **What exists.** `loadtest/graft.js` is a k6 script. `setup` builds chains of depth 4 (the seeded one), 8 and 12 (the cap) by publishing flips, and shows that a flip past the cap is refused by name. Then, one after another: reads of chains at those depths; flips of one stage; flips of many stages; a mixed run of 80% reads and 20% flips; and a ramp of flips meant to meet the configured limits. After every accepted flip it reads the chain back; about 15% of accepted flips are repeated with the same retry key and content (the answer must be the same publication, not a new one) and about 10% with the same key and a different cut (the answer must be the named key conflict).
 
