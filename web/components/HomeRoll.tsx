@@ -20,6 +20,7 @@ export function HomeRoll({
   const router = useRouter();
   return (
     <RollPlayer
+      makeHref="/make"
       blocks={blocks}
       load={load}
       reportTo={reportTo}

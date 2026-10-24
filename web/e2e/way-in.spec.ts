@@ -213,3 +213,60 @@ test("and says nothing when the service cannot be asked, and the choices still w
   await page.waitForTimeout(500);
   await expect(page.getByTestId("uploads-off")).toHaveCount(0);
 });
+
+/** One second of a tone as a WAV file: a sound of one's own to pick. */
+function tone(): Buffer {
+  const frames = 48_000;
+  const data = Buffer.alloc(frames * 2);
+  for (let i = 0; i < frames; i++) {
+    data.writeInt16LE(Math.round(Math.sin((2 * Math.PI * 220 * i) / 48_000) * 12_000), i * 2);
+  }
+  const head = Buffer.alloc(44);
+  head.write("RIFF", 0);
+  head.writeUInt32LE(36 + data.length, 4);
+  head.write("WAVEfmt ", 8);
+  head.writeUInt32LE(16, 16);
+  head.writeUInt16LE(1, 20);
+  head.writeUInt16LE(1, 22);
+  head.writeUInt32LE(48_000, 24);
+  head.writeUInt32LE(96_000, 28);
+  head.writeUInt16LE(2, 32);
+  head.writeUInt16LE(16, 34);
+  head.write("data", 36);
+  head.writeUInt32LE(data.length, 40);
+  return Buffer.concat([head, data]);
+}
+
+test("if the first look at what is open failed, choosing a sound of one's own looks once more", async ({
+  page,
+}) => {
+  let asked = 0;
+  await page.route("**/make", async (route) => {
+    const response = await route.fetch();
+    const headers = { ...response.headers() };
+    headers["content-security-policy"] = (headers["content-security-policy"] ?? "").replace(
+      "connect-src 'self'",
+      "connect-src *",
+    );
+    await route.fulfill({ response, headers });
+  });
+  await page.route("**/v1/features", (route) => {
+    asked += 1;
+    return asked === 1
+      ? route.abort("connectionrefused")
+      : route.fulfill({
+          json: { publishing: true, uploads: false },
+          headers: { "access-control-allow-origin": "*" },
+        });
+  });
+  await page.goto("/make");
+  await expect(page.getByRole("button", { name: "pick an audio file" })).toBeEnabled();
+  await page.waitForTimeout(300);
+  expect(asked, "one look when the page opens").toBe(1);
+  await page
+    .locator("input[type=file]")
+    .setInputFiles({ name: "a.wav", mimeType: "audio/wav", buffer: tone() });
+  await expect(page.getByRole("slider", { name: "speed" })).toBeVisible();
+  await expect(page.locator("#own-why")).toContainText("uploading your own sounds is switched off");
+  expect(asked, "and one more when the sound was chosen").toBe(2);
+});

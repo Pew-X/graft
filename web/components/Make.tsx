@@ -91,12 +91,13 @@ export function Make({
         ? { kind: "live", id: from }
         : null;
 
-  // Asked once, when the page opens at the picker, so the own-sound block can say up front whether
-  // publishing a sound of one's own is open and the editor can use the same answer: nothing more than
-  // this one read leaves the device before a publish. A page opened on a stage (`?from=`) has no
-  // own-sound block and asks nothing. A service that cannot be asked says nothing.
-  const [asksFeatures] = useState(() => from === null);
-  const features = useAsync(asksFeatures ? "features" : null, (signal) =>
+  // Asked when the page opens at the picker (a page opened on a stage, `?from=`, has no own-sound block
+  // and asks nothing), so the own-sound block can say up front whether publishing a sound of one's own
+  // is open and the editor can use the same answer: nothing more than this one read leaves the device
+  // before a publish. If that read failed, choosing a sound of one's own asks once more. A service that
+  // cannot be asked says nothing.
+  const [featuresTry, setFeaturesTry] = useState(0);
+  const features = useAsync(from === null ? `features:${featuresTry}` : null, (signal) =>
     readFeatures(apiUrl, signal),
   );
 
@@ -153,7 +154,11 @@ export function Make({
         <SoundPicker curated={curated} flips={flips} onChoose={setPicked}>
           <OwnSound
             uploads={features.status === "ready" ? features.value.uploads : null}
-            onSound={(samples, needsTrim) => (needsTrim ? setToTrim(samples) : setOwn(samples))}
+            onSound={(samples, needsTrim) => {
+              if (features.status === "failed") setFeaturesTry((n) => n + 1);
+              if (needsTrim) setToTrim(samples);
+              else setOwn(samples);
+            }}
           />
         </SoundPicker>
       ) : sound.status === "ready" ? (
