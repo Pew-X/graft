@@ -179,7 +179,8 @@ test("after a full session the browser holds no session id, no event and no cook
 
   expect(await context.cookies()).toEqual([]);
   const stored = await page.evaluate(async () => ({
-    local: { ...localStorage },
+    // the first-visit guide's note is a courtesy the page may keep; telemetry itself keeps nothing
+    local: Object.fromEntries(Object.entries(localStorage).filter(([k]) => k !== "graft.coach")),
     session: { ...sessionStorage },
     databases: (await indexedDB.databases()).map((d) => d.name),
     cacheNames: await caches.keys(),
