@@ -445,7 +445,7 @@ EOF
 scale_service() { # min max
   arn="arn:aws:ecs:$REGION:$ACCOUNT:service/$PREFIX/$SVC"
   mut "set the service to $1..$2 tasks" ecs update-express-gateway-service --service-arn "$arn" \
-    --scaling-target "minTaskCount=$1,maxTaskCount=$2,autoScalingMetric=AVERAGE_CPU" --output json >/dev/null
+    --scaling-target "minTaskCount=$1,maxTaskCount=$2,autoScalingMetric=AVERAGE_CPU,autoScalingTargetValue=60" --output json >/dev/null
 }
 phase_park() {
   cost="stops the task and lets the database pause after 5 idle minutes; the load balancer and its 2 public addresses still bill (about 1.3 USD a day, unverified)"

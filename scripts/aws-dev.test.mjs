@@ -247,9 +247,9 @@ test("status warns about an address attached to nothing, not about the load bala
 test("park stops the task so the database can pause, and unpark brings the one task back", () => {
   const s = sandbox();
   const park = plan(s.run(["park"], { DRY_RUN: "1" }));
-  assert.match(park, /update-express-gateway-service .*--scaling-target minTaskCount=0,maxTaskCount=0/);
+  assert.match(park, /update-express-gateway-service .*--scaling-target minTaskCount=0,maxTaskCount=0,autoScalingMetric=AVERAGE_CPU,autoScalingTargetValue=60/, "the update call needs the target value too");
   const unpark = plan(s.run(["unpark"], { DRY_RUN: "1" }));
-  assert.match(unpark, /update-express-gateway-service .*--scaling-target minTaskCount=1,maxTaskCount=1/);
+  assert.match(unpark, /update-express-gateway-service .*--scaling-target minTaskCount=1,maxTaskCount=1,autoScalingMetric=AVERAGE_CPU,autoScalingTargetValue=60/);
   assert.doesNotMatch(unpark, /maxTaskCount=[2-9]/, "never more than one task");
   assert.deepEqual(s.changes(), [], "a dry run changes nothing");
 });
