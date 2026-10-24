@@ -663,3 +663,12 @@
     serif;
   color: var(--ink);
 }
+
+/* the note that publishing a sound of one's own is switched off: marked, so it is not skimmed past */
+.own-off {
+  margin: 0.75rem 0 0;
+  padding: 0.6rem 0.9rem;
+  border-left: 3px solid var(--ink);
+  background: var(--surface);
+  color: var(--ink);
+}

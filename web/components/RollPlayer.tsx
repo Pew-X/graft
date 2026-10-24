@@ -105,6 +105,27 @@ export function RollPlayer({
   // The first placement is instant; only the moves after it slide.
   const [placed, setPlaced] = useState(false);
   const sheet = useRef<HTMLDivElement>(null);
+  const viewportEl = useRef<HTMLDivElement>(null);
+  const notesEl = useRef<HTMLDivElement>(null);
+  // The status text and the two plain lines sit over the bottom of the left column. Their real height
+  // is published (on the viewport, not on the root, whose attributes are the page's observable state)
+  // so the stage in view stops above them, whatever they say and however they wrap.
+  useLayoutEffect(() => {
+    const viewport = viewportEl.current;
+    const notes = notesEl.current;
+    if (!viewport || !notes) return undefined;
+    const publish = (): void => {
+      viewport.style.setProperty(
+        "--notes-h",
+        `${Math.ceil(notes.getBoundingClientRect().height)}px`,
+      );
+    };
+    publish();
+    if (typeof ResizeObserver === "undefined") return undefined;
+    const watch = new ResizeObserver(publish);
+    watch.observe(notes);
+    return () => watch.disconnect();
+  }, []);
   const place = useCallback((): void => {
     const node = nodes.current[hero];
     if (!node) return;
@@ -112,7 +133,14 @@ export function RollPlayer({
     const portrait = window.innerWidth < h * 0.9;
     // Landscape: the stage is centred a little above the middle. Portrait: it starts below the header.
     // A tall stage starts just under the header instead of being pushed up out of sight.
-    const top = portrait ? Math.max(h * 0.12, 96) : Math.max(72, h * 0.46 - node.offsetHeight / 2);
+    // Landscape also never lets the stage run under the status text: the latest top that keeps its
+    // last line (the block's bottom padding is empty) above the notes, with a little air.
+    const notesH = notesEl.current?.getBoundingClientRect().height ?? 0;
+    const padBottom = Number.parseFloat(getComputedStyle(node).paddingBottom) || 0;
+    const latest = h - 92 - notesH - node.offsetHeight + padBottom;
+    const top = portrait
+      ? Math.max(h * 0.12, 96)
+      : Math.max(72, Math.min(h * 0.46 - node.offsetHeight / 2, latest));
     setShift(Math.round(top - node.offsetTop));
   }, [hero]);
   useLayoutEffect(() => {
@@ -373,7 +401,7 @@ export function RollPlayer({
         <ThemeToggle />
       </header>
 
-      <div className="viewport">
+      <div className="viewport" ref={viewportEl}>
         <div
           className="sheet"
           data-placed={placed}
@@ -409,7 +437,7 @@ export function RollPlayer({
         </div>
       </div>
 
-      <div className="notes">
+      <div className="notes" ref={notesEl}>
         <p className="status" role="status" data-empty={status === ""}>
           {status}
         </p>

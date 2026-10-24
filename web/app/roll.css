@@ -216,6 +216,7 @@ button:disabled {
   outline-offset: 3px;
 }
 .bar .theme {
+  white-space: nowrap;
   pointer-events: auto;
   margin-left: 0;
   min-height: 44px;
@@ -272,7 +273,8 @@ button:disabled {
   position: relative;
   margin: 0 0 0 7vw;
   max-width: min(520px, calc(100vw - var(--R) - 11vw));
-  padding: 12vh 0;
+  /* a shorter gap above (the stage starts nearer the header), the full gap below (the next stage stays where it was) */
+  padding: min(12vh, 64px) 0 12vh;
   /* The text does not catch the pointer, so the record under it stays touchable; its controls do. */
   pointer-events: none;
   transition: opacity 0.6s;
@@ -300,8 +302,8 @@ button:disabled {
    portrait above the record. However tall it is (a long chain's details open, a short screen, large
    text) every line and "flip this" can be reached by touch, mouse and keyboard. */
 .block[data-hero="true"] > article {
-  /* the block starts at 72px (under the header) and has 12vh of padding above the article; keep 192px free for the status text, the two plain lines and the controls, so nothing is drawn over the stage's buttons */
-  max-height: calc(100dvh - 72px - 12vh - 192px);
+  /* the block starts at 72px (under the header) and has 12vh of padding above the article; stop above the status text and the two plain lines, whose real height the page measures (--notes-h), so nothing is drawn over the stage's text or buttons */
+  max-height: calc(100dvh - 72px - min(12vh, 64px) - 84px - var(--notes-h, 140px) - 16px);
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
@@ -619,7 +621,6 @@ button:disabled {
 .notes .how {
   margin: 0.25rem 0 0;
   padding: 8px 14px;
-  max-width: 44ch;
   border-radius: 12px;
   background: var(--bg);
   font:
@@ -910,4 +911,17 @@ button:disabled {
   padding: 0.25rem 0.5rem;
   text-align: left;
   white-space: nowrap;
+}
+
+/* a narrow screen: the two header buttons share the width, so their lettering is tighter and neither wraps */
+@media (max-width: 420px) {
+  .bar {
+    padding: 8px 14px;
+    gap: 0.5rem;
+  }
+  .bar .make-link,
+  .bar .theme {
+    padding: 0 0.8rem;
+    letter-spacing: 0.06em;
+  }
 }

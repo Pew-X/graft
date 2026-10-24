@@ -13,7 +13,7 @@ export const copy = {
   hint: {
     locked: "tap play to hear it. nothing sounds until you do.",
     order: "the finished flip plays first, then the credits go back to the source.",
-    how1: "press play. the finished flip plays first, then the credits go back to where the sound began.",
+    how1: "press play. the finished flip plays first, then the credits go back to the source.",
     how2: "drag the needle to jump to a step. to make your own, press make a flip.",
     how2Plain: "drag the needle to jump to a step.",
     loading: "loading the sounds.",

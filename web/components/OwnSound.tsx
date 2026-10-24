@@ -115,7 +115,7 @@ export function OwnSound({
         </label>
       </div>
       {uploads === false ? (
-        <p className="notice" data-testid="uploads-off">
+        <p className="notice own-off" data-testid="uploads-off">
           {copy.own.offUpFront}
         </p>
       ) : null}

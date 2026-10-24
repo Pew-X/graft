@@ -119,6 +119,23 @@ for (const size of SIZES) {
       expect(flipBox!.y + flipBox!.h).toBeLessThanOrEqual(size.height);
     });
 
+    test("the stage in view stops above the status text: none of its lines is drawn under it", async ({
+      page,
+    }) => {
+      await page.goto("/");
+      await expect(page.locator(".roll")).toHaveAttribute("data-audio", "ready");
+      const found = await boxes(page, {
+        stage: '.block[data-hero="true"] > article',
+        notes: ".notes",
+      });
+      expect(found["stage"]).toBeDefined();
+      expect(found["notes"]).toBeDefined();
+      expect(
+        overlap(found["stage"]!, found["notes"]!),
+        `the stage (bottom ${found["stage"]!.y + found["stage"]!.h}) runs under the status text (top ${found["notes"]!.y})`,
+      ).toBeLessThanOrEqual(4);
+    });
+
     test("making a flip starts with a clear first step and the choices to record or pick a sound on the first screen", async ({
       page,
     }) => {
