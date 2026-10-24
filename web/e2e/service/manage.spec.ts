@@ -127,7 +127,9 @@ test("a key kept in this browser can be used from there, and forgotten", async (
   await page.getByRole("button", { name: "close it to new flips" }).click();
   await expect(page.getByText("closed to new flips.")).toBeVisible();
   await page.getByRole("button", { name: "forget the key kept in this browser" }).click();
-  expect(await page.evaluate(() => localStorage.length)).toBe(0);
+  expect(
+    await page.evaluate(() => Object.keys(localStorage).filter((k) => k !== "graft.coach").length),
+  ).toBe(0);
 });
 
 test("a link to nothing says there is no publication, and the controls are not shown", async ({

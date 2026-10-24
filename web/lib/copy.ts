@@ -458,6 +458,28 @@ export const copy = {
   footer: {
     disclaimer: "independent experiment, not affiliated with or endorsed by any product named.",
     about: "about",
+    how: "how it works",
+  },
+  /** The first-visit coach: three short notes, drawn over the real screen, shown once. */
+  coach: {
+    label: "how it works",
+    count: "{n} of {total}",
+    next: "next",
+    back: "back",
+    skip: "skip",
+    done: "start listening",
+    play: {
+      title: "press play.",
+      body: "you hear the finished flip first. then the credits go back, stage by stage, to the sound it began as.",
+    },
+    needle: {
+      title: "drag the needle.",
+      body: "the record is the whole chain: one ring for each stage, the first one outermost. put the needle anywhere to hear that moment.",
+    },
+    make: {
+      title: "make your own.",
+      body: "pick a stage, cut a part of it, change its speed and hear it. publish it and the chain grows by one.",
+    },
   },
 } as const;
 

@@ -5,8 +5,21 @@ import { existsSync } from "node:fs";
 const built = Boolean(process.env["CI"]) && existsSync(".next/BUILD_ID");
 
 // Full Chromium, not the stripped-down headless shell (which crashed in an earlier check).
+// Every spec starts as a returning visitor who has already seen the first-visit coach, so its notes do
+// not cover the page; the coach's own spec starts with empty storage instead.
+const returning = {
+  cookies: [],
+  origins: [
+    {
+      origin: "http://127.0.0.1:3100",
+      localStorage: [{ name: "graft.coach", value: "seen" }],
+    },
+  ],
+};
+
 export default defineConfig({
   testDir: "e2e",
+  use: { storageState: returning },
   testMatch: "**/*.spec.ts",
   // The specs under e2e/service need the real service, a database and a bucket: scripts/service-e2e.sh
   // starts them and sets GRAFT_SERVICE_E2E. Without it they are not part of the run.

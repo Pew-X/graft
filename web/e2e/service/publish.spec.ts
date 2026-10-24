@@ -309,14 +309,21 @@ test("the key is kept in this browser only when the maker chooses, and then it i
   const parent = await parentFor(request);
   await open(page, parent);
   await fill(page);
-  expect(await page.evaluate(() => localStorage.length)).toBe(0);
+  expect(
+    await page.evaluate(() => Object.keys(localStorage).filter((k) => k !== "graft.coach").length),
+  ).toBe(0);
   await page.getByRole("button", { name: "publish", exact: true }).click();
   await expect(page.getByRole("heading", { name: "published" })).toBeVisible();
-  expect(await page.evaluate(() => localStorage.length), "publishing alone stores nothing").toBe(0);
+  expect(
+    await page.evaluate(() => Object.keys(localStorage).filter((k) => k !== "graft.coach").length),
+    "publishing alone stores nothing",
+  ).toBe(0);
   const key = await page.getByTestId("manage-key").innerText();
   await page.getByLabel(/keep this key in this browser/).check();
   await expect(page.getByText("kept in this browser.")).toBeVisible();
-  const stored = await page.evaluate(() => Object.fromEntries(Object.entries(localStorage)));
+  const stored = await page.evaluate(() =>
+    Object.fromEntries(Object.entries(localStorage).filter(([k]) => k !== "graft.coach")),
+  );
   expect(Object.keys(stored)).toEqual(["graft.manage-keys"]);
   expect(Object.values(JSON.parse(stored["graft.manage-keys"]!) as Record<string, string>)).toEqual(
     [key],

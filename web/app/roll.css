@@ -240,6 +240,15 @@ button:disabled {
   pointer-events: none;
 }
 
+/* the stages below the one in view fade out above the pill instead of being cut by it */
+.viewport {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 calc(100% - 170px),
+    transparent calc(100% - 100px)
+  );
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 170px), transparent calc(100% - 100px));
+}
 /* the roll of credits: it slides so the current stage sits where the eye is */
 .sheet {
   position: absolute;
@@ -302,8 +311,8 @@ button:disabled {
    portrait above the record. However tall it is (a long chain's details open, a short screen, large
    text) every line and "flip this" can be reached by touch, mouse and keyboard. */
 .block[data-hero="true"] > article {
-  /* the block starts at 72px (under the header) and has 12vh of padding above the article; stop above the status text and the two plain lines, whose real height the page measures (--notes-h), so nothing is drawn over the stage's text or buttons */
-  max-height: calc(100dvh - 72px - min(12vh, 64px) - 84px - var(--notes-h, 140px) - 16px);
+  /* the room is measured by the page (--article-max): under the header, above the status pill and the controls, so nothing is drawn over the stage's text or buttons */
+  max-height: var(--article-max, 60dvh);
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
@@ -311,6 +320,25 @@ button:disabled {
   /* room for the torn slab's rotated corners, which the scroll region would otherwise clip */
   margin: 0 -14px;
   padding: 0 14px;
+}
+/* more than fits: the credit lines fade out at the bottom and a word says so, instead of a hard cut */
+.block[data-hero="true"] > article[data-more="true"] {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 48px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 48px), transparent);
+}
+.block[data-hero="true"][data-more="true"]::after {
+  content: "more \2193" / "";
+  position: absolute;
+  left: 0;
+  top: calc(var(--article-top, 0px) + var(--article-max, 0px) + 2px);
+  font:
+    500 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink);
+  pointer-events: none;
 }
 .kicker {
   margin: 0 0 12px;
@@ -583,10 +611,13 @@ button:disabled {
 /* what the page says: the state of loading and playing, the order, a retry */
 .notes {
   position: absolute;
-  left: 7vw;
+  left: 50%;
   bottom: 84px;
+  transform: translateX(-50%);
   z-index: 6;
-  max-width: min(520px, calc(100vw - var(--R) - 11vw));
+  width: max-content;
+  max-width: min(560px, calc(100vw - 32px));
+  text-align: center;
   pointer-events: none;
 }
 /* the status is a pill, so it stays readable over the record */
@@ -615,26 +646,6 @@ button:disabled {
     monospace;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--muted);
-}
-/* what to do, in two lines, until the first play: on its own backing so it reads over the record */
-.notes .how {
-  margin: 0.25rem 0 0;
-  padding: 8px 14px;
-  border-radius: 12px;
-  background: var(--bg);
-  font:
-    400 12px/1.5 var(--f-mono),
-    ui-monospace,
-    monospace;
-  letter-spacing: 0.04em;
-  color: var(--ink);
-}
-.notes .how p {
-  margin: 0;
-}
-.notes .how p + p {
-  margin-top: 0.3rem;
   color: var(--muted);
 }
 .notes .retry {
@@ -695,7 +706,7 @@ button:disabled {
   letter-spacing: 0.04em;
   color: #b9b2a4;
 }
-.roll .footer a {
+.roll .footer :is(a, .how-link) {
   color: #ece6d8;
 }
 .roll .footer p {
@@ -722,10 +733,6 @@ button:disabled {
   .block {
     padding: 9vh 0;
   }
-  .block[data-hero="true"] > article {
-    /* from where the article starts (the block's top, plus its 9vh of padding) down to just above the record */
-    max-height: calc(54dvh - max(12dvh, 96px) - 9vh);
-  }
   /* Portrait: the stages around the one in view lie over the record, so only the one in view is touchable. */
   .block:not([data-hero="true"]) :is(button, summary, a) {
     pointer-events: none;
@@ -735,10 +742,10 @@ button:disabled {
       to bottom,
       transparent 10%,
       #000 13%,
-      #000 50%,
-      transparent 56%
+      #000 54%,
+      transparent 60%
     );
-    mask-image: linear-gradient(to bottom, transparent 10%, #000 13%, #000 50%, transparent 56%);
+    mask-image: linear-gradient(to bottom, transparent 10%, #000 13%, #000 54%, transparent 60%);
   }
   .line {
     padding: 6px 0;
@@ -749,21 +756,8 @@ button:disabled {
   .line dd em {
     font-size: 15px;
   }
-  .notes {
-    left: 22px;
-    right: 22px;
-    bottom: auto;
-    top: 58%;
-    max-width: none;
-    text-align: center;
-  }
   .notes .hint {
     display: none;
-  }
-  .notes .how {
-    margin-left: auto;
-    margin-right: auto;
-    text-align: center;
   }
   .record-caption {
     right: auto;
@@ -782,7 +776,7 @@ button:disabled {
     text-align: left;
     color: var(--muted);
   }
-  .roll .footer a {
+  .roll .footer :is(a, .how-link) {
     color: inherit;
   }
 }
@@ -923,5 +917,162 @@ button:disabled {
   .bar .theme {
     padding: 0 0.8rem;
     letter-spacing: 0.06em;
+  }
+}
+
+/* the footer's second link is a button that looks like the first */
+.footer-links {
+  display: inline-flex;
+  gap: 14px;
+  align-items: center;
+}
+.how-link {
+  /* a button is a 44 px target; the words stay as small as the link beside them */
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* THE COACH: three notes cut from gold paper and marked in chalk, over the real screen. The veil only
+   dims; every press goes through it, so doing what a note says is also the way to the next one. */
+.coach {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+}
+/* the note says what the status pill would say, so the pill waits behind it */
+.roll:has(.coach) .notes {
+  visibility: hidden;
+}
+.coach-veil {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 7, 6, 0.55);
+}
+.coach-marks {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+.coach-marks .mark {
+  fill: none;
+  stroke: #f6f1e6;
+  stroke-width: 3.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.7));
+  animation: coach-draw 0.55s cubic-bezier(0.4, 0.1, 0.2, 1) forwards;
+}
+.coach-marks .mark:nth-child(2) {
+  animation-delay: 0.45s;
+}
+.coach-marks .mark:nth-child(3) {
+  animation-delay: 0.9s;
+}
+@keyframes coach-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.coach-card {
+  position: absolute;
+  box-sizing: border-box;
+  padding: 16px 20px 14px;
+  background: #e0a526;
+  color: #14110e;
+  pointer-events: auto;
+  /* a cut, not a box: slightly uneven corners */
+  clip-path: polygon(
+    0.8% 3%,
+    38% 0,
+    71% 2%,
+    100% 0.6%,
+    99.2% 44%,
+    100% 97%,
+    62% 100%,
+    27% 98%,
+    0 100%,
+    1.4% 52%
+  );
+  transform: rotate(-0.8deg);
+  animation: coach-in 0.35s ease-out both;
+}
+@keyframes coach-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) rotate(-0.8deg);
+  }
+}
+.coach-count {
+  margin: 0 0 2px;
+  font:
+    500 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+.coach-title {
+  margin: 0 0 6px;
+  font:
+    400 clamp(30px, 6vw, 40px) / 1 var(--f-brush),
+    cursive;
+}
+.coach-body {
+  margin: 0 0 12px;
+  font:
+    500 15px/1.4 var(--f-sans),
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
+}
+.coach-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.coach-actions button {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 2px solid #14110e;
+  border-radius: 999px;
+  background: transparent;
+  color: #14110e;
+  font:
+    500 13px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+.coach-actions .coach-next {
+  background: #14110e;
+  color: #f6f1e6;
+}
+.coach-actions .coach-skip {
+  border-color: transparent;
+  text-decoration: underline;
+}
+.coach-actions button:focus-visible {
+  outline: 3px solid #f6f1e6;
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .coach-marks .mark {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .coach-card {
+    animation: none;
   }
 }
