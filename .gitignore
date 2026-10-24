@@ -30,3 +30,6 @@ web/test-results/
 # Local deploy settings (account id, profile, ledger path): never committed
 .aws-dev.env
 .deploy/
+
+# Local convenience targets (park, unpark, status): never committed
+GNUmakefile
