@@ -227,9 +227,19 @@ test("teardown refuses without --yes, and never touches the GitHub sign-in provi
   assert.deepEqual([...at].sort((a, b) => a - b), at, "in dependency order, the network last");
 });
 
-test("status is read-only", () => {
+test("status is read-only, and an empty account is not alarming", () => {
   const s = sandbox();
   const r = s.run(["status"]);
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(s.changes(), []);
+  assert.doesNotMatch(r.stdout, /^WARN/m);
+  assert.match(r.stdout, /nothing unexpected/);
+});
+
+test("status warns about an address attached to nothing, not about the load balancer's own", () => {
+  const s = sandbox();
+  const r = s.run(["status"], { FAKE_EXISTS: "1" });
+  assert.match(r.stdout, /^WARN\s+Elastic IPs attached to nothing/m);
+  const addresses = s.calls().filter((c) => c.includes("describe-addresses"));
+  assert.ok(addresses.every((c) => c.includes("AssociationId==`null`") || !c.includes("--query")), "only unattached addresses are queried");
 });

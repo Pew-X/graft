@@ -432,8 +432,12 @@ phase_status() {
   echo "== what can bill by the hour (ap-south-1, read-only) =="
   nat=$(lookup ec2 describe-nat-gateways --filter Name=state,Values=pending,available --query 'NatGateways[].NatGatewayId' || true)
   [ -z "$nat" ] && echo "ok    no NAT gateway" || flag "NAT gateway exists: $nat (about 0.045 USD/h plus data)"
-  eips=$(lookup ec2 describe-addresses --query 'Addresses[].PublicIp' || true)
-  [ -z "$eips" ] && echo "ok    no Elastic IP addresses" || flag "Elastic IPs: $eips (each bills while allocated)"
+  # An allocated address attached to nothing bills just the same and is the usual leak; the addresses
+  # of the load balancer's own interfaces are part of it and go when it goes.
+  loose=$(lookup ec2 describe-addresses --query 'Addresses[?AssociationId==`null`].PublicIp' || true)
+  [ -z "$loose" ] && echo "ok    no loose Elastic IP addresses" || flag "Elastic IPs attached to nothing: $loose (each bills while allocated)"
+  inuse=$(lookup ec2 describe-network-interfaces --query 'length(NetworkInterfaces[?Association.PublicIp])' || true)
+  echo "info  public IPv4 addresses in use: ${inuse:-0} (about 0.005 USD/h each)"
   lbs=$(lookup elbv2 describe-load-balancers --query 'LoadBalancers[].[LoadBalancerName,State.Code]' || true)
   [ -z "$lbs" ] && echo "ok    no load balancers" || echo "info  load balancers: $lbs (about 0.03 USD/h each)"
   svc=$(lookup ecs describe-services --cluster "$PREFIX" --services "$PREFIX" --query 'services[].[serviceName,status,desiredCount,runningCount]' 2>/dev/null || true)
