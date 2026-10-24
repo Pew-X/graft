@@ -2,8 +2,8 @@
 # The whole thing on this machine, for looking at and trying by hand: Postgres and an S3-compatible
 # server (the throwaway containers from README.md), the service with visitor uploads on, the seeded
 # chain, and the built site at http://127.0.0.1:3100. Stop it with Ctrl-C.
-#   sh scripts/dev-stack.sh              serve on 127.0.0.1 only
-#   sh scripts/dev-stack.sh --no-uploads leave visitor uploads off, as every environment ships
+#   sh scripts/dev-local.sh              serve on 127.0.0.1 only
+#   sh scripts/dev-local.sh --no-uploads leave visitor uploads off, as every environment ships
 # The database "graft_local" and the bucket prefix "local" are kept between runs; nothing else is touched.
 set -eu
 cd "$(dirname "$0")/.."
