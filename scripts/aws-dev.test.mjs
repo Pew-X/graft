@@ -36,15 +36,27 @@ case "$*" in
   *create-internet-gateway*) echo "igw-0abc" ;;
   *get-random-password*) echo "Abcdefghijklmnopqrstuvwxyz012345" ;;
   *describe-db-clusters*Endpoint*) echo "graft-dev-db.cluster-x.ap-south-1.rds.amazonaws.com" ;;
+  *describe-db-clusters*DBClusterIdentifier*) [ -z "$FAKE_CLUSTER" ] || echo "graft-dev-db" ;;
+  *describe-services*PRIMARY*taskDefinition*) cat "${dir}/td-primary" 2>/dev/null || echo "arn:td/old:1" ;;
+  *describe-services*PRIMARY*rolloutState*) echo "COMPLETED" ;;
+  *describe-task-definition*) echo '{"taskDefinitionArn":"arn:td/old:1","revision":1,"status":"ACTIVE","family":"graft-dev-service","containerDefinitions":[{"name":"Main","image":"old:image"}]}' ;;
+  *register-task-definition*) echo "arn:td/new:2" ;;
+  *describe-express-gateway-service*endpoint*) echo "https://svc.test" ;;
+  *describe-express-gateway-service*statusCode*) if [ -n "$FAKE_SERVICE_STATUS" ]; then echo "$FAKE_SERVICE_STATUS"; elif [ -n "$FAKE_EXISTS" ]; then echo "res-0abc"; fi ;;
   *describe-subnets*|*describe-security-groups*) [ -z "$FAKE_NETWORK$FAKE_EXISTS" ] || echo "net-0abc" ;;
   *describe-*|*list-*) [ -z "$FAKE_EXISTS" ] || echo "res-0abc" ;;
 esac
+# an update the service accepts makes that revision the primary one, unless the roll is stalled
+if [ -z "$FAKE_STALL" ]; then prev=""; for a in "$@"; do [ "$prev" = "--task-definition-arn" ] && echo "$a" > "${dir}/td-primary"; prev="$a"; done; fi
 # keep what any file:// argument held, to check what would have been sent
 for a in "$@"; do case "$a" in file://*) cat "\${a#file://}" >> "${dir}/files.log"; echo >> "${dir}/files.log" ;; esac; done
 exit 0
 `,
   );
   chmodSync(join(dir, "aws"), 0o755);
+  // a service that answers: the readiness probe asks curl for the status code
+  writeFileSync(join(dir, "curl"), "#!/bin/sh\necho 200\n");
+  chmodSync(join(dir, "curl"), 0o755);
   const envFile = join(dir, "env");
   writeFileSync(
     envFile,
@@ -309,4 +321,75 @@ test("redeploy swaps only the image of the running task definition, through the 
   assert.match(asked, /deployments\[\?status==.PRIMARY.\]\.taskDefinition/, "reads the primary deployment");
   assert.notEqual(s.run(["redeploy"], { DRY_RUN: "1" }).status, 0, "needs --image");
   assert.deepEqual(s.changes(), []);
+});
+
+test("a database that exists but whose URL secret was never stored gets a new password and its secret, not a skip", () => {
+  const s = sandbox();
+  const r = s.run(["database"], { FAKE_NETWORK: "1", FAKE_CLUSTER: "1" });
+  assert.equal(r.status, 0, r.stderr);
+  const calls = s.calls().join("\n");
+  assert.doesNotMatch(calls, /create-db-cluster/, "the cluster is not created again");
+  assert.match(calls, /modify-db-cluster/, "the password the lost run generated is replaced");
+  assert.match(calls, /create-secret --name graft-dev\/database-url/);
+  const password = "Abcdefghijklmnopqrstuvwxyz012345";
+  assert.match(s.sent(), new RegExp(`postgres://graft:${password}@graft-dev-db\\.cluster-x`), "the secret holds the new password");
+  assert.ok(s.sent().includes(`"MasterUserPassword": "${password}"`), "and the cluster got the same one");
+  assert.doesNotMatch(plan(r), new RegExp(password));
+  assert.doesNotMatch(s.ledger(), new RegExp(password));
+  assert.doesNotMatch(calls, new RegExp(password), "never on a command line");
+});
+
+test("teardown also removes the load copy, so nothing keeps billing and the cluster can go", () => {
+  const out = plan(sandbox().run(["teardown", "--yes"], { DRY_RUN: "1", FAKE_EXISTS: "1" }));
+  assert.match(out, /delete-express-gateway-service --service-arn \S+service\/graft-dev\/graft-dev-load/);
+  assert.match(out, /delete-secret --secret-id graft-dev\/load-database-url/);
+  assert.ok(
+    out.indexOf("graft-dev-load") < out.indexOf("delete-cluster"),
+    "the load service goes before the cluster is deleted",
+  );
+});
+
+test("status looks at every service in the cluster, not only the live one", () => {
+  const s = sandbox();
+  const r = s.run(["status"]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(s.calls().some((c) => c.includes("ecs list-services")), "it lists the cluster's services");
+});
+
+test("a deleted service does not block creating it again, and a live one does", () => {
+  const args = ["service", "--origin", "https://example.test", "--image", "img:tag"];
+  for (const gone of ["INACTIVE", "DRAINING"]) {
+    const r = sandbox().run(args, { DRY_RUN: "1", FAKE_SERVICE_STATUS: gone });
+    assert.equal(r.status, 0, `${gone}: ${r.stderr}`);
+    assert.match(plan(r), /create-express-gateway-service/);
+  }
+  const live = sandbox().run(args, { DRY_RUN: "1", FAKE_SERVICE_STATUS: "ACTIVE" });
+  assert.notEqual(live.status, 0);
+  assert.match(plan(live), /already exists/);
+});
+
+test("redeploy calls the roll ready only once the NEW revision is the primary one and answers", () => {
+  const s = sandbox();
+  const r = s.run(["redeploy", "--image", "img:new"], { GRAFT_READY_WAIT_SECS: "20", GRAFT_READY_POLL_SECS: "1" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(plan(r), /ready on the new revision/);
+  const updates = s.calls().filter((c) => c.includes("update-express-gateway-service"));
+  assert.equal(updates.length, 1, "one update, no rollback");
+  assert.match(updates[0], /--task-definition-arn arn:td\/new:2/);
+  assert.match(s.ledger(), /redeploy finished, ready/);
+});
+
+test("redeploy rolls back to the previous revision when the new one never becomes primary, and fails", () => {
+  const s = sandbox();
+  const r = s.run(["redeploy", "--image", "img:new"], {
+    FAKE_STALL: "1",
+    GRAFT_READY_WAIT_SECS: "3",
+    GRAFT_READY_POLL_SECS: "1",
+  });
+  assert.notEqual(r.status, 0, "a roll that never completes is a failure");
+  assert.match(plan(r), /did not become ready/);
+  const updates = s.calls().filter((c) => c.includes("update-express-gateway-service"));
+  assert.equal(updates.length, 2, "the update, then the rollback");
+  assert.match(updates[1], /--task-definition-arn arn:td\/old:1/, "back to the revision that was running");
+  assert.doesNotMatch(plan(r), /ready on the new revision/, "never claims it worked");
 });

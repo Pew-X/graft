@@ -341,14 +341,35 @@ EOF
       --engine aurora-postgresql --db-instance-class db.serverless --no-publicly-accessible --monitoring-interval 0 --no-enable-performance-insights \
       --tags $TAGS_KV --query DBInstance.DBInstanceIdentifier --output text >/dev/null
     if [ -z "${DRY_RUN:-}" ]; then echo "waiting for the database (about 10 minutes)..." >&2; aws rds wait db-instance-available --db-instance-identifier "$PREFIX-db-1"; fi
-    if [ -n "${DRY_RUN:-}" ]; then host='<endpoint>'; else host=$(aws rds describe-db-clusters --db-cluster-identifier "$PREFIX-db" --query 'DBClusters[0].Endpoint' --output text); fi
-    url=$(mktmp); chmod 600 "$url"
-    printf 'postgres://graft:%s@%s:5432/graft?sslmode=require' "$pw" "$host" > "$url"
-    mut "store the database URL as secret $PREFIX/database-url (value never printed)" secretsmanager create-secret --name "$PREFIX/database-url" \
-      --secret-string "file://$url" --tags $TAGS_KV --query ARN --output text >/dev/null
+    store_database_url "$pw"
   else
     echo "the database already exists: $have" >&2
+    # An earlier run may have stopped after the cluster was made and before its secret was stored; the
+    # password it generated went with its temporary file, so the cluster gets a new one, stored now.
+    if [ -z "$(secret_arn database-url)" ]; then
+      echo "its URL secret is missing: giving the cluster a new master password and storing it" >&2
+      if [ -n "${DRY_RUN:-}" ]; then pw='<generated>'; else pw=$(aws secretsmanager get-random-password --password-length 32 --exclude-punctuation --query RandomPassword --output text); fi
+      conf=$(mktmp); chmod 600 "$conf"
+      cat > "$conf" <<EOF
+{
+  "DBClusterIdentifier": "$PREFIX-db",
+  "MasterUserPassword": "$pw",
+  "ApplyImmediately": true
+}
+EOF
+      mut "reset the master password of $PREFIX-db (the earlier one was never stored)" rds modify-db-cluster --cli-input-json "file://$conf" --query DBCluster.DBClusterIdentifier --output text >/dev/null
+      if [ -z "${DRY_RUN:-}" ]; then aws rds wait db-instance-available --db-instance-identifier "$PREFIX-db-1"; fi
+      store_database_url "$pw"
+    fi
   fi
+}
+# The URL carries the password, so it goes into the secret from a private temporary file and is never printed.
+store_database_url() {
+  if [ -n "${DRY_RUN:-}" ]; then host='<endpoint>'; else host=$(aws rds describe-db-clusters --db-cluster-identifier "$PREFIX-db" --query 'DBClusters[0].Endpoint' --output text); fi
+  url=$(mktmp); chmod 600 "$url"
+  printf 'postgres://graft:%s@%s:5432/graft?sslmode=require' "$1" "$host" > "$url"
+  mut "store the database URL as secret $PREFIX/database-url (value never printed)" secretsmanager create-secret --name "$PREFIX/database-url" \
+    --secret-string "file://$url" --tags $TAGS_KV --query ARN --output text >/dev/null
 }
 
 phase_secrets() {
@@ -415,7 +436,10 @@ phase_service() {
   [ -n "$image" ] || die "service needs --image <ref>"
   # Creating is for the first time only: a service that exists is updated with `redeploy`.
   have=$(probe ecs describe-express-gateway-service --service-arn "arn:aws:ecs:$REGION:$ACCOUNT:service/$PREFIX/$SVC" --query 'service.status.statusCode')
-  [ -z "$have" ] || die "the service $SVC already exists: use redeploy --image <ref> to update it"
+  case "$have" in
+    ""|INACTIVE|DRAINING) ;; # absent, or deleted and still describable for a while
+    *) die "the service $SVC already exists: use redeploy --image <ref> to update it" ;;
+  esac
   cost="BILLS BY THE HOUR while up: an application load balancer (about 0.03 USD/h with its capacity units), 3 public IPv4 addresses (0.005 USD/h each), one 0.5 vCPU / 1 GB Fargate task (about 0.03 USD/h). Roughly 2 USD a day plus the database. Unverified estimate; run status, and teardown when idle."
   ensure_cluster
   pub_a=$(subnet_id public-a); pub_b=$(subnet_id public-b)
@@ -470,22 +494,28 @@ phase_redeploy() {
     echo "if it is not ready within 20 minutes it would be rolled back to ${previous:-the revision now running}" >&2
     return 0
   fi
-  if wait_ready; then ledger_row "redeploy finished, ready" "$td"; echo "ready on the new revision." >&2; return 0; fi
-  echo "aws-dev: the new revision did not become ready in 20 minutes: rolling back" >&2
+  if wait_ready "$td"; then ledger_row "redeploy finished, ready" "$td"; echo "ready on the new revision." >&2; return 0; fi
+  echo "aws-dev: the new revision did not become ready: rolling back" >&2
   mut "roll back to the previous revision" ecs update-express-gateway-service --service-arn "$arn" --task-definition-arn "$previous" --output json >/dev/null
-  wait_ready || echo "aws-dev: the rollback is also slow: run status and look at the service events" >&2
+  wait_ready "$previous" || echo "aws-dev: the rollback is also slow: run status and look at the service events" >&2
   die "the new revision did not become ready; the service was put back on $previous"
 }
-# Ready means the roll is complete (the new task has taken over) and the service answers.
+# Ready means: the revision asked for is the primary one, its roll is complete (the new task has taken
+# over), and the service answers. The primary check matters: right after the update the old revision is
+# still primary and complete, and would pass for the new one. It waits GRAFT_READY_WAIT_SECS (20 minutes)
+# by the clock, polling every GRAFT_READY_POLL_SECS.
 wait_ready() {
+  want=$1
   endpoint=$(aws ecs describe-express-gateway-service --service-arn "arn:aws:ecs:$REGION:$ACCOUNT:service/$PREFIX/$SVC" --query 'service.activeConfigurations[0].ingressPaths[0].endpoint' --output text)
-  n=0
-  while [ "$n" -lt 120 ]; do
+  case "$endpoint" in http://*|https://*) ;; *) endpoint="https://$endpoint" ;; esac
+  deadline=$(( $(date +%s) + ${GRAFT_READY_WAIT_SECS:-1200} ))
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    primary=$(aws ecs describe-services --cluster "$PREFIX" --services "$SVC" --query "services[0].deployments[?status=='PRIMARY'].taskDefinition | [0]" --output text)
     state=$(aws ecs describe-services --cluster "$PREFIX" --services "$SVC" --query "services[0].deployments[?status=='PRIMARY'].rolloutState | [0]" --output text)
     code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 8 "$endpoint/ready" 2>/dev/null || true)
-    [ "$state" = COMPLETED ] && [ "$code" = 200 ] && return 0
-    [ "$state" = FAILED ] && return 1
-    sleep 10; n=$((n + 1))
+    [ "$primary" = "$want" ] && [ "$state" = COMPLETED ] && [ "$code" = 200 ] && return 0
+    [ "$primary" = "$want" ] && [ "$state" = FAILED ] && return 1
+    sleep "${GRAFT_READY_POLL_SECS:-10}"
   done
   return 1
 }
@@ -587,8 +617,12 @@ phase_status() {
   echo "info  public IPv4 addresses in use: ${inuse:-0} (about 0.005 USD/h each)"
   lbs=$(lookup elbv2 describe-load-balancers --query 'LoadBalancers[].[LoadBalancerName,State.Code]' || true)
   [ -z "$lbs" ] && echo "ok    no load balancers" || echo "info  load balancers: $lbs (about 0.03 USD/h each)"
-  svc=$(lookup ecs describe-services --cluster "$PREFIX" --services "$PREFIX" --query 'services[].[serviceName,status,desiredCount,runningCount]' 2>/dev/null || true)
-  [ -z "$svc" ] && echo "ok    no service" || echo "info  service: $svc"
+  names=$(lookup ecs list-services --cluster "$PREFIX" --query 'serviceArns[]' 2>/dev/null || true)
+  if [ -z "$names" ]; then echo "ok    no service"; else
+    # shellcheck disable=SC2086
+    echo "info  services: $(lookup ecs describe-services --cluster "$PREFIX" --services $names --query 'services[].[serviceName,status,desiredCount,runningCount]' 2>/dev/null || true)"
+    [ "$(echo "$names" | wc -w | tr -d ' ')" -le 1 ] || flag "more than one service is running: a load copy left up bills like the live service (load-down --yes)"
+  fi
   tasks=$(lookup ecs list-tasks --cluster "$PREFIX" --query 'taskArns' 2>/dev/null || true)
   [ -z "$tasks" ] && echo "ok    no running tasks" || echo "info  running tasks: $(echo "$tasks" | wc -w | tr -d ' ')"
   db=$(lookup rds describe-db-clusters --query 'DBClusters[].[DBClusterIdentifier,Status,ServerlessV2ScalingConfiguration.MinCapacity,ServerlessV2ScalingConfiguration.MaxCapacity]' || true)
@@ -639,8 +673,12 @@ phase_teardown() {
   case " $* " in *" --yes "*) ;; *) die "teardown deletes everything graft made in dev: pass --yes" ;; esac
   cost="stops all hourly billing"
   arn="arn:aws:ecs:$REGION:$ACCOUNT:service/$PREFIX/$PREFIX"
+  # The load copy first, if it was left up: it bills like the live service, and its network interfaces
+  # would keep the security groups and the VPC from being deleted.
+  soft "delete the load service, if it is there" ecs delete-express-gateway-service --service-arn "arn:aws:ecs:$REGION:$ACCOUNT:service/$PREFIX/$PREFIX-load"
+  soft "delete the load secret, if it is there" secretsmanager delete-secret --secret-id "$PREFIX/load-database-url" --force-delete-without-recovery --query Name --output text
   soft "delete the Express service (and the load balancer, target groups and scaling it made)" ecs delete-express-gateway-service --service-arn "$arn"
-  wait_gone probe ecs describe-services --cluster "$PREFIX" --services "$PREFIX" --query "services[?status!='INACTIVE'].serviceName | [0]"
+  wait_gone probe ecs describe-services --cluster "$PREFIX" --services "$PREFIX" "$PREFIX-load" --query "services[?status!='INACTIVE'].serviceName | [0]"
   for t in $(lookup ecs list-tasks --cluster "$PREFIX" --query 'taskArns' 2>/dev/null || true); do soft "stop task $t" ecs stop-task --cluster "$PREFIX" --task "$t" --query 'task.taskArn' --output text; done
   soft "delete the ECS cluster" ecs delete-cluster --cluster "$PREFIX" --query cluster.clusterName --output text
   soft "delete the log group" logs delete-log-group --log-group-name "$LOG_GROUP"
