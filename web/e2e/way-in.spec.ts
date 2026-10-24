@@ -63,17 +63,16 @@ for (const size of SIZES) {
       expect(covered, "something is on top of it").toBe(false);
     });
 
-    test("the page says in two plain lines what to do, before anything is played", async ({
+    test("a visitor who has already seen the coach is still told what to do before they play", async ({
       page,
     }) => {
       await page.goto("/");
       await expect(page.locator(".roll")).toHaveAttribute("data-audio", "ready");
-      const how = page.getByTestId("how-it-works");
-      await expect(how).toBeVisible();
-      const text = (await how.innerText()).toLowerCase();
-      expect(text).toContain("play");
-      expect(text).toContain("needle");
-      expect(text).toContain("make a flip");
+      // the first-visit coach says it in full (see coach.spec.ts); after it, one plain line stays
+      const status = page.getByRole("status").filter({ hasText: "tap play" });
+      await expect(status).toBeVisible();
+      expect((await status.innerText()).toLowerCase()).toContain("nothing sounds until you do");
+      await expect(page.getByRole("button", { name: "how it works" })).toBeVisible();
     });
 
     test("nothing on the roll is drawn over anything else that is read or pressed", async ({

@@ -302,21 +302,54 @@ test("a preview that differs from the service's render is said plainly, and the 
   await expect(page.getByText("which differs from the preview you heard")).toBeVisible();
 });
 
-test("the key is kept in this browser only when the maker chooses, and then it is the one thing stored", async ({
+test("the ticket's picture is drawn from the public id, and the secret key is only ever text", async ({
   page,
   request,
 }) => {
   const parent = await parentFor(request);
   await open(page, parent);
   await fill(page);
-  expect(await page.evaluate(() => localStorage.length)).toBe(0);
+  await page.getByRole("button", { name: "publish", exact: true }).click();
+  await expect(page.getByTestId("key-stub")).toBeVisible();
+  const key = await page.getByTestId("manage-key").innerText();
+  const id = new URL(await page.getByTestId("published-link").innerText()).pathname
+    .split("/")
+    .pop()!;
+  expect(key.length).toBeGreaterThan(40);
+  const picture = await page.getByTestId("trace").evaluate((el) => el.outerHTML);
+  expect(picture, "the picture is a trace").toContain("beam");
+  expect(picture, "the secret key is part of the picture").not.toContain(key);
+  expect(picture, "nor any long run of it").not.toContain(key.slice(0, 16));
+  // the same flip draws the same line wherever it is shown: the manage page draws the one the ticket did
+  const line = await page.getByTestId("trace").locator(".beam").getAttribute("d");
+  await page.goto(`/manage/${id}`);
+  await expect(page.getByTestId("trace")).toBeVisible();
+  expect(await page.getByTestId("trace").locator(".beam").getAttribute("d")).toBe(line);
+  await expect(page.getByText("a published flip is fixed.")).toBeVisible();
+});
+
+test("the key is kept in this browser only when the maker chooses, and then it is the only thing stored about their publications", async ({
+  page,
+  request,
+}) => {
+  const parent = await parentFor(request);
+  await open(page, parent);
+  await fill(page);
+  expect(
+    await page.evaluate(() => Object.keys(localStorage).filter((k) => k !== "graft.coach").length),
+  ).toBe(0);
   await page.getByRole("button", { name: "publish", exact: true }).click();
   await expect(page.getByRole("heading", { name: "published" })).toBeVisible();
-  expect(await page.evaluate(() => localStorage.length), "publishing alone stores nothing").toBe(0);
+  expect(
+    await page.evaluate(() => Object.keys(localStorage).filter((k) => k !== "graft.coach").length),
+    "publishing alone stores nothing",
+  ).toBe(0);
   const key = await page.getByTestId("manage-key").innerText();
   await page.getByLabel(/keep this key in this browser/).check();
   await expect(page.getByText("kept in this browser.")).toBeVisible();
-  const stored = await page.evaluate(() => Object.fromEntries(Object.entries(localStorage)));
+  const stored = await page.evaluate(() =>
+    Object.fromEntries(Object.entries(localStorage).filter(([k]) => k !== "graft.coach")),
+  );
   expect(Object.keys(stored)).toEqual(["graft.manage-keys"]);
   expect(Object.values(JSON.parse(stored["graft.manage-keys"]!) as Record<string, string>)).toEqual(
     [key],

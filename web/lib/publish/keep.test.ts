@@ -1,4 +1,4 @@
-// Keeping a manage key in this browser is the maker's choice and the one thing graft stores there.
+// Keeping a manage key in this browser is the maker's choice; it is the only thing graft stores about a maker's publications (the light or dark choice and the first-visit guide's note are not about them).
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { STORAGE_KEY, forgetKey, keepKey, keptKeys, type StorageLike } from "./keep.ts";

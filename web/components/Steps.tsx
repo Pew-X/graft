@@ -14,7 +14,7 @@ export function Steps({ current }: { current: 1 | 2 | 3 }) {
           <span className="n" aria-hidden="true">
             {i + 1}
           </span>
-          {text}
+          <span className="t">{text}</span>
         </li>
       ))}
     </ol>

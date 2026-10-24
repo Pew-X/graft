@@ -13,11 +13,14 @@ import {
   type AudioContextConstructor,
   type State,
 } from "../lib/playback/index.ts";
+import { coachSeen } from "../lib/coach/seen.ts";
 import { peaksOf } from "../lib/record/disc.ts";
+import { type Mark, markFrames, markSeconds } from "../lib/record/mark.ts";
 import { startTelemetry } from "../lib/telemetry/browser.ts";
 import type { Telemetry } from "../lib/telemetry/telemetry.ts";
 import type { Loader } from "../lib/roll/audio.ts";
 import type { Block } from "../lib/roll/view.ts";
+import { Coach, type CoachStep } from "./Coach.tsx";
 import { CreditBlock, EndBlock } from "./CreditBlock.tsx";
 import { ReportDialog } from "./ReportDialog.tsx";
 import { Disc, type Live } from "./Disc.tsx";
@@ -61,7 +64,7 @@ export function RollPlayer({
   /** Where to send best-effort counts (the service's events address); none, no counts. */
   reportTo?: string | undefined;
   /** Go to the make flow for a stage. Absent where the roll is shown without the site around it. */
-  openMake?: ((id: string) => void) | undefined;
+  openMake?: ((id: string, cut?: { start: number; end: number }) => void) | undefined;
   /** Where the bar's make a flip link goes; none, no link. */
   makeHref?: string | undefined;
   /** Where the service is, for reports. Without it there is nowhere to send one, so no report control is shown. */
@@ -110,42 +113,43 @@ export function RollPlayer({
   const sheet = useRef<HTMLDivElement>(null);
   const viewportEl = useRef<HTMLDivElement>(null);
   const notesEl = useRef<HTMLDivElement>(null);
+  // the first-visit coach: shown once to a browser that has not seen it, and again on request
+  // marking a part of a stage on the record, to flip just that part
+  const [marking, setMarking] = useState(false);
+  const [mark, setMark] = useState<Mark | null>(null);
+  const [coachOpen, setCoachOpen] = useState(false);
+  const coachChecked = useRef(false);
   const place = useCallback((): void => {
     const node = nodes.current[hero];
-    if (!node) return;
+    const viewport = viewportEl.current;
+    const article = node?.querySelector<HTMLElement>(":scope > article");
+    if (!node || !article || !viewport) return;
     const h = window.innerHeight;
     const portrait = window.innerWidth < h * 0.9;
-    // Landscape: the stage is centred a little above the middle. Portrait: it starts below the header.
-    // A tall stage starts just under the header instead of being pushed up out of sight.
-    // Landscape also never lets the stage run under the status text: the latest top that keeps its
-    // last line (the block's bottom padding is empty) above the notes, with a little air.
-    const notesH = notesEl.current?.getBoundingClientRect().height ?? 0;
-    const padBottom = Number.parseFloat(getComputedStyle(node).paddingBottom) || 0;
-    const latest = h - 92 - notesH - node.offsetHeight + padBottom;
-    const top = portrait
-      ? Math.max(h * 0.12, 96)
-      : Math.max(72, Math.min(h * 0.46 - node.offsetHeight / 2, latest));
-    setShift(Math.round(top - node.offsetTop));
+    // The room the stage in view has, measured: under the header (and, in portrait, the independence
+    // line under it), and above the status pill and the controls (and, in portrait, above the record).
+    // A stage that fits is centred a little above the middle; one that does not starts at the top of its
+    // room and is a scroll region, with a fade and a word saying there is more.
+    const bar = document.querySelector(".roll .bar")?.getBoundingClientRect();
+    const footer = portrait
+      ? document.querySelector(".roll .footer")?.getBoundingClientRect()
+      : undefined;
+    const controls = document.querySelector(".roll .controls")?.getBoundingClientRect();
+    const roomTop = Math.max(bar?.bottom ?? 60, footer?.bottom ?? 0) + 14;
+    // the pill's slot is always kept, whether or not it is showing, so the stage does not jump when it goes
+    const slot = Math.max(notesEl.current?.getBoundingClientRect().height ?? 0, 50);
+    const lowest = (controls?.top ?? h - 70) - 16 - slot - 14;
+    const bottom = portrait ? Math.min(lowest, h * 0.56) : lowest;
+    const natural = article.scrollHeight;
+    const free = bottom - roomTop;
+    const ideal = portrait
+      ? roomTop + Math.min(36, Math.max(0, (free - natural) / 3))
+      : h * 0.46 - natural / 2;
+    const top = natural >= free ? roomTop : Math.max(roomTop, Math.min(ideal, bottom - natural));
+    viewport.style.setProperty("--article-max", `${Math.max(120, Math.floor(bottom - top))}px`);
+    viewport.style.setProperty("--article-top", `${article.offsetTop}px`);
+    setShift(Math.round(top - (node.offsetTop + article.offsetTop)));
   }, [hero]);
-  // The status text and the two plain lines sit over the bottom of the left column. Their real height
-  // is published (on the viewport, not on the root, whose attributes are the page's observable state)
-  // so the stage in view stops above them, whatever they say and however they wrap.
-  useLayoutEffect(() => {
-    const viewport = viewportEl.current;
-    const notes = notesEl.current;
-    if (!viewport || !notes) return undefined;
-    const publish = (): void => {
-      viewport.style.setProperty(
-        "--notes-h",
-        `${Math.ceil(notes.getBoundingClientRect().height)}px`,
-      );
-    };
-    publish();
-    if (typeof ResizeObserver === "undefined") return undefined;
-    const watch = new ResizeObserver(publish);
-    watch.observe(notes);
-    return () => watch.disconnect();
-  }, [place]);
   useLayoutEffect(() => {
     place();
     const settle = requestAnimationFrame(() => setPlaced(true));
@@ -154,6 +158,8 @@ export function RollPlayer({
     // Fonts arriving, a stage's details opening, the window changing: the roll finds its place again.
     const watch = new ResizeObserver(place);
     watch.observe(el);
+    // the status text changes height as it changes words; the stage's room changes with it
+    if (notesEl.current) watch.observe(notesEl.current);
     let alive = true;
     void document.fonts?.ready.then(() => {
       if (alive) place();
@@ -166,6 +172,42 @@ export function RollPlayer({
   }, [place, load]);
 
   // Fetch every stage's audio. Nothing is decoded or played yet.
+  // When the stage in view has more than fits, say so: a flag the styles turn into a fade and a word.
+  useLayoutEffect(() => {
+    const node = nodes.current[hero];
+    const article = node?.querySelector<HTMLElement>(":scope > article");
+    if (!node || !article) return undefined;
+    const update = (): void => {
+      const more = article.scrollHeight - article.scrollTop - article.clientHeight > 2;
+      article.dataset["more"] = String(more);
+      node.dataset["more"] = String(more);
+    };
+    update();
+    article.addEventListener("scroll", update, { passive: true });
+    const watch = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
+    watch?.observe(article);
+    return () => {
+      article.removeEventListener("scroll", update);
+      watch?.disconnect();
+      delete article.dataset["more"];
+      delete node.dataset["more"];
+    };
+  }, [hero, load, shift]);
+
+  useEffect(() => {
+    if (load !== "ready" || coachChecked.current) return undefined;
+    if (coachSeen()) {
+      coachChecked.current = true;
+      return undefined;
+    }
+    // after the roll has slid to its stage, so the notes point at things that have stopped moving
+    const id = window.setTimeout(() => {
+      coachChecked.current = true;
+      setCoachOpen(true);
+    }, 900);
+    return () => window.clearTimeout(id);
+  }, [load]);
+
   useEffect(() => {
     const abort = new AbortController();
     loadAudio(abort.signal)
@@ -297,8 +339,16 @@ export function RollPlayer({
     return stage === null || position === null ? null : { stage, position };
   }, []);
 
+  const markCut = mark ? markFrames(mark, (lengths[mark.stage] ?? 0) * 48_000) : null;
+  const markLabel =
+    mark && markCut
+      ? fill(copy.mark.seconds, {
+          n: markSeconds(mark, (lengths[mark.stage] ?? 0) * 48_000).toFixed(2),
+        })
+      : undefined;
   const status =
     notice ||
+    (marking && !markCut ? copy.mark.drag : "") ||
     (load === "loading"
       ? copy.hint.loading
       : load === "failed"
@@ -334,6 +384,22 @@ export function RollPlayer({
     },
     [blocks, lastId, openMake],
   );
+  const toggleMarking = useCallback(() => {
+    setMarking((on) => !on);
+    setMark(null);
+  }, []);
+  // escape leaves marking and clears the part
+  useEffect(() => {
+    if (!marking) return undefined;
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === "Escape") {
+        setMarking(false);
+        setMark(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [marking]);
   const [reporting, setReporting] = useState<{ id: string; title: string } | null>(null);
   const onReport = useCallback(
     (index: number) => {
@@ -350,6 +416,10 @@ export function RollPlayer({
     [current],
   );
   const heroBlock = blocks[Math.min(hero, stages - 1)];
+  const coachSteps = useMemo<readonly CoachStep[]>(
+    () => (makeHref ? ["play", "needle", "make"] : ["play", "needle"]),
+    [makeHref],
+  );
 
   return (
     <div
@@ -381,6 +451,9 @@ export function RollPlayer({
             // Some phones only unlock audio on the release of a touch, not its start.
             void audio.current?.unlock().catch(() => undefined);
           }}
+          marking={marking}
+          mark={mark ? { ...mark, ...(markLabel ? { label: markLabel } : {}) } : null}
+          onMark={setMark}
         />
       ) : null}
 
@@ -404,6 +477,17 @@ export function RollPlayer({
         <ThemeToggle />
       </header>
 
+      {coachOpen ? (
+        <Coach
+          steps={coachSteps}
+          stages={stages}
+          hero={hero}
+          playing={playing}
+          auditioning={state.kind === "auditioning"}
+          onClose={() => setCoachOpen(false)}
+        />
+      ) : null}
+
       <div className="viewport" ref={viewportEl}>
         <div
           className="sheet"
@@ -425,6 +509,8 @@ export function RollPlayer({
                 onPlay={onPlay}
                 onFlip={onFlip}
                 onReport={apiUrl ? onReport : undefined}
+                onMark={openMake ? toggleMarking : undefined}
+                marking={marking}
                 register={register}
                 onFocusBlock={onFocusBlock}
               />
@@ -441,8 +527,12 @@ export function RollPlayer({
       </div>
 
       <div className="notes" ref={notesEl}>
-        <p className="status" role="status" data-empty={status === ""}>
-          {status}
+        <p
+          className="status"
+          role="status"
+          data-empty={status === "" || (marking && markCut !== null)}
+        >
+          {marking && markCut ? "" : status}
         </p>
         {load === "failed" ? (
           <button
@@ -456,17 +546,29 @@ export function RollPlayer({
             {copy.retry}
           </button>
         ) : null}
-        {state.kind === "idle" ? (
-          <div className="how" data-testid="how-it-works">
-            <p>{copy.hint.how1}</p>
-            <p>{makeHref ? copy.hint.how2 : copy.hint.how2Plain}</p>
-          </div>
-        ) : null}
         {truncated ? <p className="hint">{copy.states.truncated}</p> : null}
         <p className="visually-hidden" role="status" aria-live="polite">
           {announcement}
         </p>
       </div>
+
+      {marking && markCut && mark ? (
+        <div className="mark-bar" role="group" aria-label={copy.mark.toggle}>
+          <button
+            type="button"
+            className="primary"
+            onClick={() => {
+              const id = blocks[mark.stage]?.id;
+              if (id) openMake?.(id, markCut);
+            }}
+          >
+            {copy.mark.flipPart} · {markLabel}
+          </button>
+          <button type="button" onClick={() => setMark(null)}>
+            {copy.mark.clear}
+          </button>
+        </div>
+      ) : null}
 
       <div className="controls" role="group" aria-label={copy.controls.label}>
         <button type="button" disabled={disabled} onClick={() => act((e) => e.previous())}>
@@ -490,7 +592,7 @@ export function RollPlayer({
       {apiUrl ? (
         <ReportDialog target={reporting} apiUrl={apiUrl} onClose={() => setReporting(null)} />
       ) : null}
-      <Footer />
+      <Footer onHow={() => setCoachOpen(true)} />
     </div>
   );
 }

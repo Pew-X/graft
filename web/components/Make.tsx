@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createApi, fetchChain } from "../lib/api/chain.ts";
@@ -116,7 +117,12 @@ export function Make({
 
   return (
     <div className="make" data-testid="make">
-      <p className="kicker">{copy.make.kicker}</p>
+      <div className="make-bar">
+        <Link href="/" className="back">
+          {copy.make.home}
+        </Link>
+        <p className="kicker">{copy.make.kicker}</p>
+      </div>
       {(origin === null && own !== null && toTrim === null) ||
       (origin !== null && sound.status === "ready") ? null : (
         <Steps current={origin === null ? 1 : 2} />
@@ -407,15 +413,17 @@ function Editor({
           >
             {listening ? copy.make.hear.pause : copy.make.hear.play}
           </button>
-          <button
-            type="button"
-            className="pill"
-            disabled={problem !== null || current === null || publishing || flipParent === null}
-            aria-describedby="why-not"
-            onClick={() => setPublishing(true)}
-          >
-            {copy.publish.open}
-          </button>
+          {publishing ? null : (
+            <button
+              type="button"
+              className="pill"
+              disabled={problem !== null || current === null || flipParent === null}
+              aria-describedby="why-not"
+              onClick={() => setPublishing(true)}
+            >
+              {copy.publish.open}
+            </button>
+          )}
           {own && sourceId === null ? (
             <button
               type="button"

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useMemo } from "react";
 import { createApi, fetchChain } from "../lib/api/chain.ts";
+import { makeAddress } from "../lib/record/mark.ts";
 import { liveLoader } from "../lib/roll/audio.ts";
 import type { Block } from "../lib/roll/view.ts";
 import { RollPlayer } from "./RollPlayer.tsx";
@@ -35,7 +36,7 @@ export function LiveRoll({
       truncated={truncated}
       reportTo={`${apiUrl}/v1/events`}
       apiUrl={apiUrl}
-      openMake={(sound) => router.push(`/make?from=${encodeURIComponent(sound)}`)}
+      openMake={(sound, cut) => router.push(makeAddress(sound, cut))}
     />
   );
 }

@@ -6,6 +6,7 @@ import { copy, fill } from "../lib/copy.ts";
 import { hit, layout } from "../lib/record/disc.ts";
 import { FrameGovernor } from "../lib/record/frames.ts";
 import { moveCursor, type Cursor } from "../lib/record/keys.ts";
+import { markBetween, type Mark } from "../lib/record/mark.ts";
 import {
   groovesIn,
   paintGrooves,
@@ -42,6 +43,10 @@ interface Props {
   onScrubStart: (stage: number, offset: number) => void;
   onScrubMove: (stage: number, offset: number) => void;
   onScrubEnd: () => void;
+  /** Marking a part to flip: a drag along a ring marks it (the sound still follows), and [ and ] mark at the cursor. */
+  marking?: boolean;
+  mark?: (Mark & { label?: string }) | null;
+  onMark?: (mark: Mark | null) => void;
 }
 
 const SAMPLE_RATE = 48_000;
@@ -66,6 +71,9 @@ export function Disc({
   onScrubStart,
   onScrubMove,
   onScrubEnd,
+  marking = false,
+  mark = null,
+  onMark,
 }: Props) {
   const stages = blocks.length;
   const theme = useResolvedTheme();
@@ -82,10 +90,12 @@ export function Disc({
   const clock = useRef(0);
   const governor = useRef(new FrameGovernor());
   const frame = useRef(0);
-  const latest = useRef({ cursor, focus, playing });
+  const latest = useRef({ cursor, focus, playing, mark });
   useLayoutEffect(() => {
-    latest.current = { cursor, focus, playing };
+    latest.current = { cursor, focus, playing, mark };
   });
+  // where a drag that marks a part began: the stage it is in and the place in it
+  const anchor = useRef<{ stage: number; u: number } | null>(null);
 
   const looks = useMemo<StageLook[]>(
     () =>
@@ -133,7 +143,7 @@ export function Disc({
       if (sample) governor.current.frame(timestamp);
       const slow = governor.current.degraded;
       if (slow) setMode((m) => (m === "cached" ? m : "cached"));
-      const { cursor: at, focus: shown, playing: sounding } = latest.current;
+      const { cursor: at, focus: shown, playing: sounding, mark: marked } = latest.current;
       const now = live();
       const stage = Math.min(now?.stage ?? (sounding ? shown : at.stage), stages - 1);
       const length = lengths[stage] ?? 0;
@@ -152,6 +162,7 @@ export function Disc({
         hover: null,
         reduced,
         cached: slow,
+        mark: marked,
       };
       const l = layout(size.w, size.h, stages);
       const over = pointer.current ? hit(l, pointer.current.x, pointer.current.y, null) : null;
@@ -199,7 +210,7 @@ export function Disc({
     };
     frame.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame.current);
-  }, [draw, playing, cursor, focus]);
+  }, [draw, playing, cursor, focus, mark]);
 
   // One redraw for a change the loop would not paint. While the disc is turning (or being dragged) the
   // loop is running and paints every frame: cancelling it here would freeze the disc mid-sound.
@@ -235,6 +246,12 @@ export function Disc({
     setHint(false);
     setCursor({ stage: hitAt.band, offset: hitAt.offset });
     onScrubStart(hitAt.band, hitAt.offset);
+    if (marking && onMark) {
+      const length = lengths[hitAt.band] ?? 0;
+      const u = length > 0 ? hitAt.offset / length : 0;
+      anchor.current = { stage: hitAt.band, u };
+      onMark(markBetween(hitAt.band, u, u));
+    }
     redraw();
   };
   const onMove = (event: PointerEvent<HTMLCanvasElement>): void => {
@@ -247,6 +264,11 @@ export function Disc({
         held.current = hitAt.band;
         setCursor({ stage: hitAt.band, offset: hitAt.offset });
         onScrubMove(hitAt.band, hitAt.offset);
+        const from = anchor.current;
+        if (marking && onMark && from && from.stage === hitAt.band) {
+          const length = lengths[hitAt.band] ?? 0;
+          onMark(markBetween(hitAt.band, from.u, length > 0 ? hitAt.offset / length : 0));
+        }
       }
     } else if (event.pointerType === "mouse") {
       pointer.current = point;
@@ -261,6 +283,7 @@ export function Disc({
     dragging.current = false;
     held.current = null;
     pointer.current = null;
+    anchor.current = null;
     onScrubEnd();
     redraw();
   };
@@ -270,6 +293,21 @@ export function Disc({
     redraw();
   };
   const onKey = (event: KeyboardEvent): void => {
+    if (marking && onMark) {
+      const length = lengths[cursor.stage] ?? 0;
+      const u = length > 0 ? cursor.offset / length : 0;
+      const here = mark && mark.stage === cursor.stage ? mark : null;
+      if (event.key === "[") {
+        event.preventDefault();
+        onMark(markBetween(cursor.stage, u, here ? Math.max(u, here.to) : u));
+        return;
+      }
+      if (event.key === "]") {
+        event.preventDefault();
+        onMark(markBetween(cursor.stage, here ? Math.min(u, here.from) : u, u));
+        return;
+      }
+    }
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       setHint(false);

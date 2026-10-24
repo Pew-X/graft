@@ -13,9 +13,6 @@ export const copy = {
   hint: {
     locked: "tap play to hear it. nothing sounds until you do.",
     order: "the finished flip plays first, then the credits go back to the source.",
-    how1: "press play. the finished flip plays first, then the credits go back to the source.",
-    how2: "drag the needle to jump to a step. to make your own, press make a flip.",
-    how2Plain: "drag the needle to jump to a step.",
     loading: "loading the sounds.",
     loadFailed: "the sounds could not be loaded. reload to try again.",
     soundFailed: "the sound could not start. tap play to try again.",
@@ -120,7 +117,7 @@ export const copy = {
     heading: "publish",
     public: "what you publish is public. anyone with the link can hear it and flip it.",
     noAccount:
-      "there is no account. you will get a key to keep, once, if you want to manage it later.",
+      "there is no account. when it is published you get a ticket with a key on it, once: keep it if you may want to close the flip or withdraw it. a published flip cannot be edited; to change it, flip it again.",
     title: "title",
     titleGloss: "up to 60 characters, shown as typed",
     name: "your name",
@@ -200,14 +197,22 @@ export const copy = {
       copy: "copy the link",
       copied: "copied.",
       copyFailed: "copying did not work here. select the link and copy it.",
-      keyHeading: "your manage key",
+      keyHeading: "your ticket for this flip",
+      traceLabel: "a line drawn from this flip's id",
+      traceCaption:
+        "this line is drawn from the flip's id: the same flip always draws the same line.",
+      stubHand: "keep this.",
       keyOnce:
-        "this is shown once and cannot be shown again. keep it if you may want to stop new flips or withdraw this later.",
+        "it is shown once and cannot be shown again. you need it to close this flip to new flips, or to withdraw it.",
       keyIsNot:
-        "it is not an identity and not a login. it only opens the controls for this one publication. if you lose it, the only loss is that this publication's settings cannot be changed.",
+        "it is not a login and not who you are. if you lose it, the only loss is that this flip's settings cannot be changed.",
+      copyKey: "copy the key",
+      keyCopied: "key copied.",
+      keyCopyFailed: "copying did not work here. select the key and copy it.",
+      fixed:
+        "a published flip is fixed. to change it, flip it again: that makes a new stage after it and leaves this one as it was.",
       keep: "keep this key in this browser",
-      keepGloss:
-        "optional. it is the only thing graft stores in your browser, and only because you chose to.",
+      keepGloss: "optional. graft keeps it here only because you chose to.",
       kept: "kept in this browser.",
       keepFailed: "this browser would not store it. copy the key somewhere safe instead.",
       mismatch:
@@ -307,7 +312,7 @@ export const copy = {
         tracker:
           "where error tracking is switched on, it runs without ip addresses, without session replay and with a scrubber.",
         browser:
-          "the only things graft can keep in your browser are your choice of light or dark, and a manage key if you tick the box to keep one when you publish.",
+          "the only things graft can keep in your browser are your choice of light or dark, a note that you have seen the first-visit guide, and a manage key if you tick the box to keep one when you publish.",
       },
     },
     takedown: {
@@ -374,6 +379,7 @@ export const copy = {
   make: {
     title: "make a flip",
     kicker: "make a flip",
+    home: "← graft",
     intro:
       "a flip is a sound with a part cut out and its speed changed. pick a sound, or record your own, then cut it, change its speed and hear it. you can publish it to get a link to share.",
     steps: {
@@ -403,7 +409,8 @@ export const copy = {
       gloss: "the part of the sound that is kept",
       start: "start of the cut",
       end: "end of the cut",
-      help: "drag the handles, or focus one and use the arrow keys: one millisecond a press, ten with shift.",
+      help: "drag the two brackets, or focus one and use the arrow keys: one millisecond a press, ten with shift.",
+      tag: { start: "start", end: "end" },
       range: "{from} to {to} seconds, {length} kept",
     },
     speed: {
@@ -458,6 +465,37 @@ export const copy = {
   footer: {
     disclaimer: "independent experiment, not affiliated with or endorsed by any product named.",
     about: "about",
+    how: "how it works",
+  },
+  /** Marking a part of a stage on the record, to flip just that part. */
+  mark: {
+    toggle: "cut on the record",
+    stop: "stop cutting",
+    drag: "drag along a ring to mark the part you want. on a keyboard, press [ and ] on the record.",
+    flipPart: "flip this part",
+    clear: "clear",
+    seconds: "{n} s",
+  },
+  /** The first-visit coach: three short notes, drawn over the real screen, shown once. */
+  coach: {
+    label: "how it works",
+    count: "{n} of {total}",
+    next: "next",
+    back: "back",
+    skip: "skip",
+    done: "start listening",
+    play: {
+      title: "press play.",
+      body: "you hear the finished flip first. then the credits go back, stage by stage, to the sound it began as.",
+    },
+    needle: {
+      title: "drag the needle.",
+      body: "the record is the whole chain: one ring for each stage, the first one outermost. put the needle anywhere to hear that moment.",
+    },
+    make: {
+      title: "make your own.",
+      body: "pick a stage, cut a part of it, change its speed and hear it. you can mark the part right on the record. publish it and the chain grows by one.",
+    },
   },
 } as const;
 
