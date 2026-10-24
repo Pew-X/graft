@@ -328,7 +328,7 @@ test("the ticket's picture is drawn from the public id, and the secret key is on
   await expect(page.getByText("a published flip is fixed.")).toBeVisible();
 });
 
-test("the key is kept in this browser only when the maker chooses, and then it is the one thing stored", async ({
+test("the key is kept in this browser only when the maker chooses, and then it is the only thing stored about their publications", async ({
   page,
   request,
 }) => {
