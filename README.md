@@ -2,15 +2,46 @@
 
 A sound's ancestry, rolled as playable credits. Open a sound, hear the chain of cuts and flips that led to it, scrub through it, and make one new flip of your own.
 
+![The home page: the last stage of the seeded chain as a torn-paper title, its credits beside it, and the record with its needle](assets/readme/home-roll.jpg)
+
 graft is an independent experiment. It is not affiliated with or endorsed by any product named in it.
 
 Every fact the project shows about a sound is one of three things: declared (said by a person), computed (produced by the system) or unknown (not established). The same applies to this repository: where a claim is measured, the test or number that backs it is named; where it is not, it says so.
 
-> Status: the backend runs end to end and is tested against real Postgres and a real S3-compatible object store: seed a source, publish a flip (rendered on the server by the canonical renderer), read the chain, manage your own publication with its key, report a sound, hide it as the operator, and serve audio through short-lived signed URLs. It also has the abuse limits and a runtime kill switch, the event path (a transactional outbox, a relay, an idempotent consumer and hourly rollups), a guarded client event endpoint, visitor source uploads (switched off by default), the seeded chain with its static snapshot, and traces, metrics and error reporting that send nothing personal. The web app has a tested playback engine and the home page: the seeded chain as a roll of credit stages (torn-paper title slabs, wall-label credits) beside a large record you can scrub, in the locked look, played from a static snapshot; any publication's link opens its chain with every state designed (removed, held, not found, offline); an operator's page at `/admin` (reports, hide and lift, the kill switch, the event path) behind the admin secret; the make flow is not built, and deployment is not built. Sections below are filled in by the work that owns them.
-
 ## What it is, and is not
 
-_Written by ticket 37 (docs consolidation)._
+A visitor opens a sound and sees its ancestry as a roll of credit stages beside a large record. Each stage is one flip: a cut of the sound before it, at a speed. Pressing play hears the finished flip first and then each step back to the source; dragging the needle jumps to a step. "Make a flip" cuts a stage, hears it, and publishes it, so the chain grows by one. Nothing sounds until the visitor presses play.
+
+The server renders every published flip with one canonical, integer-only renderer, so the same input gives the same bytes on every host the tests cover. The renderer is a single WebAssembly artefact for that reason, and the claim is "reproducible for this renderer version and these published vectors"; the repository carries the vectors and the replay tool that check it. The rest of the service is Rust to keep one language end to end and to learn it, not because the product needs it.
+
+It is not a sampler, not a social network (no accounts, no feeds), and not a statement about scale: no number here is extrapolated to a number of users. It does not check who made a sound or whether they hold the right to share it; it says so on the page.
+
+## How it is put together
+
+```mermaid
+flowchart LR
+  B["Browser"] -->|"pages"| W["Site on Vercel (Next.js)"]
+  B -->|"JSON"| S["Service: one Rust container (ECS on Fargate, ARM64)"]
+  B -->|"short-lived signed links"| O[("Audio in S3")]
+  S --> R["Canonical renderer (.wasm under wasmtime)"]
+  S --> P[("Postgres (Aurora Serverless v2)")]
+  S --> O
+  P --> E["Event ledger, relay, consumer, hourly rollups"]
+```
+
+One service and one database. A publish renders the flip, stores the audio, writes the publication and its event in one transaction, and answers; a retried request is handled once. The home page plays from a static snapshot of the seeded chain, so it works before the service has answered. ARCHITECTURE.md has the module boundaries, the concurrency and idempotency guarantees with the tests that show them, the abuse limits and their honest edges, the threat model, and the runbook.
+
+## What has been measured
+
+One load run on a clean copy of the dev environment: one Fargate task of 0.5 vCPU and 1 GB, ARM64, and Aurora Serverless v2 capped at 1 unit, driven by one laptop over a home connection with the per-address limits lifted so the service was measured and not the limiter. In the full profile (five minutes of one-minute phases: 60 chain reads a second; flips at 6 a second; a mixed run of 60 requests a second, a fifth of them flips; and a ramp to 12 flips a second) it published 1,843 flips with no errors that were not a named refusal. Publish took 79 ms at the median and 132 ms at the 99th percentile; reading a chain took 12 ms and 26 ms. The client's counts, the service's counters and the database's counts agreed exactly.
+
+What bent is also on record: at 250 reads a second the 1-unit database was the limit (a chain read took 289 ms at the median, 13 ms with the cap raised to 4 units), and in the stress run, from about 50 flips a second, publish had a tail of about 5.5 seconds whose cause is a hypothesis that was not tested. No flips-a-second ceiling is claimed. ARCHITECTURE.md, "Measured numbers", has the table, the raw results are in `loadtest/results/`, and the limits are stated beside them.
+
+## What exists, and what does not
+
+The backend runs end to end and is tested against real Postgres and a real S3-compatible object store: seed a source, publish a flip, read the chain, manage your own publication with its key, report a sound, hide it as the operator, and serve audio through short-lived signed links. It has abuse limits and a runtime kill switch, an event path (a transactional outbox, a relay, an idempotent consumer, hourly rollups), a guarded client event endpoint, visitor source uploads (switched off in every environment), and traces, metrics and error reports that send nothing personal. The web app has the playback engine, the home page and its record, any publication's link with every state designed (removed, held, not found, offline), the make flow, with recording and adding your own sound (publishing it is refused while uploads are off), the manage, report and about screens, and the operator's page at `/admin` behind the admin secret. Browser tests run the whole suite in Chromium, with accessibility and frame-budget checks, and the core loop in Firefox and WebKit.
+
+One dev environment is deployed, by choice and with no staging or production (see "Deployment"). Not done: the GitHub deploy workflow has never run; no test on a real phone or in Safari on a device; no listening test with people outside the project; the repository's licence is undecided.
 
 ## What is declared, computed and unknown
 
@@ -32,7 +63,7 @@ Needs the pinned Rust toolchain (installed from `rust-toolchain.toml` by rustup)
 sh scripts/build-wasm.sh                 # the canonical renderer artefact
 docker run -d --name graft-dev-pg -e POSTGRES_PASSWORD=graft -p 127.0.0.1:55432:5432 postgres:16
 cargo test --workspace --all-features   # vectors on every Rust host, plus the tests that need Postgres
-cd web && pnpm install && pnpm dev       # the UI shell (a blank page for now)
+cd web && pnpm install && pnpm dev       # the site alone: the home page plays from its snapshot; chain pages need a running service
 ```
 
 The tests that need Postgres create a private database each on the server named by `GRAFT_TEST_DATABASE_URL` (default: the container above) and remove it afterwards.
@@ -48,7 +79,9 @@ curl -X PUT --aws-sigv4 "aws:amz:us-east-1:s3" --user graftaccess:graftsecret123
 
 `GRAFT_TEST_S3_ENDPOINT` names a different server (default `http://127.0.0.1:59000`). To keep audio in the bucket when running the service, set `GRAFT_BLOB_S3_BUCKET`, the two credentials, `GRAFT_BLOB_S3_ENDPOINT` and `GRAFT_BLOB_S3_ALLOW_HTTP=true` (see ARCHITECTURE.md, "Configuration"). `graft-blob-cleanup` removes audio that no record uses any more.
 
-To run the service against that container:
+With both containers running, `sh scripts/dev-local.sh` starts the whole thing on this machine: the service (visitor uploads on; `--no-uploads` leaves them off, as every environment ships), the seeded chain, and the built site at `http://127.0.0.1:3100`. Stop it with Ctrl-C. It keeps its own database and bucket prefix between runs and touches nothing else.
+
+To run the service alone against that container:
 
 ```sh
 GRAFT_DATABASE_URL=postgres://postgres:graft@127.0.0.1:55432/postgres cargo run -p graft-api
@@ -58,7 +91,7 @@ It serves `GET /v1/chains/{id}` and `GET /v1/publications/{id}`, `POST /v1/publi
 
 ## Deployment
 
-A dev environment is deployed: the site on Vercel and the service as one container on AWS (ECS Express Mode on Fargate ARM64, Aurora Serverless v2 and S3, in Mumbai). It was created by `scripts/aws-dev.sh`, which names only `graft-dev-*` resources, records every change, and can remove them all. The GitHub deploy workflow (`.github/workflows/deploy.yml`) is written and has never run. There is no staging or production environment. ARCHITECTURE.md, "Hosting and environments", says what was shown and what was not; "Measured numbers" has the first load measurement and its limits.
+A dev environment is deployed: the site on Vercel and the service as one container on AWS (ECS Express Mode on Fargate ARM64, Aurora Serverless v2 and S3, in Mumbai). It was created by `scripts/aws-dev.sh`, which names only `graft-dev-*` resources, records every change, and can remove them all. The service can be parked (`scripts/aws-dev.sh park`: no running task, so the database pauses about 16 minutes later) and woken again; the costs are estimates, about 4 USD a day running and about 1.3 USD a day parked, and no budget alarm is set. The GitHub deploy workflow (`.github/workflows/deploy.yml`) is written and has never run. There is no staging or production environment. ARCHITECTURE.md, "Hosting and environments", says what was shown and what was not; "Measured numbers" has the first load measurement and its limits.
 
 Secrets, by name only (they live in the platform's store, never in this repository): `GRAFT_DATABASE_URL`, `GRAFT_ADMIN_SECRET`, optionally `GRAFT_ERROR_TRACKER_DSN`, and `GRAFT_BLOB_S3_ACCESS_KEY_ID` with `GRAFT_BLOB_S3_SECRET_ACCESS_KEY` only when the bucket is not reached through the container's role. Visitor uploads are off in every environment until the launch gate decides otherwise.
 
@@ -72,7 +105,7 @@ Only server events (a publication was created, a report was filed) can never div
 
 ## Where to look when something is wrong
 
-Logs are JSON on standard output, one line per event, each with its request id (`x-request-id` on the response) and, when traces are exported, its trace id. Metrics are at `/metrics` in the Prometheus text format, behind the operator secret (requests, publish outcomes, renders, refusals by reason, the kill switch, relay backlog and consumer lag). Traces go to the OTLP endpoint in `OTEL_EXPORTER_OTLP_ENDPOINT` when one is set. Server errors and panics go to the error tracker in `GRAFT_ERROR_TRACKER_DSN` when one is set, with no personal data. The operator reads the event path at `GET /admin/rollups` and closes publishing with `PUT /admin/switch`. ARCHITECTURE.md ("Observability and operations") has the example alert rules; the full runbook comes with the launch gate.
+Logs are JSON on standard output, one line per event, each with its request id (`x-request-id` on the response) and, when traces are exported, its trace id. Metrics are at `/metrics` in the Prometheus text format, behind the operator secret (requests, publish outcomes, renders, refusals by reason, the kill switch, relay backlog and consumer lag). Traces go to the OTLP endpoint in `OTEL_EXPORTER_OTLP_ENDPOINT` when one is set. Server errors and panics go to the error tracker in `GRAFT_ERROR_TRACKER_DSN` when one is set, with no personal data. The operator reads the event path at `GET /admin/rollups` and closes publishing with `PUT /admin/switch`. ARCHITECTURE.md ("Observability and operations") has the example alert rules and its "Operator runbook" lists each task with what was run and where.
 
 ## Concurrency
 
@@ -92,7 +125,7 @@ cargo run -q -p graft-vectors --bin vectors-replay -- --help
 
 ## Working on it
 
-`dev` is the working branch. Branch from `dev`, open a pull request into `dev` (squashed, plain conventional commit, CI green). `staging` and `main` only receive promotion pull requests from the branch before them. Enable the local hooks once with `git config core.hooksPath .githooks`: they check formatting and commit messages only, and finish in about a second.
+`dev` is the working branch. Branch from `dev`, open a pull request into `dev` (plain conventional commits, CI green; merged with a merge commit, so the branch's commits stay in the history). `staging` and `main` only receive promotion pull requests from the branch before them. Enable the local hooks once with `git config core.hooksPath .githooks`: they check formatting and commit messages only, and finish in about a second.
 
 `sh scripts/precheck.sh` runs the fast checks locally in about half a minute (`--full` adds the whole test suite): run it before pushing, because a CI run costs ten minutes. The slow jobs are skipped on a pull request that cannot affect them (see ARCHITECTURE.md, "Determinism evidence"). Checks that run on pull requests: rustfmt, clippy with warnings as errors, tests, the crate dependency direction (`scripts/check-crate-graph.mjs`), cargo-deny, cargo-audit, a secret scan, TypeScript strict, ESLint, Prettier, a production build, `pnpm audit`, and repository hygiene (`scripts/check-repo.mjs`).
 
