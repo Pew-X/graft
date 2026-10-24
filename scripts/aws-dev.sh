@@ -18,6 +18,8 @@
 #                              run the release task once: migrate, seed, check the seeded chain
 #   service --image <ref> --origin <site>
 #                              the public service (ECS Express Mode): one small task behind /ready
+#   park | unpark              stop the service's task so the database can pause (the load balancer stays and
+#                              still bills), or bring the one task back
 #   status                     read-only sweep for anything that bills or was left behind
 #   teardown --yes             delete everything above, in order; never touches the GitHub sign-in provider
 #
@@ -25,7 +27,7 @@
 set -eu
 
 die() { echo "aws-dev: $*" >&2; exit 2; }
-usage() { sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+usage() { sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
 PREFIX=graft-dev
 CIDR=10.42.0.0/16
@@ -425,6 +427,24 @@ EOF
   echo "created. Watch it settle with: sh scripts/aws-dev.sh status" >&2
 }
 
+# ---- park and unpark ------------------------------------------------------------------------------
+# The database pauses only with no connection open, and the service keeps a pool and an event relay
+# connected, so while a task runs the database stays at about half a unit. Parking stops the task;
+# the address and the load balancer stay (the load balancer still bills by the hour).
+scale_service() { # min max
+  arn="arn:aws:ecs:$REGION:$ACCOUNT:service/$PREFIX/$PREFIX"
+  mut "set the service to $1..$2 tasks" ecs update-express-gateway-service --service-arn "$arn" \
+    --scaling-target "minTaskCount=$1,maxTaskCount=$2,autoScalingMetric=AVERAGE_CPU" --output json >/dev/null
+}
+phase_park() {
+  cost="stops the task and lets the database pause after 5 idle minutes; the load balancer and its 2 public addresses still bill (about 1.3 USD a day, unverified)"
+  scale_service 0 0
+}
+phase_unpark() {
+  cost="one task and the database awake again (about 2 USD a day more, unverified)"
+  scale_service 1 1
+}
+
 # ---- status: read-only ----------------------------------------------------------------------------
 phase_status() {
   warn=0
@@ -538,7 +558,7 @@ phase_teardown() {
 }
 
 case "$phase" in
-  network|registry|storage|cors|roles|logs|push|database|secrets|release|service|status|teardown) ;;
+  network|registry|storage|cors|roles|logs|push|database|secrets|release|service|park|unpark|status|teardown) ;;
   *) usage ;;
 esac
 guard
