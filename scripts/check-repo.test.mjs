@@ -74,3 +74,34 @@ test("the web app may not import or depend on the test tooling", () => {
   assert.match(found, /web\/package\.json: the web app must not reference the test tooling/);
   assert.doesNotMatch(found, /ok\.tsx/);
 });
+
+// The fixtures build their strings at run time so that this file does not trip the rule it tests.
+const org = ["trel", "lys"].join("");
+const account = ["7044", "2742", "7583"].join("");
+
+test("the builder's other organisation never appears in a tracked file, in any case", () => {
+  const found = run({
+    "scripts/a.sh": `profile=${org}-dev`,
+    "web/lib/b.ts": `// ${org.toUpperCase()}`,
+    "scripts/ok.sh": "profile=graft-dev",
+  }).join("\n");
+  assert.match(found, /scripts\/a\.sh: names a private organisation/);
+  assert.match(found, /web\/lib\/b\.ts: names a private organisation/);
+  assert.doesNotMatch(found, /ok\.sh/);
+});
+
+test("a real AWS account id in an ARN is rejected; AWS's documented example ids are not", () => {
+  const found = run({
+    "scripts/c.sh": `role=arn:aws:iam::${account}:role/x`,
+    "scripts/d.sh": `bucket=arn:aws:s3:::graft-dev-audio`,
+    "scripts/e.sh": "role=arn:aws:iam::123456789012:role/example",
+    "scripts/f.sh": "role=arn:aws:iam::000000000000:role/example",
+  }).join("\n");
+  assert.match(found, /scripts\/c\.sh: contains an AWS account id/);
+  assert.doesNotMatch(found, /d\.sh|e\.sh|f\.sh/);
+});
+
+test("an account id written with hyphens, as the console shows it, is rejected too", () => {
+  const dashed = [account.slice(0, 4), account.slice(4, 8), account.slice(8)].join("-");
+  assert.match(run({ "scripts/g.sh": `# account ${dashed}` }).join("\n"), /scripts\/g\.sh: contains an AWS account id/);
+});
