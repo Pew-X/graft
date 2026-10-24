@@ -285,3 +285,24 @@ test("taking the load copy down removes only what it made", () => {
   assert.doesNotMatch(down, /delete-bucket|delete-db|delete-vpc|graft-dev\/database-url|graft-dev\/admin-secret|service\/graft-dev\/graft-dev\b(?!-load)/);
   assert.deepEqual(s.changes(), []);
 });
+
+test("service refuses to create over a service that already exists", () => {
+  const s = sandbox();
+  const r = s.run(["service", "--origin", "https://example.test", "--image", "img:tag"], { FAKE_EXISTS: "1" });
+  assert.notEqual(r.status, 0);
+  assert.match(plan(r), /already exists.*redeploy/);
+  assert.deepEqual(s.changes(), [], "nothing is created or changed");
+});
+
+test("redeploy swaps only the image of the running task definition, through the Express update, and says how it would roll back", () => {
+  const s = sandbox();
+  const out = plan(s.run(["redeploy", "--image", "img:new"], { DRY_RUN: "1", FAKE_EXISTS: "1" }));
+  assert.match(out, /register-task-definition/);
+  assert.match(out, /img:new/);
+  assert.match(out, /update-express-gateway-service --service-arn \S+service\/graft-dev\/graft-dev --task-definition-arn/);
+  assert.doesNotMatch(out, /create-express-gateway-service/, "an existing service is updated, never created");
+  assert.doesNotMatch(out, /GRAFT_CORS_ORIGINS/, "settings are inherited from the running revision, not rewritten");
+  assert.match(out, /rolled back to/);
+  assert.notEqual(s.run(["redeploy"], { DRY_RUN: "1" }).status, 0, "needs --image");
+  assert.deepEqual(s.changes(), []);
+});

@@ -18,6 +18,8 @@
 #                              run the release task once: migrate, seed, check the seeded chain
 #   service --image <ref> --origin <site>
 #                              the public service (ECS Express Mode): one small task behind /ready
+#   redeploy --image <ref>     update the running service to a new image (only the image changes); rolls back
+#                              to the previous revision if the new one never becomes ready
 #   park | unpark              stop the service's task so the database can pause (the load balancer stays and
 #                              still bills), or bring the one task back
 #   load-up --image <ref> --origin <site>
@@ -30,7 +32,7 @@
 set -eu
 
 die() { echo "aws-dev: $*" >&2; exit 2; }
-usage() { sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+usage() { sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
 PREFIX=graft-dev
 CIDR=10.42.0.0/16
@@ -411,6 +413,9 @@ phase_service() {
   image=$(opt --image "$@"); origin=$(opt --origin "$@")
   [ -n "$origin" ] || die "service needs --origin https://the-site (CORS must name it)"
   [ -n "$image" ] || die "service needs --image <ref>"
+  # Creating is for the first time only: a service that exists is updated with `redeploy`.
+  have=$(probe ecs describe-express-gateway-service --service-arn "arn:aws:ecs:$REGION:$ACCOUNT:service/$PREFIX/$SVC" --query 'service.status.statusCode')
+  [ -z "$have" ] || die "the service $SVC already exists: use redeploy --image <ref> to update it"
   cost="BILLS BY THE HOUR while up: an application load balancer (about 0.03 USD/h with its capacity units), 3 public IPv4 addresses (0.005 USD/h each), one 0.5 vCPU / 1 GB Fargate task (about 0.03 USD/h). Roughly 2 USD a day plus the database. Unverified estimate; run status, and teardown when idle."
   ensure_cluster
   pub_a=$(subnet_id public-a); pub_b=$(subnet_id public-b)
@@ -436,6 +441,53 @@ EOF
   ledger_row "Express service resources (load balancer, target groups, security groups, scaling): record for teardown" \
     "$(aws ecs describe-express-gateway-service --service-arn "$arn" --output json 2>&1 | tr -d ' \n' | cut -c1-400)"
   echo "created. Watch it settle with: sh scripts/aws-dev.sh status" >&2
+}
+
+# ---- redeploy ---------------------------------------------------------------------------------------
+# Update the running service to a new image: copy the running task definition with only its image
+# replaced (so every setting stays as it is), point the Express service at it, wait for the roll to
+# finish and for /ready, and put the previous revision back if that never happens. Express rolls
+# blue/green, so two tasks run for ten minutes or more.
+phase_redeploy() {
+  image=$(opt --image "$@")
+  [ -n "$image" ] || die "redeploy needs --image <ref>"
+  cost="a second task runs while the roll finishes (ten to fifteen minutes), then one again"
+  arn="arn:aws:ecs:$REGION:$ACCOUNT:service/$PREFIX/$SVC"
+  previous=$(lookup ecs describe-services --cluster "$PREFIX" --services "$SVC" --query 'services[0].taskDefinition')
+  def=$(mktmp)
+  if [ -n "${DRY_RUN:-}" ]; then
+    printf '{"note":"the running task definition, with its image replaced by %s"}\n' "$image" > "$def"
+  else
+    [ -n "$previous" ] || die "could not read the running task definition of $SVC"
+    command -v jq >/dev/null || die "redeploy needs jq"
+    aws ecs describe-task-definition --task-definition "$previous" --query taskDefinition \
+      | jq --arg image "$image" '.containerDefinitions[0].image = $image
+          | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' > "$def"
+  fi
+  td=$(mut "register the new task definition (only the image differs)" ecs register-task-definition --cli-input-json "file://$def" --query taskDefinition.taskDefinitionArn --output text)
+  mut "point the service at the new revision" ecs update-express-gateway-service --service-arn "$arn" --task-definition-arn "$td" --output json >/dev/null
+  if [ -n "${DRY_RUN:-}" ]; then
+    echo "if it is not ready within 20 minutes it would be rolled back to ${previous:-the revision now running}" >&2
+    return 0
+  fi
+  if wait_ready; then ledger_row "redeploy finished, ready" "$td"; echo "ready on the new revision." >&2; return 0; fi
+  echo "aws-dev: the new revision did not become ready in 20 minutes: rolling back" >&2
+  mut "roll back to the previous revision" ecs update-express-gateway-service --service-arn "$arn" --task-definition-arn "$previous" --output json >/dev/null
+  wait_ready || echo "aws-dev: the rollback is also slow: run status and look at the service events" >&2
+  die "the new revision did not become ready; the service was put back on $previous"
+}
+# Ready means the roll is complete (the new task has taken over) and the service answers.
+wait_ready() {
+  endpoint=$(aws ecs describe-express-gateway-service --service-arn "arn:aws:ecs:$REGION:$ACCOUNT:service/$PREFIX/$SVC" --query 'service.activeConfigurations[0].ingressPaths[0].endpoint' --output text)
+  n=0
+  while [ "$n" -lt 120 ]; do
+    state=$(aws ecs describe-services --cluster "$PREFIX" --services "$SVC" --query "services[0].deployments[?status=='PRIMARY'].rolloutState | [0]" --output text)
+    code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 8 "$endpoint/ready" 2>/dev/null || true)
+    [ "$state" = COMPLETED ] && [ "$code" = 200 ] && return 0
+    [ "$state" = FAILED ] && return 1
+    sleep 10; n=$((n + 1))
+  done
+  return 1
 }
 
 # ---- park and unpark ------------------------------------------------------------------------------
@@ -633,7 +685,7 @@ phase_teardown() {
 }
 
 case "$phase" in
-  network|registry|storage|cors|roles|logs|push|database|secrets|release|service|park|unpark|load-up|load-down|status|teardown) ;;
+  network|registry|storage|cors|roles|logs|push|database|secrets|release|service|redeploy|park|unpark|load-up|load-down|status|teardown) ;;
   *) usage ;;
 esac
 guard
