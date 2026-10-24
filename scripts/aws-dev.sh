@@ -20,6 +20,9 @@
 #                              the public service (ECS Express Mode): one small task behind /ready
 #   park | unpark              stop the service's task so the database can pause (the load balancer stays and
 #                              still bills), or bring the one task back
+#   load-up --image <ref> --origin <site>
+#                              a clean copy for the load test: second database, second service, own blob prefix
+#   load-down --yes            remove only that copy
 #   status                     read-only sweep for anything that bills or was left behind
 #   teardown --yes             delete everything above, in order; never touches the GitHub sign-in provider
 #
@@ -27,7 +30,7 @@
 set -eu
 
 die() { echo "aws-dev: $*" >&2; exit 2; }
-usage() { sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+usage() { sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
 PREFIX=graft-dev
 CIDR=10.42.0.0/16
@@ -38,6 +41,14 @@ ARCH=ARM64
 MAX_ACU=1
 LOG_GROUP=/$PREFIX/service
 TAGS_KV="Key=Project,Value=graft Key=Env,Value=dev Key=ManagedBy,Value=claude-cli"
+# What differs between the live service and the load copy; the defaults are the live service's.
+SVC=$PREFIX; DB_SECRET=database-url; BLOB_PREFIX=audio/; REL_FAMILY=$PREFIX-release; SVC_FAMILY=$PREFIX-service; EXTRA_ENV=""
+# The load copy lifts the per-address limits (one client address would only measure the limiter) and
+# says so; everything else is as deployed. It has its own database, secret, service and blob prefix.
+use_load_stack() {
+  SVC=$PREFIX-load; DB_SECRET=load-database-url; BLOB_PREFIX=audio/load/; REL_FAMILY=$PREFIX-release-load; SVC_FAMILY=$PREFIX-service-load
+  EXTRA_ENV=',{"name":"GRAFT_PUBLISH_PER_IP","value":"1000000"},{"name":"GRAFT_REPORT_PER_IP","value":"1000000"},{"name":"GRAFT_INGEST_PER_IP","value":"1000000"},{"name":"GRAFT_GLOBAL_PUBLISH_PER_HOUR","value":"1000000"},{"name":"GRAFT_GLOBAL_PUBLISH_BURST","value":"100000"},{"name":"GRAFT_STORAGE_LIMIT_BYTES","value":"900000000000000"},{"name":"GRAFT_MAX_FORKS_PER_STAGE_PER_HOUR","value":"1000000"}'
+}
 tmp_files=""
 cleanup() { for f in $tmp_files; do rm -f "$f"; done; }
 trap cleanup EXIT INT TERM
@@ -350,11 +361,11 @@ phase_secrets() {
 # ---- shared by the release task and the service ---------------------------------------------------
 container_env() { # origin
   b=$(bucket_name); b=${b:-$PREFIX-audio-PLANNED}
-  printf '[{"name":"GRAFT_ENVIRONMENT","value":"dev"},{"name":"GRAFT_BLOB_S3_BUCKET","value":"%s"},{"name":"GRAFT_BLOB_S3_REGION","value":"%s"},{"name":"GRAFT_BLOB_S3_PREFIX","value":"audio/"},{"name":"GRAFT_TRUSTED_PROXY_HOPS","value":"1"},{"name":"GRAFT_CORS_ORIGINS","value":"%s"},{"name":"GRAFT_DB_STARTUP_WAIT_SECS","value":"60"}]' "$b" "$REGION" "$1"
+  printf '[{"name":"GRAFT_ENVIRONMENT","value":"dev"},{"name":"GRAFT_BLOB_S3_BUCKET","value":"%s"},{"name":"GRAFT_BLOB_S3_REGION","value":"%s"},{"name":"GRAFT_BLOB_S3_PREFIX","value":"%s"},{"name":"GRAFT_TRUSTED_PROXY_HOPS","value":"1"},{"name":"GRAFT_CORS_ORIGINS","value":"%s"},{"name":"GRAFT_DB_STARTUP_WAIT_SECS","value":"60"}%s]' "$b" "$REGION" "$BLOB_PREFIX" "$1" "$EXTRA_ENV"
 }
 container_secrets() {
-  db=$(secret_arn database-url); ad=$(secret_arn admin-secret)
-  printf '[{"name":"GRAFT_DATABASE_URL","valueFrom":"%s"},{"name":"GRAFT_ADMIN_SECRET","valueFrom":"%s"}]' "${db:-<database-url-arn>}" "${ad:-<admin-secret-arn>}"
+  db=$(secret_arn "$DB_SECRET"); ad=$(secret_arn admin-secret)
+  printf '[{"name":"GRAFT_DATABASE_URL","valueFrom":"%s"},{"name":"GRAFT_ADMIN_SECRET","valueFrom":"%s"}]' "${db:-<$DB_SECRET-arn>}" "${ad:-<admin-secret-arn>}"
 }
 ensure_cluster() {
   have=$(probe ecs describe-clusters --clusters "$PREFIX" --query "clusters[?status=='ACTIVE'].clusterName | [0]")
@@ -369,7 +380,7 @@ phase_release() {
   ensure_cluster
   def=$(mktmp)
   cat > "$def" <<EOF
-{"family":"$PREFIX-release","networkMode":"awsvpc","requiresCompatibilities":["FARGATE"],"cpu":"512","memory":"1024",
+{"family":"$REL_FAMILY","networkMode":"awsvpc","requiresCompatibilities":["FARGATE"],"cpu":"512","memory":"1024",
  "executionRoleArn":"$(role_arn exec)","taskRoleArn":"$(role_arn task)",
  "runtimePlatform":{"cpuArchitecture":"$ARCH","operatingSystemFamily":"LINUX"},
  "containerDefinitions":[{"name":"graft","image":"$image","essential":true,
@@ -405,7 +416,7 @@ phase_service() {
   pub_a=$(subnet_id public-a); pub_b=$(subnet_id public-b)
   def=$(mktmp)
   cat > "$def" <<EOF
-{"family":"$PREFIX-service","networkMode":"awsvpc","requiresCompatibilities":["FARGATE"],"cpu":"512","memory":"1024",
+{"family":"$SVC_FAMILY","networkMode":"awsvpc","requiresCompatibilities":["FARGATE"],"cpu":"512","memory":"1024",
  "executionRoleArn":"$(role_arn exec)","taskRoleArn":"$(role_arn task)",
  "runtimePlatform":{"cpuArchitecture":"$ARCH","operatingSystemFamily":"LINUX"},
  "containerDefinitions":[{"name":"Main","image":"$image","essential":true,
@@ -415,13 +426,13 @@ phase_service() {
  "tags":[{"key":"Project","value":"graft"},{"key":"Env","value":"dev"},{"key":"ManagedBy","value":"claude-cli"}]}
 EOF
   td=$(mut "register the service task definition (ARM64, 0.5 vCPU, 1 GB)" ecs register-task-definition --cli-input-json "file://$def" --query taskDefinition.taskDefinitionArn --output text)
-  mut "create the Express service $PREFIX: one task, /ready" ecs create-express-gateway-service --service-name "$PREFIX" --cluster "$PREFIX" \
+  mut "create the Express service $SVC: one task, /ready" ecs create-express-gateway-service --service-name "$SVC" --cluster "$PREFIX" \
     --infrastructure-role-arn "$(role_arn infra)" --task-definition-arn "$td" \
     --health-check-path /ready --scaling-target minTaskCount=1,maxTaskCount=1,autoScalingMetric=AVERAGE_CPU \
     --network-configuration "subnets=$pub_a,$pub_b" \
     --tags '[{"key":"Project","value":"graft"},{"key":"Env","value":"dev"},{"key":"ManagedBy","value":"claude-cli"}]' --output json >/dev/null
   [ -z "${DRY_RUN:-}" ] || return 0
-  arn="arn:aws:ecs:$REGION:$ACCOUNT:service/$PREFIX/$PREFIX"
+  arn="arn:aws:ecs:$REGION:$ACCOUNT:service/$PREFIX/$SVC"
   ledger_row "Express service resources (load balancer, target groups, security groups, scaling): record for teardown" \
     "$(aws ecs describe-express-gateway-service --service-arn "$arn" --output json 2>&1 | tr -d ' \n' | cut -c1-400)"
   echo "created. Watch it settle with: sh scripts/aws-dev.sh status" >&2
@@ -432,7 +443,7 @@ EOF
 # connected, so while a task runs the database stays at about half a unit. Parking stops the task;
 # the address and the load balancer stay (the load balancer still bills by the hour).
 scale_service() { # min max
-  arn="arn:aws:ecs:$REGION:$ACCOUNT:service/$PREFIX/$PREFIX"
+  arn="arn:aws:ecs:$REGION:$ACCOUNT:service/$PREFIX/$SVC"
   mut "set the service to $1..$2 tasks" ecs update-express-gateway-service --service-arn "$arn" \
     --scaling-target "minTaskCount=$1,maxTaskCount=$2,autoScalingMetric=AVERAGE_CPU" --output json >/dev/null
 }
@@ -443,6 +454,70 @@ phase_park() {
 phase_unpark() {
   cost="one task and the database awake again (about 2 USD a day more, unverified)"
   scale_service 1 1
+}
+
+# ---- the load copy ---------------------------------------------------------------------------------
+# The load test writes thousands of flips and audio files, and nothing can purge them, so it never runs
+# against the live data. It runs against a copy of the same topology: a second database inside the same
+# cluster, a second service from the same image, and its own blob prefix; then the copy is removed.
+# A one-off task runs psql against the cluster, because the cluster is private and a laptop cannot.
+psql_task() { # one SQL statement
+  main=$(secret_arn database-url)
+  def=$(mktmp)
+  cat > "$def" <<EOF
+{"family":"$PREFIX-loadsetup","networkMode":"awsvpc","requiresCompatibilities":["FARGATE"],"cpu":"256","memory":"512",
+ "executionRoleArn":"$(role_arn exec)","taskRoleArn":"$(role_arn task)",
+ "runtimePlatform":{"cpuArchitecture":"$ARCH","operatingSystemFamily":"LINUX"},
+ "containerDefinitions":[{"name":"psql","image":"public.ecr.aws/docker/library/postgres:16-alpine","essential":true,
+  "command":["sh","-c","psql \"\$GRAFT_DATABASE_URL\" -v ON_ERROR_STOP=1 -c \"$1\""],
+  "secrets":[{"name":"GRAFT_DATABASE_URL","valueFrom":"${main:-<database-url-arn>}"}],
+  "logConfiguration":{"logDriver":"awslogs","options":{"awslogs-group":"$LOG_GROUP","awslogs-region":"$REGION","awslogs-stream-prefix":"loadsetup"}}}],
+ "tags":[{"key":"Project","value":"graft"},{"key":"Env","value":"dev"},{"key":"ManagedBy","value":"claude-cli"}]}
+EOF
+  td=$(mut "register the one-off psql task definition" ecs register-task-definition --cli-input-json "file://$def" --query taskDefinition.taskDefinitionArn --output text)
+  pub_a=$(subnet_id public-a); rel_sg=$(sg_id release)
+  task=$(mut "run psql once: $1" ecs run-task --cluster "$PREFIX" --launch-type FARGATE --task-definition "$td" \
+    --network-configuration "awsvpcConfiguration={subnets=[$pub_a],securityGroups=[$rel_sg],assignPublicIp=ENABLED}" --count 1 --query 'tasks[0].taskArn' --output text)
+  [ -z "${DRY_RUN:-}" ] || return 0
+  [ -n "$task" ] && [ "$task" != None ] || die "the psql task did not start"
+  aws ecs wait tasks-stopped --cluster "$PREFIX" --tasks "$task"
+  code=$(aws ecs describe-tasks --cluster "$PREFIX" --tasks "$task" --query 'tasks[0].containers[0].exitCode' --output text)
+  logs=$(aws logs get-log-events --log-group-name "$LOG_GROUP" --log-stream-name "loadsetup/psql/${task##*/}" --query 'events[].message' --output text 2>/dev/null || true)
+  echo "psql: exit $code: $logs" >&2
+  [ "$code" = 0 ] && return 0
+  case "$logs" in *"already exists"*|*"does not exist"*) return 0 ;; esac
+  die "psql failed: $logs"
+}
+
+phase_load_up() {
+  image=$(opt --image "$@"); origin=$(opt --origin "$@")
+  [ -n "$image" ] && [ -n "$origin" ] || die "load-up needs --image <ref> and --origin <site origin>"
+  use_load_stack
+  cost="A SECOND SERVICE: bills by the hour like the live one (about 2 USD a day while up) until load-down. The database is shared and idle."
+  ensure_cluster
+  psql_task "CREATE DATABASE graft_load"
+  if [ -z "$(secret_arn "$DB_SECRET")" ]; then
+    url=$(mktmp); chmod 600 "$url"
+    if [ -n "${DRY_RUN:-}" ]; then printf 'postgres://graft:<generated>@<endpoint>:5432/graft_load?sslmode=require' > "$url"
+    else aws secretsmanager get-secret-value --secret-id "$PREFIX/database-url" --query SecretString --output text | sed 's#/graft?#/graft_load?#' | tr -d '\n' > "$url"; fi
+    mut "store the load database URL as secret $PREFIX/$DB_SECRET (value never printed)" secretsmanager create-secret --name "$PREFIX/$DB_SECRET" \
+      --secret-string "file://$url" --tags $TAGS_KV --query ARN --output text >/dev/null
+  fi
+  phase_release "$@"
+  phase_service "$@"
+}
+
+phase_load_down() {
+  case " $* " in *" --yes "*) ;; *) die "load-down removes the load copy: pass --yes" ;; esac
+  use_load_stack
+  cost="stops the second service's hourly billing"
+  soft "delete the load service" ecs delete-express-gateway-service --service-arn "arn:aws:ecs:$REGION:$ACCOUNT:service/$PREFIX/$SVC"
+  wait_gone probe ecs describe-services --cluster "$PREFIX" --services "$SVC" --query "services[?status!='INACTIVE'].serviceName | [0]"
+  psql_task "DROP DATABASE IF EXISTS graft_load WITH (FORCE)"
+  soft "delete the load secret now, not after a recovery window" secretsmanager delete-secret --secret-id "$PREFIX/$DB_SECRET" --force-delete-without-recovery --query Name --output text
+  b=$(bucket_name || true)
+  [ -z "$b" ] || soft "remove the load audio (only the audio/load/ prefix)" s3 rm "s3://$b/audio/load/" --recursive --quiet
+  echo "the load copy is gone. Now run: sh scripts/aws-dev.sh status" >&2
 }
 
 # ---- status: read-only ----------------------------------------------------------------------------
@@ -558,8 +633,8 @@ phase_teardown() {
 }
 
 case "$phase" in
-  network|registry|storage|cors|roles|logs|push|database|secrets|release|service|park|unpark|status|teardown) ;;
+  network|registry|storage|cors|roles|logs|push|database|secrets|release|service|park|unpark|load-up|load-down|status|teardown) ;;
   *) usage ;;
 esac
 guard
-"phase_$phase" "$@"
+"phase_$(printf '%s' "$phase" | tr - _)" "$@"

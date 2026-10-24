@@ -253,3 +253,35 @@ test("park stops the task so the database can pause, and unpark brings the one t
   assert.doesNotMatch(unpark, /maxTaskCount=[2-9]/, "never more than one task");
   assert.deepEqual(s.changes(), [], "a dry run changes nothing");
 });
+
+test("the load copy is a separate database, a separate service and its own blob prefix, with the caps lifted only there", () => {
+  const s = sandbox();
+  const up = plan(s.run(["load-up", "--origin", "https://example.test", "--image", "img:tag"], { DRY_RUN: "1" }));
+  assert.match(up, /CREATE DATABASE graft_load/);
+  assert.match(up, /public\.ecr\.aws\/docker\/library\/postgres/);
+  assert.match(up, /create-secret --name graft-dev\/load-database-url/);
+  assert.match(up, /"family":"graft-dev-release-load"/);
+  assert.match(up, /load-database-url/);
+  assert.match(up, /"GRAFT_BLOB_S3_PREFIX","value":"audio\/load\/"/);
+  assert.match(up, /create-express-gateway-service --service-name graft-dev-load\b/);
+  assert.match(up, /minTaskCount=1,maxTaskCount=1/);
+  assert.match(up, /GRAFT_PUBLISH_PER_IP/, "the limits are lifted for the measurement, and the run says so");
+  assert.doesNotMatch(up, /GRAFT_UPLOADS/, "uploads stay off");
+  assert.match(up, /"secrets":\[\{"name":"GRAFT_DATABASE_URL","valueFrom":"<load-database-url-arn>"/, "the copy's tasks read the copy's secret, not the live one");
+  const live = plan(s.run(["service", "--origin", "https://example.test", "--image", "img:tag"], { DRY_RUN: "1" }));
+  assert.doesNotMatch(live, /GRAFT_PUBLISH_PER_IP/, "the live service keeps its defaults");
+  assert.deepEqual(s.changes(), []);
+});
+
+test("taking the load copy down removes only what it made", () => {
+  const s = sandbox();
+  const no = s.run(["load-down"], { DRY_RUN: "1" });
+  assert.notEqual(no.status, 0, "needs --yes");
+  const down = plan(s.run(["load-down", "--yes"], { DRY_RUN: "1", FAKE_EXISTS: "1" }));
+  assert.match(down, /delete-express-gateway-service --service-arn \S+service\/graft-dev\/graft-dev-load/);
+  assert.match(down, /DROP DATABASE IF EXISTS graft_load/);
+  assert.match(down, /delete-secret --secret-id graft-dev\/load-database-url/);
+  assert.match(down, /s3 rm s3:\/\/\S+\/audio\/load\/ --recursive/);
+  assert.doesNotMatch(down, /delete-bucket|delete-db|delete-vpc|graft-dev\/database-url|graft-dev\/admin-secret|service\/graft-dev\/graft-dev\b(?!-load)/);
+  assert.deepEqual(s.changes(), []);
+});
