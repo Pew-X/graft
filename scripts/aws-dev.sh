@@ -453,7 +453,7 @@ phase_redeploy() {
   [ -n "$image" ] || die "redeploy needs --image <ref>"
   cost="a second task runs while the roll finishes (ten to fifteen minutes), then one again"
   arn="arn:aws:ecs:$REGION:$ACCOUNT:service/$PREFIX/$SVC"
-  previous=$(lookup ecs describe-services --cluster "$PREFIX" --services "$SVC" --query 'services[0].taskDefinition')
+  previous=$(lookup ecs describe-services --cluster "$PREFIX" --services "$SVC" --query "services[0].deployments[?status=='PRIMARY'].taskDefinition | [0]")
   def=$(mktmp)
   if [ -n "${DRY_RUN:-}" ]; then
     printf '{"note":"the running task definition, with its image replaced by %s"}\n' "$image" > "$def"

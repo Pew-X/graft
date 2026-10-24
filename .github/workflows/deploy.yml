@@ -66,7 +66,9 @@ jobs:
           CLUSTER: ${{ vars.ECS_CLUSTER }}
           SERVICE: ${{ vars.ECS_SERVICE }}
         run: |
-          previous=$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" --query 'services[0].taskDefinition' --output text)
+          # An Express service has no task definition on the service itself; the running revision is the
+          # primary deployment's (the service's own field reads None, found on the first deploy).
+          previous=$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" --query "services[0].deployments[?status=='PRIMARY'].taskDefinition | [0]" --output text)
           echo "previous=$previous" >> "$GITHUB_OUTPUT"
           # Based on the revision the service is running, not the family's latest: a failed earlier deploy
           # leaves a newer revision registered that nothing should inherit.

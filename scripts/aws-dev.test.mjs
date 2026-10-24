@@ -303,6 +303,10 @@ test("redeploy swaps only the image of the running task definition, through the 
   assert.doesNotMatch(out, /create-express-gateway-service/, "an existing service is updated, never created");
   assert.doesNotMatch(out, /GRAFT_CORS_ORIGINS/, "settings are inherited from the running revision, not rewritten");
   assert.match(out, /rolled back to/);
+  // An Express service has no task definition on the service itself: the running revision is the
+  // primary deployment's. Reading the service's own field returns None (found on the live service).
+  const asked = s.calls().find((c) => c.includes("describe-services") && c.includes("taskDefinition")) ?? "";
+  assert.match(asked, /deployments\[\?status==.PRIMARY.\]\.taskDefinition/, "reads the primary deployment");
   assert.notEqual(s.run(["redeploy"], { DRY_RUN: "1" }).status, 0, "needs --image");
   assert.deepEqual(s.changes(), []);
 });
