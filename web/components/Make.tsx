@@ -20,6 +20,7 @@ import { OwnSound } from "./OwnSound.tsx";
 import { PublishStep } from "./PublishStep.tsx";
 import { TrimStep } from "./TrimStep.tsx";
 import { SoundPicker } from "./SoundPicker.tsx";
+import { Steps } from "./Steps.tsx";
 
 /** The first thing heard is a flip, not the sound unchanged: up a fifth. */
 const DEFAULT_SPEED = { p: 3, q: 2 };
@@ -90,6 +91,13 @@ export function Make({
         ? { kind: "live", id: from }
         : null;
 
+  // Read while the picker is on screen, so the own-sound block can say up front whether publishing
+  // a sound of one's own is open; a service that cannot be asked says nothing.
+  const features = useAsync(
+    origin === null && own === null && toTrim === null ? "features:picker" : null,
+    (signal) => readFeatures(apiUrl, signal),
+  );
+
   const [engineTry, setEngineTry] = useState(0);
   const engine = useAsync(`renderer:${engineTry}`, renderer);
 
@@ -106,6 +114,15 @@ export function Make({
   return (
     <div className="make" data-testid="make">
       <p className="kicker">{copy.make.kicker}</p>
+      {(origin === null && own !== null && toTrim === null) ||
+      (origin !== null && sound.status === "ready") ? null : (
+        <Steps current={origin === null ? 1 : 2} />
+      )}
+      {origin === null && own === null && toTrim === null ? (
+        <p className="lede" data-testid="make-intro">
+          {copy.make.intro}
+        </p>
+      ) : null}
       {origin === null && toTrim !== null ? (
         <TrimStep
           samples={toTrim}
@@ -132,6 +149,7 @@ export function Make({
       ) : origin === null ? (
         <SoundPicker curated={curated} flips={flips} onChoose={setPicked}>
           <OwnSound
+            uploads={features.status === "ready" ? features.value.uploads : null}
             onSound={(samples, needsTrim) => (needsTrim ? setToTrim(samples) : setOwn(samples))}
           />
         </SoundPicker>
@@ -287,6 +305,7 @@ function Editor({
 
   return (
     <>
+      <Steps current={publishing || publishingSource ? 3 : 2} />
       <div className="stage-head">
         {title ? (
           <h2 className="slab" data-k="src" data-dye="0">

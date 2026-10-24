@@ -22,7 +22,10 @@ const problemText = (reason: Extract<Decoded, { ok: false }>["reason"]): string 
  */
 export function OwnSound({
   onSound,
+  uploads = null,
 }: {
+  /** Whether publishing a sound of one's own is open: false says so up front; null (not known) says nothing. */
+  uploads?: boolean | null;
   /** The canonical sound, and whether it is longer than a source may be. */
   onSound: (samples: Int16Array, needsTrim: boolean) => void;
 }) {
@@ -111,6 +114,11 @@ export function OwnSound({
           />
         </label>
       </div>
+      {uploads === false ? (
+        <p className="notice" data-testid="uploads-off">
+          {copy.own.offUpFront}
+        </p>
+      ) : null}
       <p className="hint" role="status">
         {status.name === "recording"
           ? copy.own.recording

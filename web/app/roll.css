@@ -131,10 +131,14 @@ button:disabled {
   outline: 3px solid var(--focus);
   outline-offset: -3px;
 }
+/* until the first play the two plain lines already say to drag the needle, so the caption waits */
+.roll[data-playback="idle"] .record-caption {
+  display: none;
+}
 .record-caption {
   position: absolute;
   right: 3vw;
-  bottom: 84px;
+  bottom: 112px;
   margin: 0;
   font:
     500 11px var(--f-mono),
@@ -174,6 +178,10 @@ button:disabled {
 }
 .bar .meta {
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   text-align: center;
   font:
     500 11px var(--f-mono),
@@ -183,9 +191,34 @@ button:disabled {
   text-transform: uppercase;
   color: var(--muted);
 }
-.bar .theme {
+.bar .make-link {
   pointer-events: auto;
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 1.1rem;
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  font:
+    600 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.bar .make-link:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+.bar .theme {
+  pointer-events: auto;
+  margin-left: 0;
+  min-height: 44px;
   font:
     500 11px var(--f-mono),
     ui-monospace,
@@ -267,8 +300,8 @@ button:disabled {
    portrait above the record. However tall it is (a long chain's details open, a short screen, large
    text) every line and "flip this" can be reached by touch, mouse and keyboard. */
 .block[data-hero="true"] > article {
-  /* the block starts at 72px (under the header) and has 12vh of padding above the article; keep 96px free for the controls */
-  max-height: calc(100dvh - 72px - 12vh - 96px);
+  /* the block starts at 72px (under the header) and has 12vh of padding above the article; keep 192px free for the status text, the two plain lines and the controls, so nothing is drawn over the stage's buttons */
+  max-height: calc(100dvh - 72px - 12vh - 192px);
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
@@ -524,6 +557,14 @@ button:disabled {
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
+.flip.primary {
+  min-height: 44px;
+  padding: 0 1.4rem;
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+  font-weight: 600;
+}
 .cursor {
   display: inline-block;
   width: 2px;
@@ -572,6 +613,27 @@ button:disabled {
     monospace;
   letter-spacing: 0.1em;
   text-transform: uppercase;
+  color: var(--muted);
+}
+/* what to do, in two lines, until the first play: on its own backing so it reads over the record */
+.notes .how {
+  margin: 0.25rem 0 0;
+  padding: 8px 14px;
+  max-width: 44ch;
+  border-radius: 12px;
+  background: var(--bg);
+  font:
+    400 12px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+.notes .how p {
+  margin: 0;
+}
+.notes .how p + p {
+  margin-top: 0.3rem;
   color: var(--muted);
 }
 .notes .retry {
@@ -697,6 +759,11 @@ button:disabled {
   .notes .hint {
     display: none;
   }
+  .notes .how {
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+  }
   .record-caption {
     right: auto;
     left: 22px;
@@ -706,7 +773,7 @@ button:disabled {
     left: 22px;
     right: 22px;
     bottom: auto;
-    top: 48px;
+    top: 70px;
     max-width: none;
     padding: 0;
     border-radius: 0;

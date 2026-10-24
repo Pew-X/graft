@@ -113,6 +113,10 @@ export const CreditBlock = memo(function CreditBlock({
             {block.state === "unavailable" ? null : <p>{copy.states.takedown}</p>}
           </div>
         )}
+        {/* The action comes straight after the title, where it is on the first screen; the facts follow. */}
+        <button type="button" className="flip primary" onClick={() => onFlip(block.index)}>
+          {copy.flip.label}
+        </button>
         <dl className="face">
           {block.face.map((line) => (
             <Line key={`${line.role}-${line.value}`} line={line} />
@@ -129,9 +133,6 @@ export const CreditBlock = memo(function CreditBlock({
             </dl>
           </details>
         )}
-        <button type="button" className="flip" onClick={() => onFlip(block.index)}>
-          {copy.flip.label}
-        </button>
         {onReport && block.state === "available" ? (
           <button type="button" className="flip report" onClick={() => onReport(block.index)}>
             {copy.report.open}

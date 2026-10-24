@@ -364,6 +364,12 @@ export function RollPlayer({
               })
             : ""}
         </span>
+        {openMake ? (
+          // A plain link, not Next's: this component is also bundled by the browser tests outside Next.
+          <a href="/make" className="make-link">
+            {copy.flip.makeLink}
+          </a>
+        ) : null}
         <ThemeToggle />
       </header>
 
@@ -419,7 +425,12 @@ export function RollPlayer({
             {copy.retry}
           </button>
         ) : null}
-        {state.kind === "idle" ? <p className="hint">{copy.hint.order}</p> : null}
+        {state.kind === "idle" ? (
+          <div className="how" data-testid="how-it-works">
+            <p>{copy.hint.how1}</p>
+            <p>{openMake ? copy.hint.how2 : copy.hint.how2Plain}</p>
+          </div>
+        ) : null}
         {truncated ? <p className="hint">{copy.states.truncated}</p> : null}
         <p className="visually-hidden" role="status" aria-live="polite">
           {announcement}

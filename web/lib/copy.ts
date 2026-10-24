@@ -13,6 +13,9 @@ export const copy = {
   hint: {
     locked: "tap play to hear it. nothing sounds until you do.",
     order: "the finished flip plays first, then the credits go back to the source.",
+    how1: "press play. the finished flip plays first, then the credits go back to where the sound began.",
+    how2: "drag the needle to jump to a step. to make your own, press make a flip.",
+    how2Plain: "drag the needle to jump to a step.",
     loading: "loading the sounds.",
     loadFailed: "the sounds could not be loaded. reload to try again.",
     soundFailed: "the sound could not start. tap play to try again.",
@@ -108,6 +111,7 @@ export const copy = {
   retry: "try again",
   flip: {
     label: "flip this",
+    makeLink: "make a flip",
     closed: "making a flip is not open yet.",
     unavailable: "this stage is not here, so it cannot be flipped.",
   },
@@ -361,6 +365,8 @@ export const copy = {
     confirm: "i confirm: {statement}",
     declared:
       "this is printed with your sound as declared, as you wrote it. graft does not check it.",
+    offUpFront:
+      "publishing your own sound is switched off in this demo. you can still record or pick a sound and try it here: it stays on this device. the sounds below can be flipped and published.",
     off: "uploading your own sounds is switched off for now. your sound stays here: you can keep cutting and flipping it, and flip the sounds that are here.",
     closed: "publishing is switched off for now. nothing can be published until it is back.",
     sourceDone: "your sound is published. you can now publish the flip you made from it.",
@@ -368,6 +374,14 @@ export const copy = {
   make: {
     title: "make a flip",
     kicker: "make a flip",
+    intro:
+      "a flip is a sound with a part cut out and its speed changed. pick a sound, or record your own, then cut it, change its speed and hear it. you can publish it to get a link to share.",
+    steps: {
+      label: "steps",
+      pick: "pick a sound",
+      cut: "cut it and change its speed",
+      publish: "publish it, if you like",
+    },
     local: "nothing leaves this device until you publish.",
     pick: {
       heading: "pick a sound to start from",

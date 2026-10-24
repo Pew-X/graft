@@ -611,3 +611,55 @@
   height: 24px;
   flex: none;
 }
+
+/* where the maker is in the three steps */
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.25rem;
+  margin: 0 0 1.25rem;
+  padding: 0;
+  list-style: none;
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.steps .n {
+  display: inline-grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.steps li[data-state="now"] {
+  color: var(--ink);
+  font-weight: 600;
+}
+.steps li[data-state="now"] .n {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+}
+.steps li[data-state="done"] .n {
+  border-color: var(--ink);
+}
+.lede {
+  margin: 0 0 1.5rem;
+  max-width: 60ch;
+  font:
+    italic 400 clamp(17px, 2vw, 20px) / 1.45 var(--f-serif),
+    ui-serif,
+    Georgia,
+    serif;
+  color: var(--ink);
+}
