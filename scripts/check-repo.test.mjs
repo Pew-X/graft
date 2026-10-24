@@ -105,3 +105,9 @@ test("an account id written with hyphens, as the console shows it, is rejected t
   const dashed = [account.slice(0, 4), account.slice(4, 8), account.slice(8)].join("-");
   assert.match(run({ "scripts/g.sh": `# account ${dashed}` }).join("\n"), /scripts\/g\.sh: contains an AWS account id/);
 });
+
+test("an account id inside a container registry address is rejected; the documented example is not", () => {
+  const host = `${account}.dkr.ecr.ap-south-1.amazonaws.com/graft-dev-service`;
+  assert.match(run({ "scripts/h.sh": `image=${host}` }).join("\n"), /scripts\/h\.sh: contains an AWS account id/);
+  assert.deepEqual(run({ "scripts/i.sh": "image=123456789012.dkr.ecr.eu-west-1.amazonaws.com/x" }), []);
+});

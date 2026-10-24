@@ -31,3 +31,10 @@ description = "a real AWS account id in an ARN"
 regex = '''arn:aws[a-z-]*:[a-z0-9-]*:[a-z0-9-]*:[0-9]{12}:'''
 [[rules.allowlists]]
 regexes = ['''arn:aws[a-z-]*:[a-z0-9-]*:[a-z0-9-]*:(123456789012|000000000000):''']
+
+[[rules]]
+id = "aws-account-id-registry"
+description = "a real AWS account id in a container registry address"
+regex = '''(?:^|[^0-9-])([0-9]{12})\.dkr\.ecr'''
+[[rules.allowlists]]
+regexes = ['''^(123456789012|000000000000)$''']

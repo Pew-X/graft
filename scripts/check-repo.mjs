@@ -19,6 +19,7 @@ const PRIVATE_ORG = /trel{2}ys/i;
 // A real AWS account id, in an ARN or as the console prints it (4-4-4). AWS's documented example
 // ids are what tests and docs may use.
 const ARN_ACCOUNT = /arn:aws[a-z-]*:[a-z0-9-]*:[a-z0-9-]*:(\d{12}):/;
+const REGISTRY_ACCOUNT = /(?<![\d-])(\d{12})\.dkr\.ecr/;
 const SPACED_ACCOUNT = /(?<![\w-])\d{4}-\d{4}-\d{4}(?![\w-])/;
 const EXAMPLE_ACCOUNTS = new Set(["123456789012", "000000000000"]);
 // Words that belong to the audited product or overclaim; never graft vocabulary.
@@ -53,7 +54,12 @@ export function checkFiles(files, read) {
       const email = text.match(EMAIL);
       if (email) found.push(`${path}: contains an email address (${email[0]})`);
       const arn = text.match(ARN_ACCOUNT);
-      if ((arn && !EXAMPLE_ACCOUNTS.has(arn[1])) || SPACED_ACCOUNT.test(text)) {
+      const registry = text.match(REGISTRY_ACCOUNT);
+      if (
+        (arn && !EXAMPLE_ACCOUNTS.has(arn[1])) ||
+        (registry && !EXAMPLE_ACCOUNTS.has(registry[1])) ||
+        SPACED_ACCOUNT.test(text)
+      ) {
         found.push(`${path}: contains an AWS account id`);
       }
     }
