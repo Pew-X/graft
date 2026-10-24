@@ -72,7 +72,7 @@ Only server events (a publication was created, a report was filed) can never div
 
 ## Where to look when something is wrong
 
-Logs are JSON on standard output, one line per event, each with its request id (`x-request-id` on the response) and, when traces are exported, its trace id. Metrics are at `/metrics` in the Prometheus text format (requests, publish outcomes, renders, refusals by reason, the kill switch, relay backlog and consumer lag). Traces go to the OTLP endpoint in `OTEL_EXPORTER_OTLP_ENDPOINT` when one is set. Server errors and panics go to the error tracker in `GRAFT_ERROR_TRACKER_DSN` when one is set, with no personal data. The operator reads the event path at `GET /admin/rollups` and closes publishing with `PUT /admin/switch`. ARCHITECTURE.md ("Observability and operations") has the example alert rules; the full runbook comes with the launch gate.
+Logs are JSON on standard output, one line per event, each with its request id (`x-request-id` on the response) and, when traces are exported, its trace id. Metrics are at `/metrics` in the Prometheus text format, behind the operator secret (requests, publish outcomes, renders, refusals by reason, the kill switch, relay backlog and consumer lag). Traces go to the OTLP endpoint in `OTEL_EXPORTER_OTLP_ENDPOINT` when one is set. Server errors and panics go to the error tracker in `GRAFT_ERROR_TRACKER_DSN` when one is set, with no personal data. The operator reads the event path at `GET /admin/rollups` and closes publishing with `PUT /admin/switch`. ARCHITECTURE.md ("Observability and operations") has the example alert rules; the full runbook comes with the launch gate.
 
 ## Concurrency
 

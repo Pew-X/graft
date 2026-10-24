@@ -53,7 +53,8 @@ const ROUTES: &[(&str, &str)] = &[
 
 /// The routes that need the operator's secret.
 fn is_admin(path: &str) -> bool {
-    path.starts_with("/admin/")
+    // `/metrics` is the operator's too: it runs a database query on every read.
+    path.starts_with("/admin/") || path == "/metrics"
 }
 /// The routes that need a publication's manage key.
 fn is_maker(path: &str) -> bool {

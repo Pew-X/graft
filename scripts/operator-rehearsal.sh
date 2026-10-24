@@ -54,7 +54,8 @@ step "migrate and seed (idempotent: twice changes nothing)" target/debug/graft-s
 target/debug/graft-seed-chain --manifest seed/chain.json >/dev/null
 start "$secret_one"
 
-step "health, readiness, metrics" sh -c "curl -fs $api/health && echo && curl -fs $api/ready && echo && curl -fs $api/metrics | grep -c '^graft_' | sed 's/^/graft_ metric lines: /'"
+step "health, readiness, metrics (metrics need the operator secret)" sh -c "curl -fs $api/health && echo && curl -fs $api/ready && echo && curl -fs -H 'x-graft-admin-secret: $secret_one' $api/metrics | grep -c '^graft_' | sed 's/^/graft_ metric lines: /'"
+step "metrics refuse a caller with no secret and one with the wrong secret" sh -c "test \$(curl -s -o /dev/null -w '%{http_code}' $api/metrics) = 403 && test \$(curl -s -o /dev/null -w '%{http_code}' -H 'x-graft-admin-secret: not-the-secret' $api/metrics) = 403 && echo 'both refused with 403'"
 step "launch gate 1: report, hide for rights, release, withdrawn" node scripts/operator-rehearsal.mjs hide --api "$api" --secret "$secret_one"
 step "launch gate 2: the kill switch" node scripts/operator-rehearsal.mjs switch --api "$api" --secret "$secret_one"
 

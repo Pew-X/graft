@@ -36,7 +36,7 @@ async fn publish_outcomes_renders_and_the_kill_switch_are_counted_by_what_happen
         format!("graft_publish_outcomes_total{{kind=\"flip\",outcome=\"{outcome}\"}}")
     };
 
-    let text = h.raw("/metrics").await;
+    let text = h.scrape().await;
     assert!(absent(&text, &counter("created")), "nothing yet");
     assert_eq!(value(&text, "graft_publishing_open"), 1.0);
 
@@ -76,7 +76,7 @@ async fn publish_outcomes_renders_and_the_kill_switch_are_counted_by_what_happen
         .0,
         StatusCode::NOT_FOUND
     );
-    let text = h.raw("/metrics").await;
+    let text = h.scrape().await;
     assert_eq!(value(&text, &counter("created")), 2.0);
     assert_eq!(value(&text, &counter("replay")), 1.0);
     assert_eq!(value(&text, &counter("key-conflict")), 1.0);
@@ -115,25 +115,19 @@ async fn publish_outcomes_renders_and_the_kill_switch_are_counted_by_what_happen
         assert_eq!(status, StatusCode::OK);
     };
     set(false).await;
-    assert_eq!(
-        value(&h.raw("/metrics").await, "graft_publishing_open"),
-        0.0
-    );
+    assert_eq!(value(&h.scrape().await, "graft_publishing_open"), 0.0);
     // A refusal by the switch is counted by reason, not as a publish.
     let (status, _, _) = h
         .post("/v1/publications", &body(&parent, 0, 24_000, 3, 2, 9))
         .await;
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
-    let text = h.raw("/metrics").await;
+    let text = h.scrape().await;
     assert_eq!(
         value(&text, "graft_refusals_total{reason=\"publishing_off\"}"),
         1.0
     );
     set(true).await;
-    assert_eq!(
-        value(&h.raw("/metrics").await, "graft_publishing_open"),
-        1.0
-    );
+    assert_eq!(value(&h.scrape().await, "graft_publishing_open"), 1.0);
     h.finish().await;
 }
 
@@ -145,7 +139,7 @@ async fn the_metrics_page_holds_only_fixed_names_never_an_id_a_key_or_a_visitors
     request["title"] = json!("a distinctive title");
     request["author"] = json!("a distinctive author");
     h.post("/v1/publications", &request).await;
-    let text = h.raw("/metrics").await;
+    let text = h.scrape().await;
     for needle in [parent.as_str(), "distinctive", "retry-key-for-test"] {
         assert!(!text.contains(needle), "{needle} is on the metrics page");
     }

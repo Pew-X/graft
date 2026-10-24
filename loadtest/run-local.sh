@@ -33,6 +33,8 @@ export GRAFT_RENDERER_WASM="$root/target/wasm32-unknown-unknown/wasm/graft_rende
 export GRAFT_BLOB_S3_BUCKET=graft-test GRAFT_BLOB_S3_PREFIX="load-$run" GRAFT_BLOB_S3_ENDPOINT="$s3" GRAFT_BLOB_S3_ALLOW_HTTP=true
 export GRAFT_BLOB_S3_ACCESS_KEY_ID=graftaccess GRAFT_BLOB_S3_SECRET_ACCESS_KEY=graftsecret12345
 export GRAFT_BIND="127.0.0.1:$port" GRAFT_ENVIRONMENT=loadtest-local
+# /metrics needs the operator secret; this one lives only as long as the run.
+export GRAFT_ADMIN_SECRET="$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')"
 # The limits are part of the system under test, but a dry run on one address would only meet them.
 # They are lifted here and the run says so; a staging run states which it used.
 export GRAFT_PUBLISH_PER_IP=1000000 GRAFT_REPORT_PER_IP=1000000 GRAFT_INGEST_PER_IP=1000000
@@ -48,7 +50,7 @@ leaf=$(node -e 'const s=JSON.parse(require("fs").readFileSync("web/snapshot/chai
 echo "seeded chain's last stage: $leaf; service on port $port; output in $out"
 status=0
 docker run --rm -v "$root/loadtest:/loadtest:ro" -v "$out:/out" \
-  -e BASE_URL="http://host.docker.internal:$port" -e SEED_LEAF="$leaf" -e PROFILE="${PROFILE:-smoke}" \
+  -e BASE_URL="http://host.docker.internal:$port" -e SEED_LEAF="$leaf" -e PROFILE="${PROFILE:-smoke}" -e OPERATOR_SECRET="$GRAFT_ADMIN_SECRET" \
   -e SUMMARY_OUT=/out/summary.json "$K6_IMAGE" run /loadtest/graft.js || status=$?
 echo; echo "== reconcile (client counts against the service's counters and the database)"
 node loadtest/reconcile.mjs "$out/summary.json" || status=$?

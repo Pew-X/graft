@@ -258,8 +258,18 @@ const outcomes = (text) => {
   for (let m = re.exec(text); m !== null; m = re.exec(text)) found[m[1]] = Number(m[2]);
   return found;
 };
+// /metrics is the operator's: it needs the operator secret (OPERATOR_SECRET). Without it the run still
+// works but the service's own counters are missing, and the reconcile step says so; with a secret the
+// service refuses, the run stops, because a counter that quietly vanished would read as a pass.
+const OPERATOR_SECRET = __ENV.OPERATOR_SECRET || "";
 const serverView = (pool) => {
-  const metrics = http.get(`${BASE}/metrics`, { tags: { name: "GET /metrics" } });
+  const metrics = http.get(`${BASE}/metrics`, {
+    headers: OPERATOR_SECRET === "" ? {} : { "x-graft-admin-secret": OPERATOR_SECRET },
+    tags: { name: "GET /metrics" },
+  });
+  if (OPERATOR_SECRET !== "" && metrics.status !== 200) {
+    throw new Error(`the operator secret was refused by /metrics (${metrics.status}): check OPERATOR_SECRET`);
+  }
   const counts = pool.map((id) => {
     const r = http.get(`${BASE}/v1/publications/${id}`, { tags: { name: "GET /v1/publications/{id}" } });
     // One entry, not wrapped (only a publish answer wraps it).
