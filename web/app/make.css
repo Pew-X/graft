@@ -164,6 +164,8 @@
 }
 .cut-editor .track {
   position: relative;
+  /* room above and below for the start and end tags */
+  margin: 28px 0;
   height: 9.5rem;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -205,14 +207,65 @@
 .handle[data-handle="end"] {
   justify-content: flex-start;
 }
+/* The cut is a viewfinder frame: a bracket at each end, in the phosphor colour that means "the live
+   part" on the record, and a tag saying which end it is. The start bracket opens to the right and the
+   end bracket to the left, so together they frame what is kept. */
 .handle .grip {
-  width: 6px;
+  position: relative;
+  width: 4px;
   height: 100%;
-  background: #d2342a;
+  background: var(--focus);
   box-shadow: 0 0 0 1px var(--bg);
+  transform: translateX(4px);
 }
 .handle[data-handle="end"] .grip {
-  background: #e0a526;
+  transform: translateX(-4px);
+}
+.handle .grip::before,
+.handle .grip::after {
+  content: "";
+  position: absolute;
+  left: 100%;
+  width: 16px;
+  height: 4px;
+  background: var(--focus);
+  box-shadow: 0 0 0 1px var(--bg);
+}
+.handle .grip::before {
+  top: 0;
+}
+.handle .grip::after {
+  bottom: 0;
+}
+.handle[data-handle="end"] .grip::before,
+.handle[data-handle="end"] .grip::after {
+  left: auto;
+  right: 100%;
+}
+.handle .tag {
+  position: absolute;
+  padding: 2px 8px;
+  background: var(--focus);
+  color: var(--bg);
+  font:
+    500 11px/1.4 var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* the start tag sits above the track, opening to the right; the end tag below it, to the left */
+.handle[data-handle="start"] .tag {
+  top: -26px;
+  left: 100%;
+  margin-left: -4px;
+}
+.handle[data-handle="end"] .tag {
+  bottom: -26px;
+  right: 100%;
+  margin-right: -4px;
 }
 .handle:focus-visible {
   outline: 3px solid var(--focus);
@@ -330,6 +383,40 @@
 }
 .result .details {
   margin-top: 0.75rem;
+}
+/* a closed disclosure says it opens */
+.details summary::before {
+  content: "+";
+  display: inline-block;
+  width: 1.4em;
+}
+.details[open] summary::before {
+  content: "\2212";
+}
+/* the way back to the roll */
+.make-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.25rem;
+}
+.make-bar .kicker {
+  margin: 0;
+}
+.make-bar .back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 1rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.08em;
+  text-decoration: none;
 }
 .result .details code {
   overflow-wrap: anywhere;
@@ -618,7 +705,12 @@
   flex-wrap: wrap;
   gap: 0.35rem 1.25rem;
   margin: 0 0 1.25rem;
-  padding: 0;
+  /* the step stays in view while the page scrolls under it */
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding: 0.6rem 0;
+  background: var(--bg);
   list-style: none;
   font:
     500 12px var(--f-mono),

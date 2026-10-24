@@ -125,6 +125,9 @@ export function CutEditor({
               }}
             >
               <span className="grip" aria-hidden="true" />
+              <span className="tag" aria-hidden="true">
+                {copy.make.cut.tag[which]}
+              </span>
             </div>
           );
         })}

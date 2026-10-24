@@ -374,6 +374,7 @@ export const copy = {
   make: {
     title: "make a flip",
     kicker: "make a flip",
+    home: "← graft",
     intro:
       "a flip is a sound with a part cut out and its speed changed. pick a sound, or record your own, then cut it, change its speed and hear it. you can publish it to get a link to share.",
     steps: {
@@ -403,7 +404,8 @@ export const copy = {
       gloss: "the part of the sound that is kept",
       start: "start of the cut",
       end: "end of the cut",
-      help: "drag the handles, or focus one and use the arrow keys: one millisecond a press, ten with shift.",
+      help: "drag the two brackets, or focus one and use the arrow keys: one millisecond a press, ten with shift.",
+      tag: { start: "start", end: "end" },
       range: "{from} to {to} seconds, {length} kept",
     },
     speed: {
