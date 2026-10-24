@@ -5,6 +5,7 @@ import { copy } from "../lib/copy.ts";
 import { type Result, setForkPermission, withdraw } from "../lib/manage/client.ts";
 import { forgetKey, keptKeys } from "../lib/publish/keep.ts";
 import { useAsync } from "../lib/make/use-async.ts";
+import { Trace } from "./Trace.tsx";
 
 interface Shown {
   state: string;
@@ -108,6 +109,8 @@ export function ManagePublication({ id, apiUrl }: { id: string; apiUrl: string }
           {copy.manage.publication}
         </h3>
         <p className="sound-title-plain">{shown.title}</p>
+        <Trace id={id} label={copy.publish.done.traceLabel} />
+        <p className="hint">{copy.publish.done.fixed}</p>
         <p className="hint">
           {withdrawn
             ? copy.manage.withdrawnNow

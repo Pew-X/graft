@@ -1,6 +1,8 @@
 /**
- * The one value graft may keep in a browser, and only when the maker chooses: the manage keys of
- * their own publications, by id. Every call tolerates storage that is missing, blocked or full.
+ * What graft may keep in a browser about a maker's publications, and only when the maker chooses: the
+ * manage keys of their own publications, by id. (The only other things it keeps are the light or dark
+ * choice and a note that the first-visit guide was seen.) Every call tolerates storage that is
+ * missing, blocked or full.
  */
 export const STORAGE_KEY = "graft.manage-keys";
 

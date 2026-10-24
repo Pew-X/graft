@@ -11,6 +11,7 @@ import {
 } from "../lib/publish/client.ts";
 import { NAME_MAX, TITLE_MAX, hintFor } from "../lib/publish/hints.ts";
 import { keepKey } from "../lib/publish/keep.ts";
+import { Trace } from "./Trace.tsx";
 import { newRetryKey } from "../lib/publish/retry-key.ts";
 import { wireFor } from "../lib/publish/wire.ts";
 import { hintText, refusalText } from "../lib/publish/words.ts";
@@ -104,6 +105,7 @@ export function PublishStep({
   const [author, setAuthor] = useState("");
   const [phase, setPhase] = useState<Phase>({ name: "form" });
   const [copied, setCopied] = useState<"no" | "yes" | "failed">("no");
+  const [keyCopied, setKeyCopied] = useState<"no" | "yes" | "failed">("no");
   const [kept, setKept] = useState<"no" | "yes" | "failed">("no");
   const heading = useRef<HTMLHeadingElement>(null);
   const message = useRef<HTMLDivElement>(null);
@@ -209,41 +211,74 @@ export function PublishStep({
             })}
           </p>
         ) : null}
+        <p className="fixed-note">{copy.publish.done.fixed}</p>
         {outcome.manageKey ? (
-          <div className="manage-key">
-            <h4 className="kicker">{copy.publish.done.keyHeading}</h4>
-            <p>
-              <code data-testid="manage-key">{outcome.manageKey}</code>
-            </p>
-            <p>{copy.publish.done.keyOnce}</p>
-            <p>{copy.publish.done.keyIsNot}</p>
-            <label className="check">
-              <input
-                type="checkbox"
-                checked={kept === "yes"}
-                onChange={(e) => {
-                  if (!e.target.checked) return;
-                  let storage: Storage | null = null;
-                  try {
-                    storage = window.localStorage;
-                  } catch {
-                    /* storage blocked */
-                  }
-                  setKept(keepKey(storage, outcome.id, outcome.manageKey ?? "") ? "yes" : "failed");
-                }}
-              />
-              <span>
-                {copy.publish.done.keep}{" "}
-                <span className="gloss">{copy.publish.done.keepGloss}</span>
-              </span>
-            </label>
-            <p role="status" className="refusal">
-              {kept === "yes"
-                ? copy.publish.done.kept
-                : kept === "failed"
-                  ? copy.publish.done.keepFailed
-                  : ""}
-            </p>
+          <div className="manage-key stub" data-testid="key-stub">
+            <div className="stub-screen">
+              <Trace id={outcome.id} label={copy.publish.done.traceLabel} />
+              <p className="stub-caption">{copy.publish.done.traceCaption}</p>
+            </div>
+            <div className="stub-body">
+              <h4 className="kicker">{copy.publish.done.keyHeading}</h4>
+              <p className="stub-hand" aria-hidden="true">
+                {copy.publish.done.stubHand}
+              </p>
+              <p>
+                <code data-testid="manage-key">{outcome.manageKey}</code>
+              </p>
+              <div className="actions">
+                <button
+                  type="button"
+                  className="pill"
+                  onClick={() => {
+                    navigator.clipboard.writeText(outcome.manageKey ?? "").then(
+                      () => setKeyCopied("yes"),
+                      () => setKeyCopied("failed"),
+                    );
+                  }}
+                >
+                  {copy.publish.done.copyKey}
+                </button>
+                <span role="status" className="refusal">
+                  {keyCopied === "yes"
+                    ? copy.publish.done.keyCopied
+                    : keyCopied === "failed"
+                      ? copy.publish.done.keyCopyFailed
+                      : ""}
+                </span>
+              </div>
+              <p>{copy.publish.done.keyOnce}</p>
+              <p>{copy.publish.done.keyIsNot}</p>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={kept === "yes"}
+                  onChange={(e) => {
+                    if (!e.target.checked) return;
+                    let storage: Storage | null = null;
+                    try {
+                      storage = window.localStorage;
+                    } catch {
+                      /* storage blocked */
+                    }
+                    setKept(
+                      keepKey(storage, outcome.id, outcome.manageKey ?? "") ? "yes" : "failed",
+                    );
+                  }}
+                />
+                <span>
+                  {copy.publish.done.keep}{" "}
+                  <span className="gloss">{copy.publish.done.keepGloss}</span>
+                </span>
+              </label>
+              <p role="status" className="refusal">
+                {kept === "yes"
+                  ? copy.publish.done.kept
+                  : kept === "failed"
+                    ? copy.publish.done.keepFailed
+                    : ""}
+              </p>
+            </div>
           </div>
         ) : (
           <p className="notice">{copy.publish.done.replay}</p>
