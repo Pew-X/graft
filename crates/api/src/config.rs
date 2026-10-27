@@ -146,6 +146,11 @@ pub struct EventSettings {
     pub retention_interval_secs: u64,
     /// Most events in one client batch.
     pub ingest_max_batch: u32,
+    /// The queue the relay sends batches to and the consumer reads, as its address. Unset (the
+    /// default) the relay hands each batch straight to the consumer in this process.
+    pub queue_url: Option<String>,
+    /// Another address for the queue service, for an emulator. Never set in a deployment.
+    pub queue_endpoint: Option<String>,
 }
 
 fn event_settings(lookup: &impl Fn(&str) -> Option<String>) -> Result<EventSettings, ConfigError> {
@@ -156,7 +161,28 @@ fn event_settings(lookup: &impl Fn(&str) -> Option<String>) -> Result<EventSetti
         retention_days: 30,
         retention_interval_secs: 3600,
         ingest_max_batch: 20,
+        queue_url: lookup("GRAFT_EVENT_QUEUE_URL")
+            .map(|u| u.trim().to_owned())
+            .filter(|u| !u.is_empty()),
+        queue_endpoint: lookup("GRAFT_EVENT_QUEUE_ENDPOINT")
+            .map(|u| u.trim().to_owned())
+            .filter(|u| !u.is_empty()),
     };
+    if let Some(url) = &e.queue_url {
+        // plain http only where an emulator was named on purpose
+        let secure = url.starts_with("https://");
+        if !secure && !(e.queue_endpoint.is_some() && url.starts_with("http://")) {
+            return Err(ConfigError::Invalid {
+                name: "GRAFT_EVENT_QUEUE_URL",
+                reason: "must be an https:// address".to_owned(),
+            });
+        }
+    } else if e.queue_endpoint.is_some() {
+        return Err(ConfigError::Invalid {
+            name: "GRAFT_EVENT_QUEUE_ENDPOINT",
+            reason: "has no meaning without GRAFT_EVENT_QUEUE_URL".to_owned(),
+        });
+    }
     match lookup("GRAFT_EVENT_PIPELINE").as_deref().map(str::trim) {
         None | Some("on") => {}
         Some("off") => e.pipeline = false,
@@ -1080,6 +1106,51 @@ mod tests {
     }
 
     #[test]
+    fn the_event_queue_is_off_unless_an_address_is_given_and_the_address_is_checked() {
+        let base = ("GRAFT_DATABASE_URL", "postgres://x");
+        let off = Config::from_lookup(env(&[base])).expect("valid");
+        assert_eq!(off.events.queue_url, None, "no queue unless one is named");
+        let blank =
+            Config::from_lookup(env(&[base, ("GRAFT_EVENT_QUEUE_URL", "  ")])).expect("valid");
+        assert_eq!(blank.events.queue_url, None, "a blank value is no value");
+        let on = Config::from_lookup(env(&[
+            base,
+            (
+                "GRAFT_EVENT_QUEUE_URL",
+                " https://sqs.ap-south-1.amazonaws.com/1/graft-dev-events ",
+            ),
+        ]))
+        .expect("valid");
+        assert_eq!(
+            on.events.queue_url.as_deref(),
+            Some("https://sqs.ap-south-1.amazonaws.com/1/graft-dev-events")
+        );
+        // plain http only with an emulator's address named too
+        let plain = Config::from_lookup(env(&[base, ("GRAFT_EVENT_QUEUE_URL", "http://x/1/q")]))
+            .expect_err("refused");
+        assert!(
+            plain.to_string().contains("GRAFT_EVENT_QUEUE_URL"),
+            "{plain}"
+        );
+        Config::from_lookup(env(&[
+            base,
+            (
+                "GRAFT_EVENT_QUEUE_URL",
+                "http://127.0.0.1:59324/000000000000/q",
+            ),
+            ("GRAFT_EVENT_QUEUE_ENDPOINT", "http://127.0.0.1:59324"),
+        ]))
+        .expect("an emulator may be plain http");
+        // an emulator address with no queue means nothing
+        let stray = Config::from_lookup(env(&[base, ("GRAFT_EVENT_QUEUE_ENDPOINT", "http://x")]))
+            .expect_err("refused");
+        assert!(
+            stray.to_string().contains("GRAFT_EVENT_QUEUE_ENDPOINT"),
+            "{stray}"
+        );
+    }
+
+    #[test]
     fn the_event_pipeline_defaults_and_overrides_and_refuses_nonsense_by_name() {
         let c = Config::from_lookup(env(&[("GRAFT_DATABASE_URL", "postgres://x")])).expect("valid");
         assert_eq!(
@@ -1090,7 +1161,9 @@ mod tests {
                 relay_interval_ms: 1000,
                 retention_days: 30,
                 retention_interval_secs: 3600,
-                ingest_max_batch: 20
+                ingest_max_batch: 20,
+                queue_url: None,
+                queue_endpoint: None,
             }
         );
         let c = Config::from_lookup(env(&[

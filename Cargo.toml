@@ -14,6 +14,7 @@ graft-render = { path = "crates/render" }
 graft-storage = { path = "crates/storage" }
 graft-render-host = { path = "crates/render-host" }
 graft-events = { path = "crates/events" }
+graft-queue = { path = "crates/queue" }
 graft-vectors = { path = "crates/vectors" }
 
 [workspace.lints.rust]

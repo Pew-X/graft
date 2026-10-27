@@ -28,18 +28,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &std::fs::read(wasm_path)?,
         HostLimits::default(),
     )?);
-    let consumer = graft_events::Consumer::new(store.clone());
+    let consumer = Arc::new(graft_events::Consumer::new(store.clone()));
     let mut state = AppState::new(&config, store.clone(), blobs, renderer);
     state.consumer_stats = consumer.stats();
     // The relay, consumer and retention run in this process unless the pipeline is switched off
     // (another instance can carry it; claims skip locked rows, so any number may run).
     let (stop_pipeline, stop_rx) = tokio::sync::watch::channel(false);
-    let pipeline = config.events.pipeline.then(|| {
-        let relay = graft_events::Relay::new(
-            store.clone(),
-            Arc::new(graft_events::ConsumerSink(consumer)),
-            config.events.relay_batch,
+    // With a queue address the relay sends batches to the queue and a second task reads the queue and
+    // applies them; without one (the default) the relay hands each batch straight to the consumer.
+    let transport = match (&config.events.queue_url, config.events.pipeline) {
+        (Some(url), true) => Some(Arc::new(
+            graft_queue::SqsTransport::connect(url, config.events.queue_endpoint.as_deref()).await,
+        )),
+        _ => None,
+    };
+    let queue_task = transport.clone().map(|transport| {
+        let reader = graft_queue::QueueConsumer::new(
+            transport,
+            consumer.clone(),
+            graft_queue::PollSettings::default(),
         );
+        let stop = stop_rx.clone();
+        tokio::spawn(async move { reader.run(stop).await })
+    });
+    let sink: Arc<dyn graft_events::EventSink> = match transport {
+        Some(transport) => Arc::new(graft_queue::QueueSink::new(
+            transport,
+            std::time::Duration::from_secs(10),
+        )),
+        None => Arc::new(graft_events::ConsumerSink(consumer.clone())),
+    };
+    let pipeline = config.events.pipeline.then(|| {
+        let relay = graft_events::Relay::new(store.clone(), sink, config.events.relay_batch);
         let relay_interval = std::time::Duration::from_millis(config.events.relay_interval_ms);
         let relay_stop = stop_rx.clone();
         let retention = graft_events::Retention::new(store.clone(), config.events.retention_days);
@@ -75,6 +95,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .with_graceful_shutdown(shutdown_signal())
     .await?;
     let _ = stop_pipeline.send(true);
+    if let Some(reader) = queue_task {
+        let _ = reader.await;
+    }
     if let Some((relay, retention)) = pipeline {
         let _ = relay.await;
         let _ = retention.await;

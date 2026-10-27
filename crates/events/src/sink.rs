@@ -23,6 +23,13 @@ pub trait BatchConsumer: Send + Sync {
     fn apply<'a>(&'a self, batch: &'a [StoredEvent]) -> BoxFuture<'a, Result<(), SinkError>>;
 }
 
+/// A consumer shared between the relay's sink and a queue reader applies the same way.
+impl<T: BatchConsumer + ?Sized> BatchConsumer for std::sync::Arc<T> {
+    fn apply<'a>(&'a self, batch: &'a [StoredEvent]) -> BoxFuture<'a, Result<(), SinkError>> {
+        (**self).apply(batch)
+    }
+}
+
 /// The Postgres-only sink: the batch goes straight to a consumer in the same process, with no
 /// queue between them. It is the default for tests and local runs; a queue-backed sink replaces it
 /// where one is deployed, and the consumer is the same either way.
