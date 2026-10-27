@@ -167,9 +167,13 @@ test("a link to nothing is a quiet empty state with a 404, and a way home", asyn
   expect(response?.status()).toBe(404);
   await expect(page.getByRole("heading", { name: "nothing here" })).toBeVisible();
   await expect(page.getByText("this link does not lead to a sound")).toBeVisible();
+  // the first stop is the way back in the corner, the second the plain link under the words; both go home
   await page.keyboard.press("Tab");
-  const focused = await page.evaluate(() => document.activeElement?.textContent);
-  expect(focused).toBe("go to the first roll");
+  expect(await page.evaluate(() => document.activeElement?.textContent)).toBe("← graft");
+  await page.keyboard.press("Tab");
+  expect(await page.evaluate(() => document.activeElement?.textContent)).toBe(
+    "go to the first roll",
+  );
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/127\.0\.0\.1:3100\/$/);
 });
