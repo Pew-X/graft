@@ -25,6 +25,7 @@ import { CreditBlock, EndBlock } from "./CreditBlock.tsx";
 import { ReportDialog } from "./ReportDialog.tsx";
 import { Disc, type Live } from "./Disc.tsx";
 import { Footer } from "./Footer.tsx";
+import { Thread } from "./Thread.tsx";
 import { ThemeToggle } from "./ThemeToggle.tsx";
 
 type Load = "loading" | "ready" | "failed";
@@ -455,6 +456,10 @@ export function RollPlayer({
           mark={mark ? { ...mark, ...(markLabel ? { label: markLabel } : {}) } : null}
           onMark={setMark}
         />
+      ) : null}
+
+      {load === "ready" && heroBlock?.state === "available" ? (
+        <Thread id={heroBlock.id} hero={hero} stages={stages} />
       ) : null}
 
       <header className="bar">
