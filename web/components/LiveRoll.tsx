@@ -36,7 +36,7 @@ export function LiveRoll({
       truncated={truncated}
       reportTo={`${apiUrl}/v1/events`}
       apiUrl={apiUrl}
-      openMake={(sound, cut) => router.push(makeAddress(sound, cut))}
+      openMake={(sound, cut, speed) => router.push(makeAddress(sound, cut, speed))}
     />
   );
 }

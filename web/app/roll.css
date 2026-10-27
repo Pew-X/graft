@@ -1233,17 +1233,62 @@ button:disabled {
   bottom: 84px;
   transform: translateX(-50%);
   z-index: 6;
-  display: inline-flex;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 8px;
   align-items: center;
-  width: max-content;
-  max-width: calc(100vw - 32px);
+  width: min(640px, calc(100vw - 32px));
 }
 @media (max-aspect-ratio: 9/10) {
   .mark-bar {
     bottom: auto;
     top: 58%;
   }
+  /* two rows must fit a phone: the speeds, then hear, flip and clear */
+  .mark-bar button {
+    padding: 0 12px;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+  }
+  .mark-bar .speed-chip {
+    padding: 0 6px;
+  }
+  /* the part's length is on the record beside its brackets and in the note under the buttons */
+  .mark-bar .part-length {
+    display: none;
+  }
+}
+/* the part's speed, chosen where it was marked: its own row, six chips, the chosen one filled */
+.mark-bar .speeds {
+  display: flex;
+  flex-basis: 100%;
+  justify-content: center;
+  gap: 6px;
+}
+.mark-bar .speed-chip {
+  min-width: 44px;
+  padding: 0 10px;
+}
+.mark-bar button[aria-pressed="true"] {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+}
+.mark-bar .edit-note {
+  flex: 0 1 auto;
+  max-width: 100%;
+  margin: 0;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: var(--bg);
+  text-align: center;
+  font:
+    400 11px/1.4 var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.04em;
+  color: var(--muted);
 }
 .mark-bar button {
   min-height: 44px;

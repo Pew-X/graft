@@ -8,7 +8,8 @@ import { copy, fill } from "../lib/copy.ts";
 import { checkFlip, renderFlip } from "../lib/make/flip.ts";
 import { type Cut, LIMITS, outputFrames, refusal, seconds } from "../lib/make/cut.ts";
 import { Previewer } from "../lib/make/preview.ts";
-import { RENDERER_PATH, loadRenderer, type Renderer } from "../lib/make/renderer.ts";
+import { browserRenderer } from "../lib/make/browser-renderer.ts";
+import type { Renderer } from "../lib/make/renderer.ts";
 import type { Sound } from "../lib/make/sounds.ts";
 import { entryAt, indexOf, parseSpeed, step, STOPS } from "../lib/make/speed.ts";
 import { type Async, useAsync } from "../lib/make/use-async.ts";
@@ -37,21 +38,6 @@ function parseCut(text: string | null): Cut | null {
 }
 
 // One renderer for the page: fetched once and instantiated once.
-let rendererOnce: Promise<Renderer> | null = null;
-function renderer(): Promise<Renderer> {
-  rendererOnce ??= fetch(RENDERER_PATH)
-    .then((r) => {
-      if (!r.ok) throw new Error(`the renderer was answered with ${r.status}`);
-      return r.arrayBuffer();
-    })
-    .then(loadRenderer)
-    .catch((error: unknown) => {
-      rendererOnce = null; // a failed fetch may be tried again
-      throw error;
-    });
-  return rendererOnce;
-}
-
 const wait = (ms: number, signal: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
     const t = setTimeout(resolve, ms);
@@ -103,7 +89,7 @@ export function Make({
   );
 
   const [engineTry, setEngineTry] = useState(0);
-  const engine = useAsync(`renderer:${engineTry}`, renderer);
+  const engine = useAsync(`renderer:${engineTry}`, browserRenderer);
 
   const path = origin?.kind === "shipped" ? origin.sound.audioPath : null;
   const liveId = origin?.kind === "live" ? origin.id : null;

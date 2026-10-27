@@ -49,7 +49,9 @@ test("dragging along a ring marks a part, and flipping it opens the make page wi
   await toggle(page).click();
   await dragAlong(page, 0.25, 0.75);
   await expect(bar(page)).toBeVisible();
-  const label = await bar(page).getByRole("button").first().innerText();
+  const label = await bar(page)
+    .getByRole("button", { name: /flip this part/ })
+    .innerText();
   const seconds = Number(label.match(/(\d+\.\d+) s/)![1]);
   expect(seconds, "about half the stage, since the drag covered half of it").toBeGreaterThan(0.3);
   await bar(page)

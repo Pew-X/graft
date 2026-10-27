@@ -479,6 +479,15 @@ export const copy = {
     flipPart: "flip this part",
     clear: "clear",
     seconds: "{n} s",
+    /** Changing the part's speed and hearing it on the record, before taking it to the make page. */
+    edit: {
+      speed: "speed of this part",
+      chip: "{semitones}, {interval}",
+      hear: "hear it",
+      stop: "stop",
+      note: "{from} s becomes {to} s at this speed.",
+      failed: "the sound could not be made. try again.",
+    },
   },
   /** The first-visit coach: three short notes, drawn over the real screen, shown once. */
   coach: {

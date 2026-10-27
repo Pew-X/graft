@@ -26,7 +26,7 @@ export function HomeRoll({
       load={load}
       reportTo={reportTo}
       apiUrl={apiUrl}
-      openMake={(id, cut) => router.push(makeAddress(id, cut))}
+      openMake={(id, cut, speed) => router.push(makeAddress(id, cut, speed))}
     />
   );
 }
