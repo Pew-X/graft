@@ -5,16 +5,25 @@ import { traceOf, tracePath } from "../lib/trace/trace.ts";
  * screen is always dark, as a real one is, in both themes. Decoration that is caused by data: the same
  * id always draws the same line.
  */
-export function Trace({ id, label }: { id: string; label: string }) {
+export function Trace({
+  id,
+  label,
+  decorative = false,
+}: {
+  id: string;
+  label: string;
+  /** Beside a title that already says what it is: drawn, never announced. */
+  decorative?: boolean;
+}) {
   const d = tracePath(traceOf(id), 300, 84);
   return (
     <svg
       className="trace"
       viewBox="0 0 300 84"
       preserveAspectRatio="none"
-      role="img"
-      aria-label={label}
-      data-testid="trace"
+      {...(decorative
+        ? { "aria-hidden": true, "data-testid": "trace-face" }
+        : { role: "img", "aria-label": label, "data-testid": "trace" })}
     >
       <rect className="screen" width="300" height="84" rx="6" />
       <g className="grid" aria-hidden="true">

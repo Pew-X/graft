@@ -46,6 +46,8 @@ export interface DetailRow {
   honesty: Honesty;
   state: Honesty;
   asTyped: boolean;
+  /** A code this row is the written form of: the details layer draws its picture, and hides the hex. */
+  print?: string;
 }
 
 /** What a reader of the chain is told about a stage's availability. */
@@ -114,7 +116,7 @@ function details(stage: StageInput): DetailRow[] {
   rows.push(
     row(detailLabels.stage, stage.id, "computed"),
     row(detailLabels.record, stage.record_id, "computed"),
-    row(detailLabels.audio, stage.output_blob, "computed"),
+    { ...row(detailLabels.audio, stage.output_blob, "computed"), print: stage.output_blob },
   );
   return rows;
 }

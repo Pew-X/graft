@@ -50,6 +50,9 @@
   transform: none;
 }
 .quiet-link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
   min-height: 44px;
   padding: 0 1rem;
   border: 1px solid var(--line);

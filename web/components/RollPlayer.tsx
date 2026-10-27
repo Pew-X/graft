@@ -24,7 +24,9 @@ import { Coach, type CoachStep } from "./Coach.tsx";
 import { CreditBlock, EndBlock } from "./CreditBlock.tsx";
 import { ReportDialog } from "./ReportDialog.tsx";
 import { Disc, type Live } from "./Disc.tsx";
+import { EditPart } from "./EditPart.tsx";
 import { Footer } from "./Footer.tsx";
+import { Thread } from "./Thread.tsx";
 import { ThemeToggle } from "./ThemeToggle.tsx";
 
 type Load = "loading" | "ready" | "failed";
@@ -64,7 +66,9 @@ export function RollPlayer({
   /** Where to send best-effort counts (the service's events address); none, no counts. */
   reportTo?: string | undefined;
   /** Go to the make flow for a stage. Absent where the roll is shown without the site around it. */
-  openMake?: ((id: string, cut?: { start: number; end: number }) => void) | undefined;
+  openMake?:
+    | ((id: string, cut?: { start: number; end: number }, speed?: { p: number; q: number }) => void)
+    | undefined;
   /** Where the bar's make a flip link goes; none, no link. */
   makeHref?: string | undefined;
   /** Where the service is, for reports. Without it there is nowhere to send one, so no report control is shown. */
@@ -80,6 +84,8 @@ export function RollPlayer({
   // Which stages turned out to have audio to play, once the loader has answered.
   const [heard, setHeard] = useState<boolean[] | null>(null);
   const audio = useRef<LazyAudio | null>(null);
+  // each stage's audio as the engine holds it, so a marked part can be heard at another speed
+  const [stageAudio, setStageAudio] = useState<ReadonlyArray<Int16Array | null>>([]);
   const engine = useRef<Promise<Engine | null> | null>(null);
   const engineNow = useRef<Engine | null>(null);
   const reducedRef = useRef(false);
@@ -213,6 +219,7 @@ export function RollPlayer({
     loadAudio(abort.signal)
       .then((pcm) => {
         audio.current = new LazyAudio(audioConstructor, pcm);
+        setStageAudio(pcm);
         setHeard(pcm.map((samples) => samples !== null));
         setLengths(pcm.map((samples) => (samples === null ? 0 : samples.length / 48_000)));
         setPeaks(pcm.map((samples) => (samples === null ? [] : peaksOf(samples, 96))));
@@ -457,6 +464,10 @@ export function RollPlayer({
         />
       ) : null}
 
+      {load === "ready" && heroBlock?.state === "available" ? (
+        <Thread id={heroBlock.id} hero={hero} stages={stages} />
+      ) : null}
+
       <header className="bar">
         <h1>{copy.site.name}</h1>
         <span className="meta" aria-hidden="true">
@@ -553,21 +564,17 @@ export function RollPlayer({
       </div>
 
       {marking && markCut && mark ? (
-        <div className="mark-bar" role="group" aria-label={copy.mark.toggle}>
-          <button
-            type="button"
-            className="primary"
-            onClick={() => {
-              const id = blocks[mark.stage]?.id;
-              if (id) openMake?.(id, markCut);
-            }}
-          >
-            {copy.mark.flipPart} · {markLabel}
-          </button>
-          <button type="button" onClick={() => setMark(null)}>
-            {copy.mark.clear}
-          </button>
-        </div>
+        <EditPart
+          samples={stageAudio[mark.stage] ?? null}
+          cut={markCut}
+          label={markLabel ?? ""}
+          onFlip={(speed) => {
+            const id = blocks[mark.stage]?.id;
+            if (id) openMake?.(id, markCut, speed ?? undefined);
+          }}
+          onClear={() => setMark(null)}
+          onBeforeHear={() => act((e) => e.pause())}
+        />
       ) : null}
 
       <div className="controls" role="group" aria-label={copy.controls.label}>

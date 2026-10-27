@@ -40,10 +40,15 @@ export function markFrames(mark: Mark, frames: number): { start: number; end: nu
   return end - start >= MIN_FRAMES ? { start, end } : null;
 }
 
-/** Where the make page opens for a stage, with the part already marked when there is one. */
-export function makeAddress(id: string, cut?: { start: number; end: number } | null): string {
+/** Where the make page opens for a stage, with the part already marked, and its speed, when there are. */
+export function makeAddress(
+  id: string,
+  cut?: { start: number; end: number } | null,
+  speed?: { p: number; q: number } | null,
+): string {
   const base = `/make?from=${encodeURIComponent(id)}`;
-  return cut ? `${base}&cut=${cut.start}-${cut.end}` : base;
+  const withCut = cut ? `${base}&cut=${cut.start}-${cut.end}` : base;
+  return speed ? `${withCut}&speed=${encodeURIComponent(`${speed.p}/${speed.q}`)}` : withCut;
 }
 
 /** How long the marked part lasts, in seconds, for a stage of `frames`. */
