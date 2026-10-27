@@ -142,7 +142,7 @@ export function EditPart({
       </button>
       {note || failed ? (
         <p className="edit-note" role="status">
-          {failed ? copy.mark.edit.failed : note}
+          <span>{failed ? copy.mark.edit.failed : note}</span>
         </p>
       ) : null}
     </div>

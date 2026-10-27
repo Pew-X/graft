@@ -87,6 +87,8 @@ export function Disc({
   const pointer = useRef<{ x: number; y: number } | null>(null);
   const held = useRef<number | null>(null);
   const dragging = useRef(false);
+  /** The keyboard's focus is on the record (a ring is drawn on the stylus, not an outline round the screen). */
+  const focused = useRef(false);
   const clock = useRef(0);
   const governor = useRef(new FrameGovernor());
   const frame = useRef(0);
@@ -150,6 +152,7 @@ export function Disc({
       const position = now?.position ?? (stage === at.stage ? at.offset : 0);
       const u = length > 0 ? Math.min(1, Math.max(0, position / length)) : 0;
       const scene: Scene = {
+        focused: focused.current,
         width: size.w,
         height: size.h,
         theme,
@@ -345,6 +348,14 @@ export function Disc({
         aria-valuemax={Math.round((lengths[shown] ?? 0) * 1000)}
         aria-valuenow={Math.round(cursor.offset * 1000)}
         aria-valuetext={valueText}
+        onFocus={(e) => {
+          focused.current = e.currentTarget.matches(":focus-visible");
+          redraw();
+        }}
+        onBlur={() => {
+          focused.current = false;
+          redraw();
+        }}
         onPointerDown={onDown}
         onPointerMove={onMove}
         onPointerUp={onUp}

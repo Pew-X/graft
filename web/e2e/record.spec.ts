@@ -119,12 +119,9 @@ test("the slider is a keyboard control: arrows move within and between stages, E
   await page.goto("/");
   await ready(page);
   await slider(page).focus();
-  const outline = await slider(page).evaluate((el) => {
-    const s = getComputedStyle(el);
-    return { style: s.outlineStyle, width: parseFloat(s.outlineWidth) };
-  });
-  expect(outline.style).not.toBe("none");
-  expect(outline.width).toBeGreaterThanOrEqual(2);
+  // the canvas fills the screen, so its focus mark is a ring painted on the stylus, not an outline
+  // round the page (see focus.spec.ts)
+  expect(await slider(page).evaluate((el) => getComputedStyle(el).outlineStyle)).toBe("none");
 
   // At rest the cursor is on the finished flip (stage 4, 1.2 s); back to the source by ArrowUp.
   await expect(slider(page)).toHaveAttribute(

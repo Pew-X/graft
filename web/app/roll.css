@@ -127,9 +127,10 @@ button:disabled {
   height: 100%;
   touch-action: none;
 }
+/* the canvas fills the screen, so a normal outline would frame the whole page in neon green; the focus
+   mark is a ring on the stylus, painted with the record (see paintOverlay) */
 .record .disc:focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: -3px;
+  outline: none;
 }
 /* until the first play the two plain lines already say to drag the needle, so the caption waits */
 .roll[data-playback="idle"] .record-caption {
@@ -1066,7 +1067,7 @@ button:disabled {
   inset: 0;
   /* the page's own ground washed over it, so light stays warm and dark stays dark, never a grey film;
      a spotlight leaves what the note points at clear (the middle of the screen until it is measured) */
-  --veil: color-mix(in srgb, var(--bg) 52%, transparent);
+  --veil: color-mix(in srgb, var(--bg) 40%, transparent);
   --sx: 50%;
   --sy: 50%;
   --sr: 0px;
@@ -1276,12 +1277,8 @@ button:disabled {
   color: var(--bg);
 }
 .mark-bar .edit-note {
-  flex: 0 1 auto;
-  max-width: 100%;
+  flex-basis: 100%;
   margin: 0;
-  padding: 4px 14px;
-  border-radius: 999px;
-  background: var(--bg);
   text-align: center;
   font:
     400 11px/1.4 var(--f-mono),
@@ -1289,6 +1286,12 @@ button:disabled {
     monospace;
   letter-spacing: 0.04em;
   color: var(--muted);
+}
+.mark-bar .edit-note span {
+  display: inline-block;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: var(--bg);
 }
 .mark-bar button {
   min-height: 44px;

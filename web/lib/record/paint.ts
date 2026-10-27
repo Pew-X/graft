@@ -44,6 +44,8 @@ export interface Scene {
   cached?: boolean;
   /** A part of a stage being marked for a flip, with the words to show beside it. */
   mark?: (Mark & { label?: string }) | null;
+  /** The record has the keyboard's focus: a ring is drawn around the stylus, where the keys act. */
+  focused?: boolean;
 }
 
 const TAU = Math.PI * 2;
@@ -334,6 +336,20 @@ export function paintOverlay(ctx: CanvasRenderingContext2D, s: Scene): void {
   ctx.moveTo(tip.x - ux * 20, tip.y - uy * 20);
   ctx.lineTo(tip.x - ux * 5, tip.y - uy * 5);
   ctx.stroke();
+  if (s.focused) {
+    // The focus mark sits on the stylus, not around the screen: a dark ring under a bright one reads on
+    // the disc and on the page in both themes.
+    for (const [colour, width] of [
+      ["rgba(0,0,0,.7)", 6],
+      ["#5dff9c", 3],
+    ] as const) {
+      ctx.strokeStyle = colour;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      ctx.arc(tip.x, tip.y, 20, 0, TAU);
+      ctx.stroke();
+    }
+  }
   ctx.fillStyle = th.text;
   ctx.beginPath();
   ctx.arc(P.x, P.y, 9, 0, TAU);
