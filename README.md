@@ -79,6 +79,18 @@ curl -X PUT --aws-sigv4 "aws:amz:us-east-1:s3" --user graftaccess:graftsecret123
 
 `GRAFT_TEST_S3_ENDPOINT` names a different server (default `http://127.0.0.1:59000`). To keep audio in the bucket when running the service, set `GRAFT_BLOB_S3_BUCKET`, the two credentials, `GRAFT_BLOB_S3_ENDPOINT` and `GRAFT_BLOB_S3_ALLOW_HTTP=true` (see ARCHITECTURE.md, "Configuration"). `graft-blob-cleanup` removes audio that no record uses any more.
 
+The event queue tests need a queue service. This is an emulator (ElasticMQ, pinned by digest), not AWS:
+
+```sh
+docker run -d --name graft-dev-sqs -p 127.0.0.1:59324:9324 \
+  softwaremill/elasticmq-native@sha256:e4580ab9ad1bd5cd37b4ba04911bc5ccc8cd2d9ab4de56ece65acee71c24e05c
+GRAFT_TEST_SQS_ENDPOINT=http://127.0.0.1:59324 AWS_ACCESS_KEY_ID=x AWS_SECRET_ACCESS_KEY=x AWS_REGION=us-east-1 \
+  cargo test -p graft-queue --test emulator -- --ignored --test-threads=1
+GRAFT_TEST_SQS_ENDPOINT=http://127.0.0.1:59324 sh scripts/queue-e2e.sh   # the real service with the queue on
+```
+
+The other queue tests (the envelope, the consumer, the equivalence with the Postgres-only path) need no emulator and run in a plain `cargo test`.
+
 With both containers running, `sh scripts/dev-local.sh` starts the whole thing on this machine: the service (visitor uploads on; `--no-uploads` leaves them off, as every environment ships), the seeded chain, and the built site at `http://127.0.0.1:3100`. Stop it with Ctrl-C. It keeps its own database and bucket prefix between runs and touches nothing else.
 
 To run the service alone against that container:

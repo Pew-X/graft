@@ -124,9 +124,19 @@ jobs:
           RUSTFS_SECRET_KEY: graftsecret12345
         ports:
           - 59000:9000
+      # A queue service for the event queue tests (an emulator, pinned by digest: no AWS account is
+      # touched). The tests that need it are ignored in a plain `cargo test` and run explicitly below.
+      sqs:
+        image: softwaremill/elasticmq-native@sha256:e4580ab9ad1bd5cd37b4ba04911bc5ccc8cd2d9ab4de56ece65acee71c24e05c
+        ports:
+          - 59324:9324
     env:
       GRAFT_TEST_DATABASE_URL: postgres://postgres:graft@localhost:5432/postgres
       GRAFT_TEST_S3_ENDPOINT: http://127.0.0.1:59000
+      GRAFT_TEST_SQS_ENDPOINT: http://127.0.0.1:59324
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_REGION: us-east-1
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -149,6 +159,16 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - run: cargo test --workspace --all-features
+      - name: The event queue against a real queue service (the SDK, long polling, the dead-letter queue)
+        run: |
+          for i in $(seq 1 30); do
+            curl -s -o /dev/null -m 2 "$GRAFT_TEST_SQS_ENDPOINT/" && break
+            sleep 1
+          done
+          cargo test -p graft-queue --test emulator -- --ignored --test-threads=1
+      - name: The event queue through the real service
+        if: needs.changes.outputs.service == 'true'
+        run: sh scripts/queue-e2e.sh
       - name: The committed OpenAPI document matches the service
         run: |
           cargo run -q -p graft-api --bin graft-openapi > "$RUNNER_TEMP/openapi.json"
