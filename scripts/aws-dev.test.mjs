@@ -43,6 +43,8 @@ case "$*" in
   *register-task-definition*) echo "arn:td/new:2" ;;
   *describe-express-gateway-service*endpoint*) echo "https://svc.test" ;;
   *describe-express-gateway-service*statusCode*) if [ -n "$FAKE_SERVICE_STATUS" ]; then echo "$FAKE_SERVICE_STATUS"; elif [ -n "$FAKE_EXISTS" ]; then echo "res-0abc"; fi ;;
+  *get-queue-url*) [ -z "$FAKE_QUEUE" ] || echo "https://sqs.ap-south-1.amazonaws.com/${ACCOUNT}/graft-dev-events" ;;
+  *get-queue-attributes*) [ -z "$FAKE_QUEUE" ] || echo "$FAKE_DEAD" ;;
   *describe-subnets*|*describe-security-groups*) [ -z "$FAKE_NETWORK$FAKE_EXISTS" ] || echo "net-0abc" ;;
   *describe-*|*list-*) [ -z "$FAKE_EXISTS" ] || echo "res-0abc" ;;
 esac
@@ -321,6 +323,84 @@ test("redeploy swaps only the image of the running task definition, through the 
   assert.match(asked, /deployments\[\?status==.PRIMARY.\]\.taskDefinition/, "reads the primary deployment");
   assert.notEqual(s.run(["redeploy"], { DRY_RUN: "1" }).status, 0, "needs --image");
   assert.deepEqual(s.changes(), []);
+});
+
+test("the queue phase makes only two tagged, encrypted queues and one narrow permission", () => {
+  const s = sandbox();
+  const r = s.run(["queue"], { DRY_RUN: "1" });
+  assert.equal(r.status, 0, plan(r));
+  const out = plan(r);
+  assert.deepEqual(
+    out.split("\n").filter((l) => l.startsWith("would run: aws ")).map((l) => l.split(" ").slice(3, 5).join(" ")),
+    ["sqs create-queue", "sqs create-queue", "iam put-role-policy"],
+    "two queues and one policy, nothing else",
+  );
+  assert.deepEqual(s.changes(), [], "a dry run changes nothing");
+  assert.match(out, /--queue-name graft-dev-events-dead/);
+  assert.match(out, /--queue-name graft-dev-events\b/);
+  assert.match(out, /Project=graft,Env=dev,ManagedBy=claude-cli/, "every queue carries the project tags");
+  // what the main queue is made with: kept two weeks, encrypted, waits 20 s on every receive, five tries then the dead-letter queue
+  const body = s.sent();
+  assert.match(out, /MessageRetentionPeriod=1209600,SqsManagedSseEnabled=true/, "the dead-letter queue keeps two weeks, encrypted");
+  assert.match(out, /"MessageRetentionPeriod":"1209600"/);
+  assert.match(out, /"ReceiveMessageWaitTimeSeconds":"20"/, "a receive waits even if a client forgets to ask");
+  assert.match(out, /"SqsManagedSseEnabled":"true"/);
+  assert.match(out, /maxReceiveCount\\":\\"5/);
+  assert.match(out, new RegExp(`deadLetterTargetArn\\\\":\\\\"arn:aws:sqs:ap-south-1:${ACCOUNT}:graft-dev-events-dead`));
+  // the permission: five actions on the one queue, never a wildcard, never the dead-letter queue
+  const policy = out.split("\n").filter((l) => l.includes("sqs:SendMessage")).join("");
+  assert.match(policy, /"Resource":"arn:aws:sqs:ap-south-1:123456789012:graft-dev-events"/);
+  assert.doesNotMatch(policy, /sqs:\*|"Resource":"\*"|events-dead/);
+  assert.equal((policy.match(/"sqs:[A-Za-z]+"/g) ?? []).length, 5);
+  void body;
+});
+
+test("the queue phase run again brings the settings back instead of failing on a queue that exists", () => {
+  const s = sandbox();
+  const out = plan(s.run(["queue"], { DRY_RUN: "1", FAKE_QUEUE: "1" }));
+  assert.doesNotMatch(out, /create-queue/);
+  assert.match(out, /set-queue-attributes/);
+});
+
+test("redeploy can switch the queue on and off without touching anything else, and names only its own queue", () => {
+  const own = `https://sqs.ap-south-1.amazonaws.com/${ACCOUNT}/graft-dev-events`;
+  const s = sandbox();
+  // on, with no new image: the queue's address alone is enough
+  const on = s.run(["redeploy", "--queue-url", own], { FAKE_EXISTS: "1", GRAFT_READY_WAIT_SECS: "5", GRAFT_READY_POLL_SECS: "1" });
+  assert.equal(on.status, 0, plan(on));
+  assert.match(s.sent(), /"name": ?"GRAFT_EVENT_QUEUE_URL"/);
+  assert.match(s.sent(), new RegExp(own.replaceAll("/", "\\/")));
+  assert.match(s.sent(), /"image": ?"old:image"/, "the image is the running one");
+  // off
+  const t = sandbox();
+  const off = t.run(["redeploy", "--queue-url", "off"], { FAKE_EXISTS: "1", GRAFT_READY_WAIT_SECS: "5", GRAFT_READY_POLL_SECS: "1" });
+  assert.equal(off.status, 0, plan(off));
+  assert.doesNotMatch(t.sent(), /GRAFT_EVENT_QUEUE_URL/);
+  // another queue, another account, a typo, plain http: all refused before any change
+  for (const wrong of [
+    `https://sqs.ap-south-1.amazonaws.com/999999999999/graft-dev-events`,
+    `https://sqs.ap-south-1.amazonaws.com/${ACCOUNT}/someone-elses`,
+    `http://sqs.ap-south-1.amazonaws.com/${ACCOUNT}/graft-dev-events`,
+    "on",
+  ]) {
+    const u = sandbox();
+    const r = u.run(["redeploy", "--queue-url", wrong], { DRY_RUN: "1", FAKE_EXISTS: "1" });
+    assert.notEqual(r.status, 0, wrong);
+    assert.match(plan(r), /--queue-url must be off or exactly/);
+    assert.deepEqual(u.changes(), []);
+  }
+  assert.notEqual(sandbox().run(["redeploy"], { DRY_RUN: "1" }).status, 0, "needs an image or a queue setting");
+});
+
+test("teardown deletes both queues, and status shows the queue and warns about a dead-letter queue that holds anything", () => {
+  const s = sandbox();
+  const out = plan(s.run(["teardown", "--yes"], { DRY_RUN: "1", FAKE_QUEUE: "1" }));
+  assert.match(out, /delete-queue --queue-url \S+graft-dev-events/);
+  const quiet = plan(sandbox().run(["status"], { FAKE_QUEUE: "1", FAKE_DEAD: "0" }));
+  assert.match(quiet, /dead-letter queue is empty/);
+  const loud = plan(sandbox().run(["status"], { FAKE_QUEUE: "1", FAKE_DEAD: "3" }));
+  assert.match(loud, /WARN\s+dead-letter queue holds 3 message/);
+  assert.match(plan(sandbox().run(["status"])), /ok\s+no event queue/);
 });
 
 test("a database that exists but whose URL secret was never stored gets a new password and its secret, not a skip", () => {

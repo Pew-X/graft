@@ -18,8 +18,12 @@
 #                              run the release task once: migrate, seed, check the seeded chain
 #   service --image <ref> --origin <site>
 #                              the public service (ECS Express Mode): one small task behind /ready
-#   redeploy --image <ref>     update the running service to a new image (only the image changes); rolls back
-#                              to the previous revision if the new one never becomes ready
+#   queue                      the event queue and its dead-letter queue (free at this size), and the task role's
+#                              permission to use just those two; nothing reads it until the service is told to
+#   redeploy --image <ref> [--queue-url <url>|off]
+#                              update the running service to a new image and/or switch the event queue on (the
+#                              queue's address) or off; only those settings change; rolls back to the previous
+#                              revision if the new one never becomes ready
 #   park | unpark              stop the service's task so the database can pause (the load balancer stays and
 #                              still bills), or bring the one task back
 #   load-up --image <ref> --origin <site>
@@ -44,7 +48,7 @@ MAX_ACU=1
 LOG_GROUP=/$PREFIX/service
 TAGS_KV="Key=Project,Value=graft Key=Env,Value=dev Key=ManagedBy,Value=claude-cli"
 # What differs between the live service and the load copy; the defaults are the live service's.
-SVC=$PREFIX; DB_SECRET=database-url; BLOB_PREFIX=audio/; REL_FAMILY=$PREFIX-release; SVC_FAMILY=$PREFIX-service; EXTRA_ENV=""
+SVC=$PREFIX; EVENTS_Q=$PREFIX-events; DEAD_Q=$PREFIX-events-dead; DB_SECRET=database-url; BLOB_PREFIX=audio/; REL_FAMILY=$PREFIX-release; SVC_FAMILY=$PREFIX-service; EXTRA_ENV=""
 # The load copy lifts the per-address limits (one client address would only measure the limiter) and
 # says so; everything else is as deployed. It has its own database, secret, service and blob prefix.
 use_load_stack() {
@@ -275,6 +279,41 @@ EOF
   mut "infrastructure role: the Express Mode policy" iam attach-role-policy --role-name "$PREFIX-infra" --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSInfrastructureRoleforExpressGatewayServices
 }
 
+# ---- queue ----------------------------------------------------------------------------------------
+# The event queue (ARCHITECTURE.md, "Events and the outbox"): one queue, one dead-letter queue. A message
+# the service cannot apply is received five times and then set aside, so one bad message never blocks the
+# rest. Fourteen days of retention, so what was sent before a long park is still there when the service
+# wakes. Encrypted with the queue service's own key (no cost). The queue waits 20 seconds on every receive
+# whatever the client asks, so a client that forgot to long-poll still cannot loop. The task role gets the
+# five permissions the service uses, on this one queue; the dead-letter queue is read by a person.
+queue_arn() { printf 'arn:aws:sqs:%s:%s:%s' "$REGION" "$ACCOUNT" "$1"; }
+queue_url() { printf 'https://sqs.%s.amazonaws.com/%s/%s' "$REGION" "$ACCOUNT" "$1"; }
+phase_queue() {
+  cost="free at this size: the first million requests a month are free, and one running consumer makes about 4,300 a day (a 20 second wait); parked, nothing polls. Unverified estimate."
+  tags='Project=graft,Env=dev,ManagedBy=claude-cli'
+  have=$(probe sqs get-queue-url --queue-name "$DEAD_Q" --query QueueUrl)
+  [ -n "$have" ] || mut "create the dead-letter queue $DEAD_Q" sqs create-queue --queue-name "$DEAD_Q" \
+    --attributes MessageRetentionPeriod=1209600,SqsManagedSseEnabled=true --tags "$tags" --query QueueUrl --output text >/dev/null
+  attrs=$(mktmp)
+  cat > "$attrs" <<EOF
+{"MessageRetentionPeriod":"1209600","VisibilityTimeout":"60","ReceiveMessageWaitTimeSeconds":"20","SqsManagedSseEnabled":"true",
+ "RedrivePolicy":"{\"deadLetterTargetArn\":\"$(queue_arn "$DEAD_Q")\",\"maxReceiveCount\":\"5\"}"}
+EOF
+  have=$(probe sqs get-queue-url --queue-name "$EVENTS_Q" --query QueueUrl)
+  if [ -z "$have" ]; then
+    mut "create the event queue $EVENTS_Q (14 days, encrypted, 20 second wait, five receives then the dead-letter queue)" sqs create-queue --queue-name "$EVENTS_Q" \
+      --attributes "file://$attrs" --tags "$tags" --query QueueUrl --output text >/dev/null
+  else
+    mut "bring the event queue's settings to what they should be" sqs set-queue-attributes --queue-url "$have" --attributes "file://$attrs"
+  fi
+  pol=$(mktmp)
+  cat > "$pol" <<EOF
+{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["sqs:SendMessage","sqs:ReceiveMessage","sqs:DeleteMessage","sqs:ChangeMessageVisibility","sqs:GetQueueAttributes"],"Resource":"$(queue_arn "$EVENTS_Q")"}]}
+EOF
+  mut "the task role uses only $EVENTS_Q" iam put-role-policy --role-name "$PREFIX-task" --policy-name "$PREFIX-task-events" --policy-document "file://$pol"
+  echo "the queue's address (for redeploy --queue-url): $(queue_url "$EVENTS_Q")" >&2
+}
+
 # ---- logs -----------------------------------------------------------------------------------------
 phase_logs() {
   cost="pennies (7 days of retention)"
@@ -473,22 +512,30 @@ EOF
 # finish and for /ready, and put the previous revision back if that never happens. Express rolls
 # blue/green, so two tasks run for ten minutes or more.
 phase_redeploy() {
-  image=$(opt --image "$@")
-  [ -n "$image" ] || die "redeploy needs --image <ref>"
+  image=$(opt --image "$@"); queue=$(opt --queue-url "$@")
+  [ -n "$image" ] || [ -n "$queue" ] || die "redeploy needs --image <ref> and/or --queue-url <the queue's address>|off"
+  # only this deployment's own queue may be named: a typo must not point the service at another one
+  case "$queue" in ""|off|"$(queue_url "$EVENTS_Q")") ;; *) die "--queue-url must be off or exactly $(queue_url "$EVENTS_Q")" ;; esac
   cost="a second task runs while the roll finishes (ten to fifteen minutes), then one again"
   arn="arn:aws:ecs:$REGION:$ACCOUNT:service/$PREFIX/$SVC"
   previous=$(lookup ecs describe-services --cluster "$PREFIX" --services "$SVC" --query "services[0].deployments[?status=='PRIMARY'].taskDefinition | [0]")
   def=$(mktmp)
   if [ -n "${DRY_RUN:-}" ]; then
-    printf '{"note":"the running task definition, with its image replaced by %s"}\n' "$image" > "$def"
+    printf '{"note":"the running task definition, with image %s and event queue %s"}\n' "${image:-unchanged}" "${queue:-unchanged}" > "$def"
   else
     [ -n "$previous" ] || die "could not read the running task definition of $SVC"
     command -v jq >/dev/null || die "redeploy needs jq"
     aws ecs describe-task-definition --task-definition "$previous" --query taskDefinition \
-      | jq --arg image "$image" '.containerDefinitions[0].image = $image
+      | jq --arg image "$image" --arg queue "$queue" '
+          (if $image != "" then .containerDefinitions[0].image = $image else . end)
+          | (if $queue == "" then .
+             else .containerDefinitions[0].environment = ((.containerDefinitions[0].environment // [])
+                  | map(select(.name != "GRAFT_EVENT_QUEUE_URL"))
+                  + (if $queue == "off" then [] else [{"name":"GRAFT_EVENT_QUEUE_URL","value":$queue}] end))
+             end)
           | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' > "$def"
   fi
-  td=$(mut "register the new task definition (only the image differs)" ecs register-task-definition --cli-input-json "file://$def" --query taskDefinition.taskDefinitionArn --output text)
+  td=$(mut "register the new task definition (only the image and the event queue setting can differ)" ecs register-task-definition --cli-input-json "file://$def" --query taskDefinition.taskDefinitionArn --output text)
   mut "point the service at the new revision" ecs update-express-gateway-service --service-arn "$arn" --task-definition-arn "$td" --output json >/dev/null
   if [ -n "${DRY_RUN:-}" ]; then
     echo "if it is not ready within 20 minutes it would be rolled back to ${previous:-the revision now running}" >&2
@@ -646,6 +693,14 @@ phase_status() {
   echo "info  images in the repository: ${imgs:-none}"
   b=$(bucket_name || true)
   [ -z "$b" ] || echo "info  bucket $b: $(aws s3 ls "s3://$b" --recursive --summarize 2>/dev/null | tail -2 | tr '\n' ' ')"
+  qurl=$(probe sqs get-queue-url --queue-name "$EVENTS_Q" --query QueueUrl)
+  if [ -z "$qurl" ]; then echo "ok    no event queue"; else
+    waiting=$(probe sqs get-queue-attributes --queue-url "$qurl" --attribute-names ApproximateNumberOfMessages ApproximateNumberOfMessagesNotVisible --query 'Attributes.[ApproximateNumberOfMessages,ApproximateNumberOfMessagesNotVisible]')
+    echo "info  event queue (waiting, being applied): ${waiting:-unknown} (free at this size)"
+    durl=$(probe sqs get-queue-url --queue-name "$DEAD_Q" --query QueueUrl)
+    dead=$(probe sqs get-queue-attributes --queue-url "${durl:-none}" --attribute-names ApproximateNumberOfMessages --query 'Attributes.ApproximateNumberOfMessages')
+    if [ -z "$dead" ] || [ "$dead" = 0 ]; then echo "ok    dead-letter queue is empty"; else flag "dead-letter queue holds $dead message(s): messages the service could not apply (ARCHITECTURE.md, the runbook)"; fi
+  fi
   secs=$(lookup secretsmanager list-secrets --query 'SecretList[].Name' || true)
   echo "info  secrets: ${secs:-none}"
   stray=$(lookup resourcegroupstaggingapi get-resources --tag-filters Key=Project,Values=graft --query 'ResourceTagMappingList[].ResourceARN' || true)
@@ -692,6 +747,10 @@ phase_teardown() {
   for s in database-url admin-secret; do
     soft "delete secret $PREFIX/$s now, not after a recovery window" secretsmanager delete-secret --secret-id "$PREFIX/$s" --force-delete-without-recovery --query Name --output text
   done
+  for qn in "$EVENTS_Q" "$DEAD_Q"; do
+    qu=$(probe sqs get-queue-url --queue-name "$qn" --query QueueUrl)
+    [ -z "$qu" ] || soft "delete queue $qn" sqs delete-queue --queue-url "$qu"
+  done
   soft "delete the image repository and its images" ecr delete-repository --repository-name "$PREFIX-service" --force --query repository.repositoryName --output text
   b=$(bucket_name || true)
   if [ -n "$b" ]; then
@@ -723,7 +782,7 @@ phase_teardown() {
 }
 
 case "$phase" in
-  network|registry|storage|cors|roles|logs|push|database|secrets|release|service|redeploy|park|unpark|load-up|load-down|status|teardown) ;;
+  network|registry|storage|cors|roles|queue|logs|push|database|secrets|release|service|redeploy|park|unpark|load-up|load-down|status|teardown) ;;
   *) usage ;;
 esac
 guard
