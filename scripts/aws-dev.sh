@@ -304,7 +304,7 @@ phase_push() {
 
 # ---- database -------------------------------------------------------------------------------------
 phase_database() {
-  cost="Aurora Serverless v2: at most $MAX_ACU unit. Pauses after 5 idle minutes only if nothing holds a connection; the service does, so expect about 0.5 unit all day (roughly 2 USD a day) until parked. Unverified estimate."
+  cost="Aurora Serverless v2: at most $MAX_ACU unit. Pauses only if nothing holds a connection (measured: about 16 minutes after the task stops); the service does hold one, so expect about 0.5 unit all day (roughly 2 USD a day) until parked. Unverified estimate."
   priv_a=$(subnet_id private-a); priv_b=$(subnet_id private-b); db_sg=$(sg_id db)
   if [ -z "${DRY_RUN:-}" ]; then
     [ -n "$priv_a" ] && [ -n "$priv_b" ] && [ -n "$db_sg" ] || die "run network first"
@@ -530,7 +530,7 @@ scale_service() { # min max
     --scaling-target "minTaskCount=$1,maxTaskCount=$2,autoScalingMetric=AVERAGE_CPU,autoScalingTargetValue=60" --output json >/dev/null
 }
 phase_park() {
-  cost="stops the task and lets the database pause after 5 idle minutes; the load balancer and its 2 public addresses still bill (about 1.3 USD a day, unverified)"
+  cost="stops the task and lets the database pause about 16 minutes later (measured); the load balancer and its 2 public addresses still bill (about 1.3 USD a day, unverified)"
   scale_service 0 0
 }
 phase_unpark() {

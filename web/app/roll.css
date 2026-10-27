@@ -138,7 +138,7 @@ button:disabled {
 .record-caption {
   position: absolute;
   right: 3vw;
-  bottom: 112px;
+  bottom: 130px;
   margin: 0;
   font:
     500 11px var(--f-mono),
@@ -424,6 +424,10 @@ button:disabled {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   opacity: 0.9;
+}
+/* the condensed title's glyphs overshoot its tight line box, so its label needs more room */
+.slab[data-k="up"] .play-word {
+  margin-top: 0.6em;
 }
 .empty-slab {
   display: inline-flex;
@@ -954,7 +958,18 @@ button:disabled {
 .coach-veil {
   position: absolute;
   inset: 0;
-  background: rgba(8, 7, 6, 0.55);
+  /* the page's own ground washed over it, so light stays warm and dark stays dark, never a grey film;
+     a spotlight leaves what the note points at clear (the middle of the screen until it is measured) */
+  --veil: color-mix(in srgb, var(--bg) 52%, transparent);
+  --sx: 50%;
+  --sy: 50%;
+  --sr: 0px;
+  background: radial-gradient(
+    circle at var(--sx) var(--sy),
+    transparent 0,
+    transparent var(--sr),
+    var(--veil) calc(var(--sr) + 150px)
+  );
 }
 .coach-marks {
   position: absolute;

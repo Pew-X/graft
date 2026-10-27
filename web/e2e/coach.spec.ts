@@ -182,3 +182,20 @@ for (const size of SIZES) {
     });
   });
 }
+
+test("the veil leaves what a note points at clear, so the first screen is not one grey film", async ({
+  page,
+}) => {
+  await arrive(page);
+  const veil = page.locator(".coach-veil");
+  await expect
+    .poll(() => veil.evaluate((el) => parseFloat(el.style.getPropertyValue("--sr"))))
+    .toBeGreaterThan(20);
+  const button = await page.locator(".controls .primary").boundingBox();
+  const spot = await veil.evaluate((el) => ({
+    x: parseFloat(el.style.getPropertyValue("--sx")),
+    y: parseFloat(el.style.getPropertyValue("--sy")),
+  }));
+  expect(Math.abs(spot.x - (button!.x + button!.width / 2))).toBeLessThan(2);
+  expect(Math.abs(spot.y - (button!.y + button!.height / 2))).toBeLessThan(2);
+});

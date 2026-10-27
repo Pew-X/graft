@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Footer } from "../../../components/Footer.tsx";
 import { ManagePublication } from "../../../components/ManagePublication.tsx";
 import { apiUrls } from "../../../lib/api/server.ts";
@@ -19,7 +20,12 @@ export default async function ManagePage({ params }: { params: Promise<{ id: str
   return (
     <>
       <main className="make">
-        <p className="kicker">{copy.manage.title}</p>
+        <div className="make-bar">
+          <Link href="/" className="back">
+            {copy.make.home}
+          </Link>
+          <p className="kicker">{copy.manage.title}</p>
+        </div>
         <ManagePublication id={id} apiUrl={apiUrls().browser} />
       </main>
       <Footer />

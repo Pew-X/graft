@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { copy, fill } from "../lib/copy.ts";
 import {
   arrowPath,
@@ -181,7 +189,19 @@ export function Coach({
       data-testid="coach"
       data-step={step}
     >
-      <div className="coach-veil" aria-hidden="true" />
+      <div
+        className="coach-veil"
+        aria-hidden="true"
+        style={
+          drawn
+            ? ({
+                "--sx": `${drawn.target.x + drawn.target.w / 2}px`,
+                "--sy": `${drawn.target.y + drawn.target.h / 2}px`,
+                "--sr": `${Math.max(drawn.target.w, drawn.target.h) / 2 + 22}px`,
+              } as CSSProperties)
+            : undefined
+        }
+      />
       {drawn ? (
         <svg
           className="coach-marks"
