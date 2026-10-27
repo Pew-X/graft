@@ -57,6 +57,15 @@ test("the details layer gives the exact values of the second stage", () => {
   assert.match(rows["audio hash (sha-256)"]!, /^[0-9a-f]{64}$/);
 });
 
+test("only the audio hash is drawn as a picture, from the hash itself", () => {
+  for (const block of blocks) {
+    const drawn = block.details.filter((r) => r.print !== undefined);
+    assert.equal(drawn.length, 1, block.title);
+    assert.equal(drawn[0]!.label, "audio hash (sha-256)");
+    assert.equal(drawn[0]!.print, drawn[0]!.value);
+  }
+});
+
 test("a source has no speed row and says so by leaving it out", () => {
   assert.equal(
     blocks[0]!.details.some((r) => r.label === "speed"),

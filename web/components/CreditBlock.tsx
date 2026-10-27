@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { copy, fill } from "../lib/copy.ts";
 import type { Block, DetailRow, FaceLine } from "../lib/roll/view.ts";
+import { Trace } from "./Trace.tsx";
 
 /** The honesty state in words (colour is never the only carrier of it). */
 function Stated({ state, asTyped }: { state: string; asTyped: boolean }) {
@@ -30,7 +31,21 @@ function Detail({ row }: { row: DetailRow }) {
     <div className="line" data-honesty={row.honesty}>
       <dt>{row.label}</dt>
       <dd>
-        <code>{row.value}</code>
+        {row.print === undefined ? (
+          <code>{row.value}</code>
+        ) : (
+          // A code is drawn first and written out only on request: the same sound draws the same line.
+          <>
+            <span className="print">
+              <Trace id={row.print} label={copy.details.printLabel} />
+            </span>
+            <em className="print-note">{copy.details.printNote}</em>
+            <details className="code">
+              <summary>{copy.details.showCode}</summary>
+              <code>{row.value}</code>
+            </details>
+          </>
+        )}
         <Stated state={row.state} asTyped={row.asTyped} />
       </dd>
     </div>
@@ -90,9 +105,26 @@ export const CreditBlock = memo(function CreditBlock({
       onFocus={() => onFocusBlock(block.index)}
     >
       <article aria-labelledby={heading}>
-        <p className="kicker">
-          {fill(copy.roll.kicker, { n: String(block.numeral).padStart(2, "0"), kind: block.kind })}
-        </p>
+        <div className="kicker-row">
+          <p className="kicker">
+            {fill(copy.roll.kicker, {
+              n: String(block.numeral).padStart(2, "0"),
+              kind: block.kind,
+            })}
+          </p>
+          {block.state === "available" ? (
+            // The stage's face: its trace, drawn from its public id. A tap plays it; the title below is
+            // the control a keyboard or a screen reader uses, so this one is only drawn.
+            <div
+              className="trace-face"
+              aria-hidden="true"
+              data-stage={block.id}
+              onClick={() => (disabled ? undefined : onPlay(block.index))}
+            >
+              <Trace id={block.id} label="" decorative />
+            </div>
+          ) : null}
+        </div>
         <h2 id={heading} className="slab" data-k={block.lettering}>
           <button
             type="button"

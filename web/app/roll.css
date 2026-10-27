@@ -351,6 +351,29 @@ button:disabled {
   color: var(--muted);
 }
 
+/* a stage's face: the kicker and its trace, the same line wherever this stage is shown */
+.kicker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 12px;
+}
+.kicker-row .kicker {
+  margin: 0;
+}
+.trace-face {
+  flex: none;
+  width: 104px;
+  height: 30px;
+  border-radius: 5px;
+  overflow: hidden;
+  cursor: pointer;
+}
+.trace-face .trace {
+  height: 100%;
+}
+
 /* the title: a torn slab of the stage's dye, lettered after what was done to the sound */
 .slab {
   margin: 0 0 4.5vh;
@@ -564,6 +587,28 @@ button:disabled {
 }
 .details dl {
   margin: 0;
+}
+/* a code, drawn: its line first, the written form on request */
+.details .print {
+  display: block;
+  width: min(100%, 240px);
+  margin: 0.25rem 0 0.4rem;
+}
+.details .print-note {
+  display: block;
+  margin-bottom: 0.25rem;
+  font:
+    italic 400 0.9rem/1.3 var(--f-serif),
+    serif;
+  color: var(--muted);
+}
+.details .code summary {
+  min-height: 44px;
+  font-size: 10px;
+}
+.details .code code {
+  display: block;
+  overflow-wrap: anywhere;
 }
 .stage-note {
   margin: 0 0 0.75rem;

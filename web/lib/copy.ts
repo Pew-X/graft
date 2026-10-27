@@ -455,6 +455,10 @@ export const copy = {
   },
   details: {
     summary: "details",
+    printLabel: "a line drawn from this sound's code",
+    printNote:
+      "drawn from the code below, so the same sound always draws the same line. a picture of the code, not of how the sound goes.",
+    showCode: "show the code",
   },
   theme: {
     label: "theme",
