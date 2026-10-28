@@ -136,6 +136,11 @@ button:disabled {
 .roll[data-playback="idle"] .record-caption {
   display: none;
 }
+/* while the guide is speaking (the captions, then the needle hint) it says the same thing, so the plain
+   caption waits: one voice at a time on the screen */
+.roll:is([data-guide="narrating"], [data-guide="hintNeedle"]) .record-caption {
+  display: none;
+}
 .record-caption {
   position: absolute;
   right: 3vw;

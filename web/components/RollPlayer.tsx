@@ -543,6 +543,7 @@ export function RollPlayer({
       data-sounding={playing}
       data-audio={load}
       data-reduced={reduced}
+      data-guide={phase}
     >
       {load === "ready" ? (
         <Disc
