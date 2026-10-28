@@ -578,3 +578,62 @@ test("the wake package carries its own pinned ECS client, installed from the loc
   const lock = JSON.parse(readFileSync(new URL("../tools/wake/package-lock.json", import.meta.url), "utf8"));
   assert.equal(lock.packages["node_modules/@aws-sdk/client-ecs"].version, pkg.dependencies["@aws-sdk/client-ecs"]);
 });
+
+// a made-up marker for the address, so a test can search for it everywhere (the real one is never in a file)
+const ALARM = "ALARM-ADDRESS-SENTINEL-7f3a";
+
+test("the budget phase refuses to run without the alarm address, before any change", () => {
+  const s = sandbox();
+  const r = s.run(["budget"]);
+  assert.notEqual(r.status, 0);
+  assert.match(plan(r), /GRAFT_ALARM_EMAIL/);
+  assert.deepEqual(s.changes(), []);
+});
+
+test("the budget is 60 USD a month for this region, with a warning at 45 actual and at 60 forecast", () => {
+  const s = sandbox();
+  const out = plan(s.run(["budget"], { DRY_RUN: "1", GRAFT_ALARM_EMAIL: ALARM }));
+  assert.match(out, /create-budget --account-id \d{12} --budget file:/);
+  const sent = out;
+  assert.match(sent, /"BudgetName":"graft-dev-month"/);
+  assert.match(sent, /"Amount":"60","Unit":"USD"/);
+  assert.match(sent, /"TimeUnit":"MONTHLY"/);
+  assert.match(sent, /"CostFilters":\{"Region":\["ap-south-1"\]\}/, "this region only: the account holds another project elsewhere");
+  assert.match(sent, /"NotificationType":"ACTUAL".*"Threshold":45/);
+  assert.match(sent, /"NotificationType":"FORECASTED".*"Threshold":60/);
+  const custom = plan(sandbox().run(["budget", "--limit", "80", "--alarm", "50"], { DRY_RUN: "1", GRAFT_ALARM_EMAIL: ALARM }));
+  assert.match(custom, /"Amount":"80"/);
+  assert.match(custom, /"Threshold":50/);
+});
+
+test("the alarm address is never printed, logged, or put on a command line", () => {
+  const s = sandbox();
+  const dry = plan(s.run(["budget"], { DRY_RUN: "1", GRAFT_ALARM_EMAIL: ALARM }));
+  assert.doesNotMatch(dry, new RegExp(ALARM), "not even in a dry run's plan");
+  const real = sandbox();
+  const r = real.run(["budget"], { GRAFT_ALARM_EMAIL: ALARM });
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(real.sent().includes(ALARM), "it reaches the Budgets call, in a file");
+  assert.doesNotMatch(plan(r), new RegExp(ALARM), "never printed");
+  assert.doesNotMatch(real.ledger(), new RegExp(ALARM), "never in the ledger");
+  assert.doesNotMatch(real.calls().join("\n"), new RegExp(ALARM), "never on a command line");
+  assert.match(real.ledger(), /graft-dev-month/);
+});
+
+test("the budget phase rejects an alarm at or above the limit, and amounts that are not whole numbers", () => {
+  const bad = (args) => sandbox().run(["budget", ...args], { DRY_RUN: "1", GRAFT_ALARM_EMAIL: ALARM });
+  assert.notEqual(bad(["--limit", "60", "--alarm", "60"]).status, 0);
+  assert.notEqual(bad(["--limit", "60", "--alarm", "70"]).status, 0);
+  assert.notEqual(bad(["--limit", "sixty"]).status, 0);
+});
+
+test("a budget that exists is left alone, and status and teardown know about it", () => {
+  const exists = sandbox();
+  const r = exists.run(["budget"], { FAKE_EXISTS: "1", GRAFT_ALARM_EMAIL: ALARM });
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(exists.changes(), []);
+  assert.match(plan(sandbox().run(["status"])), /info\s+no cost budget graft-dev-month/);
+  assert.match(plan(sandbox().run(["status"], { FAKE_EXISTS: "1" })), /ok\s+budget graft-dev-month/);
+  assert.match(plan(sandbox().run(["teardown", "--yes"], { DRY_RUN: "1" })), /delete-budget --account-id \d{12} --budget-name graft-dev-month/);
+});
+

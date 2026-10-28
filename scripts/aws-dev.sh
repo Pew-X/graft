@@ -30,6 +30,10 @@
 #                              starts the service when someone visits (it needs the shared secret) and a
 #                              five-minute check that stops it when idle. The check is created OFF; turn it
 #                              on with --schedule on once the warm window commands exist
+#   budget [--limit 60] [--alarm 45]
+#                              a monthly cost budget for this region, warning at the alarm amount (actual) and
+#                              at the limit (forecast); the address to warn comes from GRAFT_ALARM_EMAIL at run
+#                              time and is never printed or written down. It warns; it does not stop spending
 #   load-up --image <ref> --origin <site>
 #                              a clean copy for the load test: second database, second service, own blob prefix
 #   load-down --yes            remove only that copy
@@ -40,7 +44,7 @@
 set -eu
 
 die() { echo "aws-dev: $*" >&2; exit 2; }
-usage() { sed -n '2,36p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+usage() { sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
 PREFIX=graft-dev
 CIDR=10.42.0.0/16
@@ -685,6 +689,40 @@ EOF
   echo "the idle check is $rule_state" >&2
 }
 
+# ---- budget ---------------------------------------------------------------------------------------
+# One monthly cost budget for this region, with an email when spend reaches the alarm amount and when it
+# is forecast to reach the limit. It only warns: nothing here stops spending (the cloud is stopped by park,
+# or by the idle check). The Budgets service is global (its endpoint is in us-east-1) and a budget is an
+# account-level object; the builder said yes to this one call on 2026-10-28 (the ledger has it). The cost
+# filter is the region, because the account also holds another project's resources elsewhere and this
+# budget must not count them. The address is read from the environment, put only in a temporary file,
+# and never printed, so it appears in no output, ledger row or committed file.
+BUDGET=$PREFIX-month
+phase_budget() {
+  cost="free (the first two budgets in an account are free)"
+  limit=$(opt --limit "$@"); limit=${limit:-60}
+  alarm=$(opt --alarm "$@"); alarm=${alarm:-45}
+  case "$limit$alarm" in *[!0-9]*) die "--limit and --alarm are whole amounts in USD" ;; esac
+  [ "$alarm" -lt "$limit" ] || die "the alarm ($alarm) must be below the limit ($limit)"
+  [ -n "${GRAFT_ALARM_EMAIL:-}" ] || die "set GRAFT_ALARM_EMAIL to the address that should be warned (it is read at run time and never written down)"
+  if [ -n "$(probe budgets describe-budget --account-id "$ACCOUNT" --budget-name "$BUDGET" --query Budget.BudgetName)" ]; then
+    echo "the budget $BUDGET already exists; nothing to do" >&2; return 0
+  fi
+  addr=$GRAFT_ALARM_EMAIL
+  [ -z "${DRY_RUN:-}" ] || addr='<alarm address>'
+  b=$(mktmp)
+  cat > "$b" <<EOF
+{"BudgetName":"$BUDGET","BudgetLimit":{"Amount":"$limit","Unit":"USD"},"TimeUnit":"MONTHLY","BudgetType":"COST","CostFilters":{"Region":["$REGION"]}}
+EOF
+  n=$(mktmp); chmod 600 "$n"
+  cat > "$n" <<EOF
+[{"Notification":{"NotificationType":"ACTUAL","ComparisonOperator":"GREATER_THAN","Threshold":$alarm,"ThresholdType":"ABSOLUTE_VALUE"},"Subscribers":[{"SubscriptionType":"EMAIL","Address":"$addr"}]},
+ {"Notification":{"NotificationType":"FORECASTED","ComparisonOperator":"GREATER_THAN","Threshold":$limit,"ThresholdType":"ABSOLUTE_VALUE"},"Subscribers":[{"SubscriptionType":"EMAIL","Address":"$addr"}]}]
+EOF
+  mut "create the monthly budget $BUDGET: $limit USD for $REGION, an email at $alarm USD actual and at $limit USD forecast, to the builder's own address (not recorded)" \
+    budgets create-budget --account-id "$ACCOUNT" --budget "file://$b" --notifications-with-subscribers "file://$n"
+}
+
 # ---- the load copy ---------------------------------------------------------------------------------
 # The load test writes thousands of flips and audio files, and nothing can purge them, so it never runs
 # against the live data. It runs against a copy of the same topology: a second database inside the same
@@ -806,6 +844,11 @@ phase_status() {
     warm=$(probe ecs list-tags-for-resource --resource-arn "arn:aws:ecs:$REGION:$ACCOUNT:service/$PREFIX/$PREFIX" --query "tags[?key=='graft-warm-until'].value | [0]")
     echo "info  wake function $wfn: address $(probe lambda get-function-url-config --function-name "$WAKE_FN" --query FunctionUrl); idle check $(probe events describe-rule --name "$WAKE_RULE" --query State); warm until: ${warm:-not set} (free at this size)"
   fi
+  bl=$(probe budgets describe-budget --account-id "$ACCOUNT" --budget-name "$BUDGET" --query 'Budget.BudgetLimit.Amount')
+  if [ -z "$bl" ]; then echo "info  no cost budget $BUDGET: nothing warns about spend (run: GRAFT_ALARM_EMAIL=... sh scripts/aws-dev.sh budget)"; else
+    subs=$(probe budgets describe-notifications-for-budget --account-id "$ACCOUNT" --budget-name "$BUDGET" --query 'length(Notifications)')
+    echo "ok    budget $BUDGET: $bl USD a month, ${subs:-0} notification(s) (the address is not shown)"
+  fi
   secs=$(lookup secretsmanager list-secrets --query 'SecretList[].Name' || true)
   echo "info  secrets: ${secs:-none}"
   stray=$(lookup resourcegroupstaggingapi get-resources --tag-filters Key=Project,Values=graft --query 'ResourceTagMappingList[].ResourceARN' || true)
@@ -846,6 +889,7 @@ phase_teardown() {
   soft "remove the idle check's target" events remove-targets --rule "$WAKE_RULE" --ids wake
   soft "delete the idle check" events delete-rule --name "$WAKE_RULE"
   soft "delete the wake function (and its web address)" lambda delete-function --function-name "$WAKE_FN"
+  soft "delete the cost budget" budgets delete-budget --account-id "$ACCOUNT" --budget-name "$BUDGET"
   soft "delete the wake function's log group" logs delete-log-group --log-group-name "/aws/lambda/$WAKE_FN"
 
   soft "delete the database writer" rds delete-db-instance --db-instance-identifier "$PREFIX-db-1" --skip-final-snapshot --delete-automated-backups --query DBInstance.DBInstanceIdentifier --output text
@@ -892,7 +936,7 @@ phase_teardown() {
 }
 
 case "$phase" in
-  network|registry|storage|cors|roles|queue|logs|push|database|secrets|release|service|redeploy|park|unpark|wake|load-up|load-down|status|teardown) ;;
+  network|registry|storage|cors|roles|queue|logs|push|database|secrets|release|service|redeploy|park|unpark|wake|budget|load-up|load-down|status|teardown) ;;
   *) usage ;;
 esac
 guard
