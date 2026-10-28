@@ -69,6 +69,7 @@ test.describe("a chain page opened while the service is asleep", () => {
     const waking = page.getByTestId("waking");
     await expect(waking).toBeVisible();
     await expect(waking).toContainText("waking up.");
+    await expect(page, "the tab says it too, not that nothing is here").toHaveTitle("waking up.");
     await expect(waking).toContainText("about a minute");
     await expect(waking.getByRole("button", { name: "try now" })).toBeVisible();
     await expect(waking).toHaveAttribute("data-mood", "waking");
