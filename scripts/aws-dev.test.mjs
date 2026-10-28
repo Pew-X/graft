@@ -668,3 +668,16 @@ test("cool removes the tag and nothing else, so the idle check may stop the serv
   assert.deepEqual(s.changes().map((c) => c.replace(/ --resource-arn \S+/, " <service>")), ["ecs untag-resource <service> --tag-keys graft-warm-until"]);
 });
 
+test("redeploy can switch visitor uploads on or off by themselves, and says so in the task definition it registers", () => {
+  const on = plan(sandbox().run(["redeploy", "--uploads", "on"], { DRY_RUN: "1" }));
+  assert.match(on, /uploads on/);
+  assert.match(on, /register-task-definition/);
+  assert.match(on, /update-express-gateway-service .*--task-definition-arn/);
+  assert.match(plan(sandbox().run(["redeploy", "--uploads", "off"], { DRY_RUN: "1" })), /uploads off/);
+  const bad = sandbox().run(["redeploy", "--uploads", "maybe"], { DRY_RUN: "1" });
+  assert.notEqual(bad.status, 0);
+  assert.match(plan(bad), /on or off/);
+  const none = sandbox().run(["redeploy"], { DRY_RUN: "1" });
+  assert.notEqual(none.status, 0);
+});
+

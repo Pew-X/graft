@@ -114,6 +114,11 @@ export function OwnSound({
           />
         </label>
       </div>
+      {uploads === true ? (
+        <p className="notice own-rights" data-testid="rights-note">
+          {copy.own.rightsNote}
+        </p>
+      ) : null}
       {uploads === false ? (
         <p className="notice own-off" data-testid="uploads-off">
           {copy.own.offUpFront}
