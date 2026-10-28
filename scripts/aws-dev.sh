@@ -26,6 +26,10 @@
 #                              revision if the new one never becomes ready
 #   park | unpark              stop the service's task so the database can pause (the load balancer stays and
 #                              still bills), or bring the one task back
+#   wake [--schedule on|off]  the wake and park function (tools/wake): a Lambda with its own web address that
+#                              starts the service when someone visits (it needs the shared secret) and a
+#                              five-minute check that stops it when idle. The check is created OFF; turn it
+#                              on with --schedule on once the warm window commands exist
 #   load-up --image <ref> --origin <site>
 #                              a clean copy for the load test: second database, second service, own blob prefix
 #   load-down --yes            remove only that copy
@@ -36,7 +40,7 @@
 set -eu
 
 die() { echo "aws-dev: $*" >&2; exit 2; }
-usage() { sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+usage() { sed -n '2,36p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
 PREFIX=graft-dev
 CIDR=10.42.0.0/16
@@ -585,6 +589,93 @@ phase_unpark() {
   scale_service 1 1
 }
 
+# ---- wake -----------------------------------------------------------------------------------------
+# A visit wakes the service; a five-minute check stops it when nobody has used it (tools/wake has the
+# decisions and their tests). One small Lambda with a web address, its own role that may touch only the
+# one service, a shared secret kept in the secrets store (the value is never printed), and a schedule. The
+# schedule is created OFF, so nothing can stop the service until the builder turns the check on.
+WAKE_FN=$PREFIX-wake
+WAKE_RULE=$PREFIX-wake-check
+wake_lb_dimension() { # the load balancer's CloudWatch name, "app/<name>/<id>"; Express Mode keeps one shared load balancer
+  lb=$(probe elbv2 describe-load-balancers --query "LoadBalancers[?starts_with(LoadBalancerName,'ecs-express-gateway-alb')].LoadBalancerArn | [0]")
+  printf '%s' "${lb#*:loadbalancer/}"
+}
+phase_wake() {
+  cost="free at this size (Lambda and the schedule are inside the free tier); the secret is about 0.40 USD a month"
+  schedule=$(opt --schedule "$@"); schedule=${schedule:-off}
+  case "$schedule" in on) rule_state=ENABLED ;; off) rule_state=DISABLED ;; *) die "--schedule is on or off" ;; esac
+  svc_arn="arn:aws:ecs:$REGION:$ACCOUNT:service/$PREFIX/$PREFIX"
+  here=$(cd "$(dirname "$0")" && pwd)
+  lb=$(wake_lb_dimension)
+  if [ -z "$lb" ]; then
+    [ -n "${DRY_RUN:-}" ] || die "no load balancer found for the service: run service first"
+    lb="app/PLANNED/0"
+  fi
+
+  # the shared secret, made once and never printed
+  if [ -z "$(secret_arn wake-secret)" ]; then
+    if [ -n "${DRY_RUN:-}" ]; then pw='<generated>'; else pw=$(aws secretsmanager get-random-password --password-length 48 --exclude-punctuation --query RandomPassword --output text); fi
+    f=$(mktmp); chmod 600 "$f"; printf '%s' "$pw" > "$f"
+    mut "store the wake secret as $PREFIX/wake-secret (value never printed)" secretsmanager create-secret --name "$PREFIX/wake-secret" \
+      --secret-string "file://$f" --tags $TAGS_KV --query ARN --output text >/dev/null
+  fi
+
+  # the role: this one service and nothing else
+  ensure_role wake lambda.amazonaws.com
+  pol=$(mktmp)
+  cat > "$pol" <<EOF
+{"Version":"2012-10-17","Statement":[
+ {"Sid":"ThisServiceOnly","Effect":"Allow","Action":["ecs:DescribeServices","ecs:ListTagsForResource","ecs:TagResource","ecs:UpdateExpressGatewayService","ecs:DescribeExpressGatewayService"],"Resource":"$svc_arn"},
+ {"Sid":"ItsTasks","Effect":"Allow","Action":"ecs:DescribeTasks","Resource":"arn:aws:ecs:$REGION:$ACCOUNT:task/$PREFIX/*"},
+ {"Sid":"ListItsTasks","Effect":"Allow","Action":"ecs:ListTasks","Resource":"*","Condition":{"ArnEquals":{"ecs:cluster":"arn:aws:ecs:$REGION:$ACCOUNT:cluster/$PREFIX"}}},
+ {"Sid":"ReadRequestCounts","Effect":"Allow","Action":"cloudwatch:GetMetricStatistics","Resource":"*"},
+ {"Sid":"PassTheInfrastructureRole","Effect":"Allow","Action":"iam:PassRole","Resource":"$(role_arn infra)","Condition":{"StringEquals":{"iam:PassedToService":"ecs.amazonaws.com"}}},
+ {"Sid":"ItsOwnLogs","Effect":"Allow","Action":["logs:CreateLogStream","logs:PutLogEvents"],"Resource":"arn:aws:logs:$REGION:$ACCOUNT:log-group:/aws/lambda/$WAKE_FN:*"}]}
+EOF
+  mut "the wake role may touch only the service $PREFIX, read request counts and write its own logs" iam put-role-policy --role-name "$PREFIX-wake" --policy-name "$PREFIX-wake-service" --policy-document "file://$pol"
+
+  have=$(lookup logs describe-log-groups --log-group-name-prefix "/aws/lambda/$WAKE_FN" --query 'logGroups[0].logGroupName')
+  [ -n "$have" ] || mut "create log group /aws/lambda/$WAKE_FN" logs create-log-group --log-group-name "/aws/lambda/$WAKE_FN" --tags Project=graft,Env=dev,ManagedBy=claude-cli
+  mut "keep the wake function's logs 7 days" logs put-retention-policy --log-group-name "/aws/lambda/$WAKE_FN" --retention-in-days 7
+
+  # the code, packaged from the repository; the settings go in as a file so the secret is never on a command line
+  zipf=$(mktmp); rm -f "$zipf"
+  zip -q -j "$zipf" "$here/../tools/wake/decide.mjs" "$here/../tools/wake/handler.mjs" "$here/../tools/wake/index.mjs"
+  envf=$(mktmp); chmod 600 "$envf"
+  if [ -n "${DRY_RUN:-}" ]; then sec='<generated>'; else sec=$(aws secretsmanager get-secret-value --secret-id "$PREFIX/wake-secret" --query SecretString --output text); fi
+  printf '{"Variables":{"GRAFT_WAKE_SECRET":"%s","GRAFT_SERVICE_ARN":"%s","GRAFT_LB_DIMENSION":"%s"}}' "$sec" "$svc_arn" "$lb" > "$envf"
+  fn=$(probe lambda get-function --function-name "$WAKE_FN" --query 'Configuration.FunctionName')
+  if [ -z "$fn" ]; then
+    n=0
+    until mut "create the wake function $WAKE_FN (Node 22, ARM64, 128 MB, 20 s)" lambda create-function --function-name "$WAKE_FN" \
+      --runtime nodejs22.x --architectures arm64 --handler index.handler --role "$(role_arn wake)" --timeout 20 --memory-size 128 \
+      --zip-file "fileb://$zipf" --environment "file://$envf" --tags Project=graft,Env=dev,ManagedBy=claude-cli --query FunctionArn --output text >/dev/null; do
+      n=$((n + 1)); [ "$n" -lt 6 ] || die "the function could not be created (the new role may not have reached Lambda yet: run wake again)"
+      sleep 10
+    done
+  else
+    mut "update the wake function's code" lambda update-function-code --function-name "$WAKE_FN" --zip-file "fileb://$zipf" --query FunctionArn --output text >/dev/null
+    [ -n "${DRY_RUN:-}" ] || aws lambda wait function-updated-v2 --function-name "$WAKE_FN"
+    mut "update the wake function's settings" lambda update-function-configuration --function-name "$WAKE_FN" --environment "file://$envf" --query FunctionArn --output text >/dev/null
+  fi
+  [ -n "${DRY_RUN:-}" ] || aws lambda wait function-active-v2 --function-name "$WAKE_FN"
+  soft "cap the wake function at two at once, so a flood of calls cannot run up a bill" lambda put-function-concurrency --function-name "$WAKE_FN" --reserved-concurrent-executions 2 --query ReservedConcurrentExecutions --output text
+
+  # its web address: open to anyone who has it, and refusing everyone without the secret (the function checks it)
+  url=$(probe lambda get-function-url-config --function-name "$WAKE_FN" --query FunctionUrl)
+  [ -n "$url" ] || url=$(mut "give the wake function a web address" lambda create-function-url-config --function-name "$WAKE_FN" --auth-type NONE --query FunctionUrl --output text)
+  soft "let the web address be called" lambda add-permission --function-name "$WAKE_FN" --statement-id UrlInvokeUrl --action lambda:InvokeFunctionUrl --principal '*' --function-url-auth-type NONE
+  soft "let the function run when called through its web address" lambda add-permission --function-name "$WAKE_FN" --statement-id UrlInvokeFunction --action lambda:InvokeFunction --principal '*' --invoked-via-function-url
+
+  # the five-minute check, off until asked
+  rule_arn="arn:aws:events:$REGION:$ACCOUNT:rule/$WAKE_RULE"
+  mut "the idle check: every five minutes, $rule_state" events put-rule --name "$WAKE_RULE" --schedule-expression "rate(5 minutes)" --state "$rule_state" --tags $TAGS_KV >/dev/null
+  soft "let the schedule run the function" lambda add-permission --function-name "$WAKE_FN" --statement-id ScheduleInvoke --action lambda:InvokeFunction --principal events.amazonaws.com --source-arn "$rule_arn"
+  mut "point the idle check at the wake function" events put-targets --rule "$WAKE_RULE" --targets "Id=wake,Arn=arn:aws:lambda:$REGION:$ACCOUNT:function:$WAKE_FN" >/dev/null
+  echo "the wake address (for Vercel, with the secret from $PREFIX/wake-secret): $url" >&2
+  echo "the idle check is $rule_state" >&2
+}
+
 # ---- the load copy ---------------------------------------------------------------------------------
 # The load test writes thousands of flips and audio files, and nothing can purge them, so it never runs
 # against the live data. It runs against a copy of the same topology: a second database inside the same
@@ -701,6 +792,10 @@ phase_status() {
     dead=$(probe sqs get-queue-attributes --queue-url "${durl:-none}" --attribute-names ApproximateNumberOfMessages --query 'Attributes.ApproximateNumberOfMessages')
     if [ -z "$dead" ] || [ "$dead" = 0 ]; then echo "ok    dead-letter queue is empty"; else flag "dead-letter queue holds $dead message(s): messages the service could not apply (ARCHITECTURE.md, the runbook)"; fi
   fi
+  wfn=$(probe lambda get-function --function-name "$WAKE_FN" --query 'Configuration.FunctionName')
+  if [ -z "$wfn" ]; then echo "ok    no wake function"; else
+    echo "info  wake function $wfn: address $(probe lambda get-function-url-config --function-name "$WAKE_FN" --query FunctionUrl); idle check $(probe events describe-rule --name "$WAKE_RULE" --query State); warm until: $(probe ecs list-tags-for-resource --resource-arn "arn:aws:ecs:$REGION:$ACCOUNT:service/$PREFIX/$PREFIX" --query "tags[?key=='graft-warm-until'].value | [0]" | sed 's/^$/not set/') (free at this size)"
+  fi
   secs=$(lookup secretsmanager list-secrets --query 'SecretList[].Name' || true)
   echo "info  secrets: ${secs:-none}"
   stray=$(lookup resourcegroupstaggingapi get-resources --tag-filters Key=Project,Values=graft --query 'ResourceTagMappingList[].ResourceARN' || true)
@@ -737,6 +832,11 @@ phase_teardown() {
   for t in $(lookup ecs list-tasks --cluster "$PREFIX" --query 'taskArns' 2>/dev/null || true); do soft "stop task $t" ecs stop-task --cluster "$PREFIX" --task "$t" --query 'task.taskArn' --output text; done
   soft "delete the ECS cluster" ecs delete-cluster --cluster "$PREFIX" --query cluster.clusterName --output text
   soft "delete the log group" logs delete-log-group --log-group-name "$LOG_GROUP"
+  # the wake function, its schedule and its log group (before its role)
+  soft "remove the idle check's target" events remove-targets --rule "$WAKE_RULE" --ids wake
+  soft "delete the idle check" events delete-rule --name "$WAKE_RULE"
+  soft "delete the wake function (and its web address)" lambda delete-function --function-name "$WAKE_FN"
+  soft "delete the wake function's log group" logs delete-log-group --log-group-name "/aws/lambda/$WAKE_FN"
 
   soft "delete the database writer" rds delete-db-instance --db-instance-identifier "$PREFIX-db-1" --skip-final-snapshot --delete-automated-backups --query DBInstance.DBInstanceIdentifier --output text
   wait_gone probe rds describe-db-instances --db-instance-identifier "$PREFIX-db-1" --query 'DBInstances[0].DBInstanceIdentifier'
@@ -744,7 +844,7 @@ phase_teardown() {
   wait_gone probe rds describe-db-clusters --db-cluster-identifier "$PREFIX-db" --query 'DBClusters[0].DBClusterIdentifier'
   soft "delete the database subnet group" rds delete-db-subnet-group --db-subnet-group-name "$PREFIX-db"
 
-  for s in database-url admin-secret; do
+  for s in database-url admin-secret wake-secret; do
     soft "delete secret $PREFIX/$s now, not after a recovery window" secretsmanager delete-secret --secret-id "$PREFIX/$s" --force-delete-without-recovery --query Name --output text
   done
   for qn in "$EVENTS_Q" "$DEAD_Q"; do
@@ -758,7 +858,7 @@ phase_teardown() {
     soft "delete bucket $b" s3api delete-bucket --bucket "$b"
   fi
 
-  for r in task exec infra github-deploy; do
+  for r in task exec infra wake github-deploy; do
     for p in $(probe iam list-attached-role-policies --role-name "$PREFIX-$r" --query 'AttachedPolicies[].PolicyArn'); do soft "detach $p from $PREFIX-$r" iam detach-role-policy --role-name "$PREFIX-$r" --policy-arn "$p"; done
     for p in $(probe iam list-role-policies --role-name "$PREFIX-$r" --query 'PolicyNames'); do soft "delete inline policy $p of $PREFIX-$r" iam delete-role-policy --role-name "$PREFIX-$r" --policy-name "$p"; done
     soft "delete role $PREFIX-$r" iam delete-role --role-name "$PREFIX-$r"
@@ -782,7 +882,7 @@ phase_teardown() {
 }
 
 case "$phase" in
-  network|registry|storage|cors|roles|queue|logs|push|database|secrets|release|service|redeploy|park|unpark|load-up|load-down|status|teardown) ;;
+  network|registry|storage|cors|roles|queue|logs|push|database|secrets|release|service|redeploy|park|unpark|wake|load-up|load-down|status|teardown) ;;
   *) usage ;;
 esac
 guard
