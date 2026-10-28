@@ -38,11 +38,23 @@ test("output length stays exact at the largest cut and the most awkward ratios (
   }
 });
 
-test("a cut shorter than 480 frames is refused with the numbers in the message", () => {
+test("a cut shorter than 480 frames is refused, and the message says the limit in plain units", () => {
   const problem = checkCut({ start: 100, end: 579 }, 48_000);
   assert.equal(problem?.kind, "cutShort");
-  assert.match(refusal(problem!), /480/);
+  assert.match(refusal(problem!), /10 milliseconds/);
+  assert.doesNotMatch(refusal(problem!), /frames/);
   assert.equal(checkCut({ start: 100, end: 580 }, 48_000), null, "exactly 480 is allowed");
+});
+
+test("the limits the messages name in words are the limits the checks use", () => {
+  // the copy says 10 milliseconds, 10 seconds and 20 seconds; these are those, in frames at 48 kHz
+  assert.equal(LIMITS.minFrames, 0.01 * 48_000);
+  assert.equal(LIMITS.maxCutFrames, 10 * 48_000);
+  assert.equal(LIMITS.maxOutputFrames, 20 * 48_000);
+  const says = (kind: Parameters<typeof refusal>[0]["kind"]) => refusal({ kind } as never);
+  assert.match(says("cutLong"), /10 seconds/);
+  assert.match(says("outputLong"), /20 seconds/);
+  assert.match(says("outputShort"), /10 milliseconds/);
 });
 
 test("a cut longer than 10 seconds is refused; exactly 480,000 frames is allowed", () => {

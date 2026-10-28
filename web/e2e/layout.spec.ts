@@ -130,7 +130,7 @@ for (const size of SIZES) {
         const cy = portrait ? h0 + R * 0.1 : h0 / 2;
         const bad: string[] = [];
         for (const el of document.querySelectorAll(".roll *")) {
-          if (el.closest(".record, .controls, .bar, .coach")) continue;
+          if (el.closest(".record, .controls, .bar, .caption, .hint-layer")) continue;
           if (el.matches(".notes .status, .roll .footer, .record-caption")) continue;
           const style = getComputedStyle(el);
           if (style.display === "none" || style.visibility === "hidden") continue;

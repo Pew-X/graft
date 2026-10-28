@@ -273,7 +273,17 @@
 .handle:focus-visible {
   outline: 3px solid var(--focus);
 }
-.cut-editor .help,
+.cut-editor .help {
+  /* kept for the keyboard and screen readers; the one visible hint is the line above the editor */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 .cut-editor .readout {
   margin: 0.5rem 0 0;
   font:

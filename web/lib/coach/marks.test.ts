@@ -1,7 +1,15 @@
 // The coach's drawing and placement, worked as plain geometry. Each test names what it protects.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { arrowPath, edgeToward, loopPath, placeCard, seeded, type Rect } from "./marks.ts";
+import {
+  arrowPath,
+  edgeToward,
+  loopPath,
+  placeCard,
+  seeded,
+  underlinePath,
+  type Rect,
+} from "./marks.ts";
 
 const numbers = (d: string): number[] => (d.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
 const view = { w: 1280, h: 720 };
@@ -112,4 +120,21 @@ test("an arrow ends just outside the target's edge, on the side the note is on",
     Number.isFinite(edgeToward(target, { x: 550, y: 325 }).y),
     "a note over the middle never fails",
   );
+});
+
+test("an underline runs the whole width left to right and stays on its own line", () => {
+  const d = underlinePath(300, 5);
+  assert.equal(d, underlinePath(300, 5), "the same seed draws the same line");
+  assert.notEqual(d, underlinePath(300, 6));
+  const n = numbers(d);
+  const xs = n.filter((_, i) => i % 2 === 0);
+  const ys = n.filter((_, i) => i % 2 === 1);
+  assert.equal(xs[0], 0);
+  assert.equal(xs.at(-1), 300);
+  assert.deepEqual(
+    xs,
+    [...xs].sort((a, b) => a - b),
+    "left to right, never doubling back",
+  );
+  for (const y of ys) assert.ok(y > 3 && y < 9, `y ${y} stays near the middle of the 12 px box`);
 });

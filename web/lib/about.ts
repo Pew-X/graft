@@ -62,6 +62,10 @@ export const privacyClaims: readonly Claim[] = [
         file: "web/e2e/service/publish.spec.ts",
         test: "the key is kept in this browser only when the maker chooses",
       },
+      {
+        file: "web/e2e/guide.spec.ts",
+        test: "the browser keeps one key with one of three words, and nothing else",
+      },
     ],
   },
 ];

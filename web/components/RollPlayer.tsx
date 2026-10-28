@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { copy, fill } from "../lib/copy.ts";
 import {
   Engine,
@@ -13,23 +21,35 @@ import {
   type AudioContextConstructor,
   type State,
 } from "../lib/playback/index.ts";
-import { coachSeen } from "../lib/coach/seen.ts";
-import { peaksOf } from "../lib/record/disc.ts";
-import { type Mark, markFrames, markSeconds } from "../lib/record/mark.ts";
+import { type Event, type Phase, follow, next as nextPhase } from "../lib/coach/first.ts";
+import { captions, momentAt } from "../lib/coach/narration.ts";
+import { readPhase, writePhase } from "../lib/coach/seen.ts";
+import { captionBox } from "../lib/coach/where.ts";
+import { type Rect } from "../lib/coach/marks.ts";
+import { readyCut, READY_SPEED } from "../lib/make/ready.ts";
+import { layout, needleAt, peaksOf } from "../lib/record/disc.ts";
+import { type Mark, makeAddress, markFrames, markSeconds } from "../lib/record/mark.ts";
 import { startTelemetry } from "../lib/telemetry/browser.ts";
 import type { Telemetry } from "../lib/telemetry/telemetry.ts";
 import type { Loader } from "../lib/roll/audio.ts";
 import type { Block } from "../lib/roll/view.ts";
-import { Coach, type CoachStep } from "./Coach.tsx";
+import { Caption } from "./Caption.tsx";
 import { CreditBlock, EndBlock } from "./CreditBlock.tsx";
 import { ReportDialog } from "./ReportDialog.tsx";
 import { Disc, type Live } from "./Disc.tsx";
 import { EditPart } from "./EditPart.tsx";
 import { Footer } from "./Footer.tsx";
+import { Hint } from "./Hint.tsx";
 import { Thread } from "./Thread.tsx";
 import { ThemeToggle } from "./ThemeToggle.tsx";
 
 type Load = "loading" | "ready" | "failed";
+
+/** Which side of its target each hint likes to sit: on empty space, not on the thing it explains. */
+const HINT_SIDES = {
+  needle: ["left", "above", "below"],
+  mark: ["right", "below", "above"],
+} as const;
 
 const clock = {
   now: () => performance.now() / 1000,
@@ -119,12 +139,32 @@ export function RollPlayer({
   const sheet = useRef<HTMLDivElement>(null);
   const viewportEl = useRef<HTMLDivElement>(null);
   const notesEl = useRef<HTMLDivElement>(null);
-  // the first-visit coach: shown once to a browser that has not seen it, and again on request
+  const barEl = useRef<HTMLElement>(null);
+  // how tall the header is, with the sentence under it, so what sits below it (the independence line in
+  // portrait) keeps clear
+  const [barHeight, setBarHeight] = useState(0);
   // marking a part of a stage on the record, to flip just that part
   const [marking, setMarking] = useState(false);
   const [mark, setMark] = useState<Mark | null>(null);
-  const [coachOpen, setCoachOpen] = useState(false);
-  const coachChecked = useRef(false);
+  // the first-visit guide: the first play narrates itself, then two small hints, each once. Where it
+  // starts is read from the browser after the page is up (the server cannot know), and every step
+  // forward is written back.
+  const [phase, setPhase] = useState<Phase>("armed");
+  const [phaseKnown, setPhaseKnown] = useState(false);
+  const guide = useCallback((event: Event): void => setPhase((p) => nextPhase(p, event)), []);
+  useEffect(() => {
+    // read after the page is up, in a microtask: the server cannot know what the browser has stored
+    queueMicrotask(() => {
+      setPhase(readPhase());
+      setPhaseKnown(true);
+    });
+  }, []);
+  useEffect(() => {
+    if (phaseKnown) writePhase(phase);
+  }, [phase, phaseKnown]);
+  const narrating = phase === "narrating";
+  // where the caption sits so that it keeps clear of the record
+  const [caption, setCaption] = useState(() => captionBox(1280, 720, blocks.length));
   const place = useCallback((): void => {
     const node = nodes.current[hero];
     const viewport = viewportEl.current;
@@ -141,10 +181,17 @@ export function RollPlayer({
       ? document.querySelector(".roll .footer")?.getBoundingClientRect()
       : undefined;
     const controls = document.querySelector(".roll .controls")?.getBoundingClientRect();
-    const roomTop = Math.max(bar?.bottom ?? 60, footer?.bottom ?? 0) + 14;
+    const roomTop =
+      Math.max(bar?.bottom ?? 60, footer?.bottom ?? 0) + (portrait && h < 700 ? 6 : 14);
     // the pill's slot is always kept, whether or not it is showing, so the stage does not jump when it goes
-    const slot = Math.max(notesEl.current?.getBoundingClientRect().height ?? 0, 50);
-    const lowest = (controls?.top ?? h - 70) - 16 - slot - 14;
+    const notesBox = notesEl.current?.getBoundingClientRect();
+    const slot = Math.max(notesBox?.height ?? 0, 50);
+    const normal = (controls?.top ?? h - 70) - 16 - slot - 14;
+    // a caption in portrait sits above the record, higher than the pill: the stage keeps clear of it
+    const lowest =
+      notesEl.current?.dataset["caption"] === "true" && portrait && notesBox
+        ? Math.min(normal, notesBox.top - 14)
+        : normal;
     const bottom = portrait ? Math.min(lowest, h * 0.56) : lowest;
     const natural = article.scrollHeight;
     const free = bottom - roomTop;
@@ -156,6 +203,18 @@ export function RollPlayer({
     viewport.style.setProperty("--article-top", `${article.offsetTop}px`);
     setShift(Math.round(top - (node.offsetTop + article.offsetTop)));
   }, [hero]);
+  useLayoutEffect(() => {
+    const bar = barEl.current;
+    if (!bar) return undefined;
+    const measure = (): void => {
+      bar.parentElement?.style.setProperty("--bar-h", `${bar.offsetHeight}px`);
+      setBarHeight(bar.offsetHeight);
+    };
+    measure();
+    const watch = new ResizeObserver(measure);
+    watch.observe(bar);
+    return () => watch.disconnect();
+  }, []);
   useLayoutEffect(() => {
     place();
     const settle = requestAnimationFrame(() => setPlaced(true));
@@ -175,7 +234,7 @@ export function RollPlayer({
       cancelAnimationFrame(settle);
       watch.disconnect();
     };
-  }, [place, load]);
+  }, [place, load, narrating, barHeight]);
 
   // Fetch every stage's audio. Nothing is decoded or played yet.
   // When the stage in view has more than fits, say so: a flag the styles turn into a fade and a word.
@@ -199,20 +258,6 @@ export function RollPlayer({
       delete node.dataset["more"];
     };
   }, [hero, load, shift]);
-
-  useEffect(() => {
-    if (load !== "ready" || coachChecked.current) return undefined;
-    if (coachSeen()) {
-      coachChecked.current = true;
-      return undefined;
-    }
-    // after the roll has slid to its stage, so the notes point at things that have stopped moving
-    const id = window.setTimeout(() => {
-      coachChecked.current = true;
-      setCoachOpen(true);
-    }, 900);
-    return () => window.clearTimeout(id);
-  }, [load]);
 
   useEffect(() => {
     const abort = new AbortController();
@@ -276,6 +321,24 @@ export function RollPlayer({
     reported.current.add(current);
     telemetry.current?.track("stage_played", block.id);
   }, [playing, current, blocks]);
+
+  // Keep the caption off the record at the size the window is now.
+  useEffect(() => {
+    const measure = (): void =>
+      setCaption(captionBox(window.innerWidth, window.innerHeight, stages));
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [stages]);
+
+  // The guide follows what the visitor does: the first sound starts the narration; taking the needle or
+  // a ring ends it and counts as the first hint done; marking a part is the second. It is worked out while
+  // rendering, so the guide is always in step with what is on the screen.
+  const sounding = state.kind;
+  if (phaseKnown) {
+    const event = follow(phase, { sounding, marking });
+    if (event !== null) setPhase(nextPhase(phase, event));
+  }
 
   // Leaving the page stops everything.
   useEffect(() => {
@@ -365,8 +428,17 @@ export function RollPlayer({
         : state.kind === "idle"
           ? [copy.hint.locked, unplayableText].filter(Boolean).join(" ")
           : "");
+  const moment = narrating ? momentAt(state, stages) : null;
+  const captionText = moment
+    ? captions(
+        moment,
+        blocks,
+        lengths.map((seconds) => (seconds > 0 ? Math.round(seconds * 48_000) : null)),
+      )
+    : null;
+  // while the captions speak they are what is announced, so the stage is not read out a second time
   const announcement =
-    current === null || !playing
+    current === null || !playing || captionText !== null
       ? ""
       : fill(copy.roll.stage, {
           n: current + 1,
@@ -423,10 +495,32 @@ export function RollPlayer({
     [current],
   );
   const heroBlock = blocks[Math.min(hero, stages - 1)];
-  const coachSteps = useMemo<readonly CoachStep[]>(
-    () => (makeHref ? ["play", "needle", "make"] : ["play", "needle"]),
-    [makeHref],
-  );
+  // Where the hints point, measured on the real page each time they look.
+  const findNeedle = useCallback((): Rect | null => {
+    const l = layout(window.innerWidth, window.innerHeight, Math.max(1, stages));
+    const tip = needleAt(l, Math.min(Math.max(0, hero), Math.max(0, stages - 1)), 0);
+    return { x: tip.x - 36, y: tip.y - 36, w: 72, h: 72 };
+  }, [stages, hero]);
+  const findMark = useCallback((): Rect | null => {
+    const button = document.querySelector('.block[data-hero="true"] .mark-toggle');
+    const region = document.querySelector('.block[data-hero="true"] > article');
+    if (!button || !region) return null;
+    const b = button.getBoundingClientRect();
+    const r = region.getBoundingClientRect();
+    // only while the button is wholly inside the stage's window, where it can be pressed
+    if (b.width < 1 || b.y < r.y - 1 || b.y + b.height > r.y + r.height + 1) return null;
+    return { x: b.x, y: b.y, w: b.width, h: b.height };
+  }, []);
+  const fadedHint = useCallback(() => guide("hintFaded"), [guide]);
+
+  // The header's way in: the sound on the roll, already cut and sped up, so one tap on "hear it" has sound.
+  const heroSeconds = lengths[Math.min(hero, stages - 1)] ?? 0;
+  const ready =
+    heroBlock?.state === "available" ? readyCut(Math.round(heroSeconds * 48_000)) : null;
+  const wayIn =
+    makeHref && heroBlock?.state === "available"
+      ? makeAddress(heroBlock.id, ready, ready ? READY_SPEED : null)
+      : makeHref;
 
   return (
     <div
@@ -468,7 +562,7 @@ export function RollPlayer({
         <Thread id={heroBlock.id} hero={hero} stages={stages} />
       ) : null}
 
-      <header className="bar">
+      <header className="bar" ref={barEl}>
         <h1>{copy.site.name}</h1>
         <span className="meta" aria-hidden="true">
           {heroBlock
@@ -479,23 +573,35 @@ export function RollPlayer({
               })
             : ""}
         </span>
-        {makeHref ? (
+        {wayIn ? (
           // A plain link, not Next's: this component is also bundled by the browser tests outside Next.
-          <a href={makeHref} className="make-link">
+          <a href={wayIn} className="make-link">
             {copy.flip.makeLink}
           </a>
         ) : null}
         <ThemeToggle />
+        <span className="bar-break" aria-hidden="true" />
+        <p className="sentence">{copy.site.sentence}</p>
       </header>
 
-      {coachOpen ? (
-        <Coach
-          steps={coachSteps}
-          stages={stages}
-          hero={hero}
-          playing={playing}
-          auditioning={state.kind === "auditioning"}
-          onClose={() => setCoachOpen(false)}
+      {phase === "hintNeedle" && load === "ready" ? (
+        <Hint
+          key="needle"
+          text={copy.hints.needle}
+          find={findNeedle}
+          prefer={HINT_SIDES.needle}
+          seed={23}
+          onFaded={fadedHint}
+        />
+      ) : null}
+      {phase === "hintMark" && load === "ready" && !marking ? (
+        <Hint
+          key="mark"
+          text={copy.hints.mark}
+          find={findMark}
+          prefer={HINT_SIDES.mark}
+          seed={41}
+          onFaded={fadedHint}
         />
       ) : null}
 
@@ -506,7 +612,6 @@ export function RollPlayer({
           ref={sheet}
           style={{ transform: `translateY(${shift}px)` }}
         >
-          <p className="lead">{copy.roll.lead}</p>
           <ol className="blocks" aria-label={copy.roll.label}>
             {blocks.map((block) => (
               <CreditBlock
@@ -537,11 +642,34 @@ export function RollPlayer({
         </div>
       </div>
 
-      <div className="notes" ref={notesEl}>
+      <div
+        className="notes"
+        ref={notesEl}
+        data-caption={captionText !== null}
+        style={
+          captionText !== null
+            ? ({
+                "--cap-left": caption.left === null ? "50%" : `${caption.left}px`,
+                "--cap-tf": caption.left === null ? "translateX(-50%)" : "none",
+                "--cap-bottom": `${caption.bottom}px`,
+                "--cap-max": `${caption.maxWidth}px`,
+              } as CSSProperties)
+            : undefined
+        }
+      >
+        {moment && captionText !== null ? (
+          <Caption
+            text={captionText}
+            moment={`${moment.kind}:${moment.stage}`}
+            last={moment.kind === "rest"}
+            onSkip={() => guide("skipped")}
+            onEnd={() => guide("narrationEnded")}
+          />
+        ) : null}
         <p
           className="status"
           role="status"
-          data-empty={status === "" || (marking && markCut !== null)}
+          data-empty={captionText !== null || status === "" || (marking && markCut !== null)}
         >
           {marking && markCut ? "" : status}
         </p>
@@ -578,7 +706,14 @@ export function RollPlayer({
       ) : null}
 
       <div className="controls" role="group" aria-label={copy.controls.label}>
-        <button type="button" disabled={disabled} onClick={() => act((e) => e.previous())}>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => {
+            if (phase === "narrating") guide("tookOver");
+            act((e) => e.previous());
+          }}
+        >
           <span aria-hidden="true">←</span>
           <span className="visually-hidden">{copy.controls.previous}</span>
         </button>
@@ -590,7 +725,14 @@ export function RollPlayer({
         >
           {playing ? copy.controls.pause : reduced ? copy.controls.playAll : copy.controls.play}
         </button>
-        <button type="button" disabled={disabled} onClick={() => act((e) => e.next())}>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => {
+            if (phase === "narrating") guide("tookOver");
+            act((e) => e.next());
+          }}
+        >
           <span aria-hidden="true">→</span>
           <span className="visually-hidden">{copy.controls.next}</span>
         </button>
@@ -599,7 +741,16 @@ export function RollPlayer({
       {apiUrl ? (
         <ReportDialog target={reporting} apiUrl={apiUrl} onClose={() => setReporting(null)} />
       ) : null}
-      <Footer onHow={() => setCoachOpen(true)} />
+      <Footer
+        onHow={() => {
+          // the guide again from the start: the roll begins at its first step, and this press allows sound
+          guide("replay");
+          act((e) => {
+            e.routeChange();
+            e.play();
+          });
+        }}
+      />
     </div>
   );
 }

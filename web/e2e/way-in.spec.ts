@@ -46,7 +46,8 @@ for (const size of SIZES) {
       await expect(page.locator(".roll")).toHaveAttribute("data-audio", "ready");
       const link = page.getByRole("link", { name: "make a flip" });
       await expect(link).toBeVisible();
-      await expect(link).toHaveAttribute("href", "/make");
+      // the way in names the sound on the roll, ready cut and speed, so one tap on "hear it" has sound
+      await expect(link).toHaveAttribute("href", /^\/make\?from=[a-z0-9]+&cut=0-\d+&speed=3%2F2$/);
       const box = await link.boundingBox();
       expect(box).not.toBeNull();
       expect(box!.x).toBeGreaterThanOrEqual(0);
@@ -63,12 +64,12 @@ for (const size of SIZES) {
       expect(covered, "something is on top of it").toBe(false);
     });
 
-    test("a visitor who has already seen the coach is still told what to do before they play", async ({
+    test("a visitor who has finished the guide is still told what to do before they play", async ({
       page,
     }) => {
       await page.goto("/");
       await expect(page.locator(".roll")).toHaveAttribute("data-audio", "ready");
-      // the first-visit coach says it in full (see coach.spec.ts); after it, one plain line stays
+      // the first-visit guide says it in full (see guide.spec.ts); after it, one plain line stays
       const status = page.getByRole("status").filter({ hasText: "tap play" });
       await expect(status).toBeVisible();
       expect((await status.innerText()).toLowerCase()).toContain("nothing sounds until you do");
@@ -82,6 +83,7 @@ for (const size of SIZES) {
       await expect(page.locator(".roll")).toHaveAttribute("data-audio", "ready");
       const found = await boxes(page, {
         name: ".bar h1",
+        sentence: ".bar .sentence",
         meta: ".bar .meta",
         make: ".bar .make-link",
         theme: ".bar .theme",
