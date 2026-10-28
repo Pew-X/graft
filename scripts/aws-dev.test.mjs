@@ -61,6 +61,9 @@ exit 0
   // a service that answers: the readiness probe asks curl for the status code
   writeFileSync(join(dir, "curl"), "#!/bin/sh\necho 200\n");
   chmodSync(join(dir, "curl"), 0o755);
+  // the wake package installs its pinned client with npm; the tests do not go to the network for it
+  writeFileSync(join(dir, "npm"), "#!/bin/sh\nmkdir -p node_modules/@aws-sdk/client-ecs\n");
+  chmodSync(join(dir, "npm"), 0o755);
   const envFile = join(dir, "env");
   writeFileSync(
     envFile,
@@ -563,4 +566,15 @@ test("status shows the wake function and the idle check, and stays read-only", (
   const out = plan(there.run(["status"], { FAKE_EXISTS: "1" }));
   assert.match(out, /info\s+wake function .*idle check/);
   assert.deepEqual(there.changes(), []);
+});
+
+test("the wake package carries its own pinned ECS client, installed from the lockfile, because the runtime's is too old", () => {
+  const s = sandbox();
+  const r = s.run(["wake"], { DRY_RUN: "1" });
+  assert.equal(r.status, 0, r.stderr);
+  const pkg = JSON.parse(readFileSync(new URL("../tools/wake/package.json", import.meta.url), "utf8"));
+  // an exact version, never a range or a tag
+  assert.match(pkg.dependencies["@aws-sdk/client-ecs"], /^\d+\.\d+\.\d+$/);
+  const lock = JSON.parse(readFileSync(new URL("../tools/wake/package-lock.json", import.meta.url), "utf8"));
+  assert.equal(lock.packages["node_modules/@aws-sdk/client-ecs"].version, pkg.dependencies["@aws-sdk/client-ecs"]);
 });

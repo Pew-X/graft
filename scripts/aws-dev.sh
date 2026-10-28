@@ -60,7 +60,8 @@ use_load_stack() {
   EXTRA_ENV=',{"name":"GRAFT_PUBLISH_PER_IP","value":"1000000"},{"name":"GRAFT_REPORT_PER_IP","value":"1000000"},{"name":"GRAFT_INGEST_PER_IP","value":"1000000"},{"name":"GRAFT_GLOBAL_PUBLISH_PER_HOUR","value":"1000000"},{"name":"GRAFT_GLOBAL_PUBLISH_BURST","value":"100000"},{"name":"GRAFT_STORAGE_LIMIT_BYTES","value":"900000000000000"},{"name":"GRAFT_MAX_FORKS_PER_STAGE_PER_HOUR","value":"1000000"}'
 }
 tmp_files=""
-cleanup() { for f in $tmp_files; do rm -f "$f"; done; }
+tmp_dirs=""
+cleanup() { for f in $tmp_files; do rm -f "$f"; done; for d in $tmp_dirs; do rm -rf "$d"; done; }
 trap cleanup EXIT INT TERM
 
 phase=${1:-}
@@ -639,8 +640,13 @@ EOF
   mut "keep the wake function's logs 7 days" logs put-retention-policy --log-group-name "/aws/lambda/$WAKE_FN" --retention-in-days 7
 
   # the code, packaged from the repository; the settings go in as a file so the secret is never on a command line
+  # The Node runtime's own ECS client predates Express Mode (found on the first live run), so the
+  # package carries a newer one, installed from the pinned lockfile.
+  stage=$(mktemp -d "${TMPDIR:-/tmp}/graft-wake.XXXXXX"); tmp_dirs="$tmp_dirs $stage"
+  cp "$here/../tools/wake/decide.mjs" "$here/../tools/wake/handler.mjs" "$here/../tools/wake/index.mjs" "$here/../tools/wake/package.json" "$here/../tools/wake/package-lock.json" "$stage/"
+  (cd "$stage" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund --silent)
   zipf=$(mktmp); rm -f "$zipf"
-  zip -q -j "$zipf" "$here/../tools/wake/decide.mjs" "$here/../tools/wake/handler.mjs" "$here/../tools/wake/index.mjs"
+  (cd "$stage" && zip -q -r "$zipf" . -x 'package.json' 'package-lock.json')
   envf=$(mktmp); chmod 600 "$envf"
   if [ -n "${DRY_RUN:-}" ]; then sec='<generated>'; else sec=$(aws secretsmanager get-secret-value --secret-id "$PREFIX/wake-secret" --query SecretString --output text); fi
   printf '{"Variables":{"GRAFT_WAKE_SECRET":"%s","GRAFT_SERVICE_ARN":"%s","GRAFT_LB_DIMENSION":"%s"}}' "$sec" "$svc_arn" "$lb" > "$envf"
@@ -659,18 +665,21 @@ EOF
     mut "update the wake function's settings" lambda update-function-configuration --function-name "$WAKE_FN" --environment "file://$envf" --query FunctionArn --output text >/dev/null
   fi
   [ -n "${DRY_RUN:-}" ] || aws lambda wait function-active-v2 --function-name "$WAKE_FN"
-  soft "cap the wake function at two at once, so a flood of calls cannot run up a bill" lambda put-function-concurrency --function-name "$WAKE_FN" --reserved-concurrent-executions 2 --query ReservedConcurrentExecutions --output text
+  # a new account has too little spare concurrency to reserve any (found on the first run): then the
+  # function is capped only by the account's own limit of 10, and by the secret every call must carry
+  soft "cap the wake function at two at once, so a flood of calls cannot run up a bill (refused where the account has little spare concurrency)" lambda put-function-concurrency --function-name "$WAKE_FN" --reserved-concurrent-executions 2 --query ReservedConcurrentExecutions --output text
 
   # its web address: open to anyone who has it, and refusing everyone without the secret (the function checks it)
   url=$(probe lambda get-function-url-config --function-name "$WAKE_FN" --query FunctionUrl)
   [ -n "$url" ] || url=$(mut "give the wake function a web address" lambda create-function-url-config --function-name "$WAKE_FN" --auth-type NONE --query FunctionUrl --output text)
-  soft "let the web address be called" lambda add-permission --function-name "$WAKE_FN" --statement-id UrlInvokeUrl --action lambda:InvokeFunctionUrl --principal '*' --function-url-auth-type NONE
-  soft "let the function run when called through its web address" lambda add-permission --function-name "$WAKE_FN" --statement-id UrlInvokeFunction --action lambda:InvokeFunction --principal '*' --invoked-via-function-url
+  policy_has() { aws lambda get-policy --function-name "$WAKE_FN" --query Policy --output text 2>/dev/null | grep -q "\"Sid\":\"$1\""; }
+  policy_has UrlInvokeUrl || soft "let the web address be called" lambda add-permission --function-name "$WAKE_FN" --statement-id UrlInvokeUrl --action lambda:InvokeFunctionUrl --principal '*' --function-url-auth-type NONE
+  policy_has UrlInvokeFunction || soft "let the function run when called through its web address" lambda add-permission --function-name "$WAKE_FN" --statement-id UrlInvokeFunction --action lambda:InvokeFunction --principal '*' --invoked-via-function-url
 
   # the five-minute check, off until asked
   rule_arn="arn:aws:events:$REGION:$ACCOUNT:rule/$WAKE_RULE"
   mut "the idle check: every five minutes, $rule_state" events put-rule --name "$WAKE_RULE" --schedule-expression "rate(5 minutes)" --state "$rule_state" --tags $TAGS_KV >/dev/null
-  soft "let the schedule run the function" lambda add-permission --function-name "$WAKE_FN" --statement-id ScheduleInvoke --action lambda:InvokeFunction --principal events.amazonaws.com --source-arn "$rule_arn"
+  policy_has ScheduleInvoke || soft "let the schedule run the function" lambda add-permission --function-name "$WAKE_FN" --statement-id ScheduleInvoke --action lambda:InvokeFunction --principal events.amazonaws.com --source-arn "$rule_arn"
   mut "point the idle check at the wake function" events put-targets --rule "$WAKE_RULE" --targets "Id=wake,Arn=arn:aws:lambda:$REGION:$ACCOUNT:function:$WAKE_FN" >/dev/null
   echo "the wake address (for Vercel, with the secret from $PREFIX/wake-secret): $url" >&2
   echo "the idle check is $rule_state" >&2
@@ -794,7 +803,8 @@ phase_status() {
   fi
   wfn=$(probe lambda get-function --function-name "$WAKE_FN" --query 'Configuration.FunctionName')
   if [ -z "$wfn" ]; then echo "ok    no wake function"; else
-    echo "info  wake function $wfn: address $(probe lambda get-function-url-config --function-name "$WAKE_FN" --query FunctionUrl); idle check $(probe events describe-rule --name "$WAKE_RULE" --query State); warm until: $(probe ecs list-tags-for-resource --resource-arn "arn:aws:ecs:$REGION:$ACCOUNT:service/$PREFIX/$PREFIX" --query "tags[?key=='graft-warm-until'].value | [0]" | sed 's/^$/not set/') (free at this size)"
+    warm=$(probe ecs list-tags-for-resource --resource-arn "arn:aws:ecs:$REGION:$ACCOUNT:service/$PREFIX/$PREFIX" --query "tags[?key=='graft-warm-until'].value | [0]")
+    echo "info  wake function $wfn: address $(probe lambda get-function-url-config --function-name "$WAKE_FN" --query FunctionUrl); idle check $(probe events describe-rule --name "$WAKE_RULE" --query State); warm until: ${warm:-not set} (free at this size)"
   fi
   secs=$(lookup secretsmanager list-secrets --query 'SecretList[].Name' || true)
   echo "info  secrets: ${secs:-none}"
