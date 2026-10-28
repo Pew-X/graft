@@ -65,7 +65,7 @@ export function makeHandler({ secret, now, log, service, metrics }) {
   async function check() {
     const at = now();
     const facts = await service.read();
-    // no need to ask for the count of a service that is stopped, or kept warm
+    // no need to ask for the count of a service that is stopped
     const requests = facts.desired >= 1 ? await metrics.requests(IDLE_WINDOW_MS).catch(() => null) : null;
     const verdict = shouldPark({
       desired: facts.desired,

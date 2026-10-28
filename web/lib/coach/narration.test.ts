@@ -81,7 +81,7 @@ test("no caption names a maker, whatever the chain's credits say", () => {
   const stages: Narrated[] = [source(), { ...flip([0, 100], { p: 3, q: 2 }), title: "up a fifth" }];
   // makers live in the credit lines, which captions never read: a person's name and "graft" alike
   for (const text of all(stages)) {
-    assert.doesNotMatch(text, /\bby\b|graft|piyush|alice/i, text);
+    assert.doesNotMatch(text, /\bby\b|graft|alice|bob/i, text);
   }
 });
 

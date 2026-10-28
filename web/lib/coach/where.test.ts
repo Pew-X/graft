@@ -12,7 +12,7 @@ const SIZES = [
   [676, 1000],
   [1024, 600],
 ] as const;
-/** Two lines of the caption's type, the most it takes. */
+/** Two lines of the caption's type, the most it needs. */
 const HEIGHT = 70;
 
 for (const [w, h] of SIZES) {

@@ -111,7 +111,7 @@ test("a browser that blocks storage shows the guide again and nothing throws", (
 
 const doing = (sounding: Doing["sounding"], marking = false): Doing => ({ sounding, marking });
 
-test("what the visitor does moves the guide: the first sound narrates, the needle takes over, marking is the last hint", () => {
+test("what the visitor does moves the guide: the first sound narrates, the needle ends it, marking is the last hint", () => {
   assert.equal(follow("armed", doing("idle")), null);
   assert.equal(follow("armed", doing("rolling")), "rolled");
   assert.equal(follow("armed", doing("auditioning")), "tookOver");

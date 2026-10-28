@@ -35,7 +35,9 @@ export function Caption({
   }, [last, moment, onEnd]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === "Escape") onSkip();
+      // another layer (the report dialog, marking a part) may be using this Escape
+      if (e.key === "Escape" && !e.defaultPrevented && !document.querySelector("dialog[open]"))
+        onSkip();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

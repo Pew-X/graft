@@ -31,6 +31,14 @@ const ecs = new ECSClient({});
 const cloudwatch = new CloudWatchClient({});
 const serviceArn = process.env.GRAFT_SERVICE_ARN ?? "";
 
+// Without the load balancer's name the count would be empty, and an empty count reads as "idle": fail
+// loudly instead, so a misconfigured function reports "no count to go on" and never parks a live service.
+function loadBalancer() {
+  const name = process.env.GRAFT_LB_DIMENSION;
+  if (!name) throw new Error("GRAFT_LB_DIMENSION is not set");
+  return name;
+}
+
 const asNumber = (text) => {
   const n = Number(text);
   return text !== undefined && text !== "" && Number.isFinite(n) ? n : null;
@@ -94,7 +102,7 @@ export const handler = makeHandler({
         new GetMetricStatisticsCommand({
           Namespace: "AWS/ApplicationELB",
           MetricName: "RequestCount",
-          Dimensions: [{ Name: "LoadBalancer", Value: process.env.GRAFT_LB_DIMENSION ?? "" }],
+          Dimensions: [{ Name: "LoadBalancer", Value: loadBalancer() }],
           StartTime: start,
           EndTime: end,
           Period: 300,

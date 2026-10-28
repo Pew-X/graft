@@ -73,7 +73,7 @@ test("the note goes above the target when there is room, and covers neither it n
   assert.ok(spot.x >= 16 && spot.x + card.w <= view.w - 16 && spot.y >= 16);
 });
 
-test("a preferred side is used when it fits, and the usual order takes over when it does not", () => {
+test("a preferred side is used when it fits, and the usual order applies when it does not", () => {
   const card = { w: 300, h: 150 };
   const target: Rect = { x: 100, y: 330, w: 160, h: 50 };
   assert.equal(placeCard(target, card, view, 16, 28, ["right", "below"]).side, "right");

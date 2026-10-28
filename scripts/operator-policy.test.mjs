@@ -50,7 +50,10 @@ export function problems(policies) {
       const region = s.Condition?.StringEquals?.["aws:RequestedRegion"];
       const global = actions.length > 0 && actions.every((a) => GLOBAL_OK.test(a));
       const bound = Object.keys(s.Condition ?? {}).length > 0;
-      if (!global && !bound) out.push(`${where}: no region or other condition`);
+      // IAM is global (a pass of one role carries its own condition); everything else must name Mumbai
+      const iamOnly = actions.length > 0 && actions.every((a) => a.startsWith("iam:"));
+      if (!global && !iamOnly && region === undefined) out.push(`${where}: no region condition`);
+      if (!global && !bound) out.push(`${where}: no condition at all`);
       if (region !== undefined && region !== "ap-south-1") out.push(`${where}: allows ${region}`);
       if (global && resources.some((r) => !r.includes(":budget/graft-"))) {
         out.push(`${where}: a budget statement that is not the project's own budget`);
@@ -102,7 +105,7 @@ test("every way of widening the role is caught", () => {
   const region = { StringEquals: { "aws:RequestedRegion": "ap-south-1" } };
   assert.match(bad({ Action: "lambda:*", Resource: "arn:aws:lambda:ap-south-1:1:function:graft-dev-*", Condition: region })[0], /wildcard/);
   assert.match(bad({ Action: "lambda:InvokeFunction", Resource: "*", Condition: region })[0], /every resource/);
-  assert.match(bad({ Action: "lambda:GetFunction", Resource: "arn:aws:lambda:ap-south-1:1:function:graft-dev-*" })[0], /no region/);
+  assert.match(bad({ Action: "lambda:GetFunction", Resource: "arn:aws:lambda:ap-south-1:1:function:graft-dev-*" })[0], /no region condition/);
   assert.match(
     bad({ Action: "lambda:GetFunction", Resource: "arn:aws:lambda:us-east-1:1:function:graft-dev-*", Condition: { StringEquals: { "aws:RequestedRegion": "us-east-1" } } })[0],
     /allows us-east-1/,

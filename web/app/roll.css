@@ -305,7 +305,7 @@ button:disabled {
   flex: 0 1 auto;
   margin: 0;
   padding: 0 0 4px;
-  /* on a wide screen the record takes the right side: the sentence keeps to the left of it, and never
+  /* on a wide screen the record fills the right side: the sentence keeps to the left of it, and never
      runs wider than a comfortable line */
   max-width: min(44rem, calc(100vw - var(--R) * 0.96 - 44px));
   font:
@@ -810,7 +810,7 @@ button:disabled {
   color: var(--bg);
 }
 
-/* a short phone: the header, the sentence and the independence line already take a third of the screen,
+/* a short phone: the header, the sentence and the independence line already fill a third of the screen,
    so the stage tightens its own gaps to keep its flip button whole and clear of the fade */
 @media (max-aspect-ratio: 9/10) and (max-height: 700px) {
   .slab {
@@ -926,7 +926,7 @@ button:disabled {
   .roll .footer :is(a, .how-link) {
     color: inherit;
   }
-  /* the note and its two links share a row, so the header does not take the stage's room */
+  /* the note and its two links share a row, so the header does not crowd the stage's room */
   .roll .footer p {
     flex: 1 1 8rem;
   }
@@ -1183,7 +1183,7 @@ button:disabled {
 }
 
 /* THE HINTS: a few words on an ink tag with a short marker arrow, beside the thing they point at. They
-   take no press (the whole layer ignores the pointer) and go by themselves. */
+   catch no press (the whole layer ignores the pointer) and go by themselves. */
 .hint-layer {
   position: fixed;
   inset: 0;

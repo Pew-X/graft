@@ -185,7 +185,7 @@ test("how it works in the footer plays the narration again from the start, and t
   await expect(caption(page)).toHaveAttribute("data-moment", "teaser:3");
   await caption(page).getByRole("button", { name: "skip" }).click();
   await expect(hint(page)).toContainText("drag the needle");
-  expect(await stored(page), "a replay never takes a browser back").toBe("done");
+  expect(await stored(page), "a replay never sends a browser back").toBe("done");
 });
 
 test("the hints come one at a time: the first goes when the needle is used, then the second, then none", async ({
@@ -226,7 +226,7 @@ test("a hint that is not acted on fades by itself and the next follows; neither 
   await expect(hint(page)).toHaveCount(0);
 });
 
-test("a hint takes no press, never covers what it points at, and never moves the stage", async ({
+test("a hint catches no press, never covers what it points at, and never moves the stage", async ({
   page,
 }) => {
   await arriveWith(page, "narrated");

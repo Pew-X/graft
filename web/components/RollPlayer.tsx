@@ -26,6 +26,7 @@ import { captions, momentAt } from "../lib/coach/narration.ts";
 import { readPhase, writePhase } from "../lib/coach/seen.ts";
 import { captionBox } from "../lib/coach/where.ts";
 import { type Rect } from "../lib/coach/marks.ts";
+import { SAMPLE_RATE } from "../lib/playback/config.ts";
 import { readyCut, READY_SPEED } from "../lib/make/ready.ts";
 import { layout, needleAt, peaksOf } from "../lib/record/disc.ts";
 import { type Mark, makeAddress, markFrames, markSeconds } from "../lib/record/mark.ts";
@@ -152,6 +153,8 @@ export function RollPlayer({
   const [phase, setPhase] = useState<Phase>("armed");
   const [phaseKnown, setPhaseKnown] = useState(false);
   const guide = useCallback((event: Event): void => setPhase((p) => nextPhase(p, event)), []);
+  const skipNarration = useCallback(() => guide("skipped"), [guide]);
+  const narrationOver = useCallback(() => guide("narrationEnded"), [guide]);
   useEffect(() => {
     // read after the page is up, in a microtask: the server cannot know what the browser has stored
     queueMicrotask(() => {
@@ -335,8 +338,16 @@ export function RollPlayer({
   // a ring ends it and counts as the first hint done; marking a part is the second. It is worked out while
   // rendering, so the guide is always in step with what is on the screen.
   const sounding = state.kind;
+  // a narration that has begun and then goes quiet (the sound failed, or the visitor left it) is over: it
+  // must never leave the page without its skip, and the hints must still come
+  const [narrationBegan, setNarrationBegan] = useState(false);
+  if (phase === "narrating" && sounding === "rolling" && !narrationBegan) setNarrationBegan(true);
+  if (phase !== "narrating" && narrationBegan) setNarrationBegan(false);
   if (phaseKnown) {
-    const event = follow(phase, { sounding, marking });
+    const event =
+      phase === "narrating" && narrationBegan && sounding === "idle"
+        ? "skipped"
+        : follow(phase, { sounding, marking });
     if (event !== null) setPhase(nextPhase(phase, event));
   }
 
@@ -433,7 +444,7 @@ export function RollPlayer({
     ? captions(
         moment,
         blocks,
-        lengths.map((seconds) => (seconds > 0 ? Math.round(seconds * 48_000) : null)),
+        lengths.map((seconds) => (seconds > 0 ? Math.round(seconds * SAMPLE_RATE) : null)),
       )
     : null;
   // while the captions speak they are what is announced, so the stage is not read out a second time
@@ -516,7 +527,7 @@ export function RollPlayer({
   // The header's way in: the sound on the roll, already cut and sped up, so one tap on "hear it" has sound.
   const heroSeconds = lengths[Math.min(hero, stages - 1)] ?? 0;
   const ready =
-    heroBlock?.state === "available" ? readyCut(Math.round(heroSeconds * 48_000)) : null;
+    heroBlock?.state === "available" ? readyCut(Math.round(heroSeconds * SAMPLE_RATE)) : null;
   const wayIn =
     makeHref && heroBlock?.state === "available"
       ? makeAddress(heroBlock.id, ready, ready ? READY_SPEED : null)
@@ -662,8 +673,8 @@ export function RollPlayer({
             text={captionText}
             moment={`${moment.kind}:${moment.stage}`}
             last={moment.kind === "rest"}
-            onSkip={() => guide("skipped")}
-            onEnd={() => guide("narrationEnded")}
+            onSkip={skipNarration}
+            onEnd={narrationOver}
           />
         ) : null}
         <p
