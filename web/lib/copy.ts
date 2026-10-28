@@ -54,6 +54,16 @@ export const copy = {
     flippedOnce: "flipped once",
     flippedMany: "flipped {n} times",
   },
+  /** A chain page opened while the service was asleep: said plainly and kindly, and it comes back by itself. */
+  waking: {
+    title: "waking up.",
+    line: "this sound lives on a small server that sleeps when nobody is around. it needs about a minute to wake, and this page opens by itself when it is ready.",
+    checking: "checking again in a moment.",
+    offline: "you look to be offline. it will check again when you are back.",
+    slow: "it is taking longer than a minute. nothing is lost: try now, or come back in a little while.",
+    tryNow: "try now",
+    home: "hear the first roll meanwhile",
+  },
   notFound: {
     title: "nothing here",
     line: "this link does not lead to a sound. it may have been mistyped.",
@@ -136,7 +146,7 @@ export const copy = {
     adjusted: "a link or a handle was removed from your {fields}.",
     gaveUp: {
       network:
-        "the network did not answer after {attempts} tries. nothing was lost: try again and the same request goes out.",
+        "the network did not answer after {attempts} tries. the service may be waking up, which needs about a minute. nothing was lost: try again and the same request goes out.",
       busy: "the service is busy and did not finish after {attempts} tries. nothing was changed: try again and the same request goes out.",
       server:
         "the service did not finish after {attempts} tries. nothing was changed: try again and the same request goes out.",
@@ -308,6 +318,7 @@ export const copy = {
           "a visit gets an anonymous session id that lives in memory only. it is never written to your browser and is gone when the page closes.",
         signal:
           "if your browser sends global privacy control or do not track, graft sends no events at all and does not load its error tracker.",
+        wake: "opening graft may start its service if it was asleep: your browser asks graft's own server, which sends one short call with nothing about you in it.",
         noIp: "graft stores no ip address in its own records. the hosting providers it runs on have to process addresses to deliver traffic, as any host does.",
         tracker:
           "where error tracking is switched on, it runs without ip addresses, without session replay and with a scrubber.",

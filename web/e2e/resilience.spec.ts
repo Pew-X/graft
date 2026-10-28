@@ -21,7 +21,10 @@ test("the home route makes no request to any API: the seeded chain is static, an
     [],
   );
   expect(requests.filter((r) => new URL(r.url).pathname.startsWith("/v1/"))).toEqual([]);
-  expect(requests.filter((r) => r.method !== "GET")).toEqual([]);
+  // the one thing the home page sends is the quiet wake call to the site's own server
+  expect(requests.filter((r) => r.method !== "GET").map((r) => new URL(r.url).pathname)).toEqual([
+    "/api/wake",
+  ]);
   expect(audio.length).toBe(4);
   for (const a of audio) expect(a.cache, a.url).toBe("public, max-age=31536000, immutable");
 });

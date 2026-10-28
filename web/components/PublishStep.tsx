@@ -147,8 +147,12 @@ export function PublishStep({
         onPublished?.(outcome.id);
       } else if (outcome.kind === "refused")
         setPhase({ name: "refused", refusal: outcome.refusal });
-      else if (outcome.kind === "gaveUp") setPhase({ name: "gaveUp", outcome });
-      else setPhase({ name: "form" });
+      else if (outcome.kind === "gaveUp") {
+        // a service that did not answer may be asleep: ask the site's server to wake it
+        if (outcome.why === "network")
+          void fetch("/api/wake", { method: "POST" }).catch(() => undefined);
+        setPhase({ name: "gaveUp", outcome });
+      } else setPhase({ name: "form" });
     } finally {
       busy.current = false;
     }

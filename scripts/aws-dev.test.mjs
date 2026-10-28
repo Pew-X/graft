@@ -34,7 +34,7 @@ case "$*" in
   *create-security-group*) echo "sg-0abc" ;;
   *create-route-table*) echo "rtb-0abc" ;;
   *create-internet-gateway*) echo "igw-0abc" ;;
-  *get-random-password*) echo "Abcdefghijklmnopqrstuvwxyz012345" ;;
+  *get-random-password*|*get-secret-value*) echo "Abcdefghijklmnopqrstuvwxyz012345" ;;
   *describe-db-clusters*Endpoint*) echo "graft-dev-db.cluster-x.ap-south-1.rds.amazonaws.com" ;;
   *describe-db-clusters*DBClusterIdentifier*) [ -z "$FAKE_CLUSTER" ] || echo "graft-dev-db" ;;
   *describe-services*PRIMARY*taskDefinition*) cat "${dir}/td-primary" 2>/dev/null || echo "arn:td/old:1" ;;
@@ -46,6 +46,8 @@ case "$*" in
   *get-queue-url*) [ -z "$FAKE_QUEUE" ] || echo "https://sqs.ap-south-1.amazonaws.com/${ACCOUNT}/graft-dev-events" ;;
   *get-queue-attributes*) [ -z "$FAKE_QUEUE" ] || echo "$FAKE_DEAD" ;;
   *describe-subnets*|*describe-security-groups*) [ -z "$FAKE_NETWORK$FAKE_EXISTS" ] || echo "net-0abc" ;;
+  *get-function*) [ -z "$FAKE_EXISTS" ] || echo "graft-dev-wake" ;;
+  *describe-load-balancers*starts_with*) echo "arn:aws:elasticloadbalancing:ap-south-1:${ACCOUNT}:loadbalancer/app/ecs-express-gateway-alb-x/abc" ;;
   *describe-*|*list-*) [ -z "$FAKE_EXISTS" ] || echo "res-0abc" ;;
 esac
 # an update the service accepts makes that revision the primary one, unless the roll is stalled
@@ -59,6 +61,9 @@ exit 0
   // a service that answers: the readiness probe asks curl for the status code
   writeFileSync(join(dir, "curl"), "#!/bin/sh\necho 200\n");
   chmodSync(join(dir, "curl"), 0o755);
+  // the wake package installs its pinned client with npm; the tests do not go to the network for it
+  writeFileSync(join(dir, "npm"), "#!/bin/sh\nmkdir -p node_modules/@aws-sdk/client-ecs\n");
+  chmodSync(join(dir, "npm"), 0o755);
   const envFile = join(dir, "env");
   writeFileSync(
     envFile,
@@ -473,3 +478,193 @@ test("redeploy rolls back to the previous revision when the new one never become
   assert.match(updates[1], /--task-definition-arn arn:td\/old:1/, "back to the revision that was running");
   assert.doesNotMatch(plan(r), /ready on the new revision/, "never claims it worked");
 });
+
+test("the wake phase makes one small ARM function with its own role, a web address, and a schedule that starts OFF", () => {
+  const s = sandbox();
+  const out = plan(s.run(["wake"], { DRY_RUN: "1" }));
+  assert.match(out, /create-function --function-name graft-dev-wake --runtime nodejs22\.x --architectures arm64 --handler index\.handler --role \S+role\/graft-dev-wake/);
+  assert.match(out, /--timeout 20 --memory-size 128/);
+  assert.match(out, /create-function-url-config --function-name graft-dev-wake --auth-type NONE/);
+  // the two statements a function address with no AWS sign-in needs
+  assert.match(out, /add-permission .*--action lambda:InvokeFunctionUrl .*--function-url-auth-type NONE/);
+  assert.match(out, /add-permission .*--action lambda:InvokeFunction .*--invoked-via-function-url/);
+  assert.match(out, /put-function-concurrency .*--reserved-concurrent-executions 2/);
+  assert.match(out, /put-rule --name graft-dev-wake-check --schedule-expression rate\(5 minutes\) --state DISABLED/);
+  assert.doesNotMatch(out, /--state ENABLED/, "nothing may stop the service until the check is switched on");
+  assert.deepEqual(s.changes(), [], "a dry run changes nothing");
+});
+
+test("the wake phase's schedule is switched on only by asking", () => {
+  const on = plan(sandbox().run(["wake", "--schedule", "on"], { DRY_RUN: "1" }));
+  assert.match(on, /put-rule .*--state ENABLED/);
+  const bad = sandbox().run(["wake", "--schedule", "maybe"], { DRY_RUN: "1" });
+  assert.notEqual(bad.status, 0);
+});
+
+test("the wake role may change only the one service, and its permissions name no other resource", () => {
+  const s = sandbox();
+  s.run(["wake"], { DRY_RUN: "1" });
+  const out = plan(s.run(["wake"], { DRY_RUN: "1" }));
+  const policy = out.split("\n").filter((l) => l.startsWith("    | ")).join("\n");
+  const doc = policy.slice(policy.indexOf('{"Version":"2012-10-17","Statement":[\n'));
+  assert.match(out, /Trust|lambda\.amazonaws\.com/);
+  assert.match(out, /"Action":\["ecs:DescribeServices".*"ecs:UpdateExpressGatewayService".*"Resource":"arn:aws:ecs:ap-south-1:\d{12}:service\/graft-dev\/graft-dev"/s);
+  // the only "*" resources are the ones AWS cannot narrow: the task list (narrowed by cluster), the request
+  // counts, and task definitions (an Express update registers a new one; found on the first live wake)
+  const stars = [...out.matchAll(/"Action":(?:"([^"]+)"|\[([^\]]+)\]),"Resource":"\*"/g)].map((m) => m[1] ?? m[2].replace(/"/g, "")).sort();
+  assert.deepEqual(stars, ["cloudwatch:GetMetricStatistics", "ecs:ListTasks", "ecs:RegisterTaskDefinition,ecs:DescribeTaskDefinition,ecs:DeregisterTaskDefinition"]);
+  assert.match(out, /"ecs:cluster":"arn:aws:ecs:ap-south-1:\d{12}:cluster\/graft-dev"/);
+  assert.doesNotMatch(out, /"Action":"[a-z0-9-]+:\*"|"Action":"\*"/, "no service-wide wildcard action");
+  assert.ok(doc.length > 0);
+});
+
+test("every change the wake phase makes is to something named for it", () => {
+  const s = sandbox();
+  const r = s.run(["wake"]);
+  assert.equal(r.status, 0, r.stderr);
+  for (const c of s.changes()) {
+    assert.match(c, /graft-dev-wake|graft-dev\/wake-secret/, `not named for the wake function: ${c}`);
+  }
+});
+
+test("the wake secret is generated once, stored in the secrets store, and never printed, logged or put on a command line", () => {
+  const s = sandbox();
+  const r = s.run(["wake"]);
+  assert.equal(r.status, 0, r.stderr);
+  const secret = "Abcdefghijklmnopqrstuvwxyz012345";
+  assert.ok(s.sent().includes(secret), "it reaches the secrets store and the function's settings, in files");
+  assert.doesNotMatch(plan(r), new RegExp(secret), "never printed");
+  assert.doesNotMatch(s.ledger(), new RegExp(secret), "never logged");
+  assert.doesNotMatch(s.calls().join("\n"), new RegExp(secret), "never on a command line");
+  assert.match(s.calls().join("\n"), /create-secret --name graft-dev\/wake-secret/);
+});
+
+test("running wake again updates the function instead of failing on one that exists", () => {
+  const s = sandbox();
+  const r = s.run(["wake"], { FAKE_EXISTS: "1" });
+  assert.equal(r.status, 0, r.stderr);
+  const changes = s.changes().join("\n");
+  assert.match(changes, /update-function-code/);
+  assert.match(changes, /update-function-configuration/);
+  assert.doesNotMatch(changes, /create-function /);
+  assert.doesNotMatch(changes, /create-secret/, "the secret is made once");
+});
+
+test("teardown removes the wake function, its schedule, its secret, its logs and its role", () => {
+  const out = plan(sandbox().run(["teardown", "--yes"], { DRY_RUN: "1" }));
+  assert.match(out, /remove-targets --rule graft-dev-wake-check/);
+  assert.match(out, /delete-rule --name graft-dev-wake-check/);
+  assert.match(out, /delete-function --function-name graft-dev-wake/);
+  assert.match(out, /delete-log-group --log-group-name \/aws\/lambda\/graft-dev-wake/);
+  assert.match(out, /delete-secret --secret-id graft-dev\/wake-secret/);
+  assert.match(out, /delete-role --role-name graft-dev-wake/);
+});
+
+test("status shows the wake function and the idle check, and stays read-only", () => {
+  const s = sandbox();
+  assert.match(plan(s.run(["status"])), /ok\s+no wake function/);
+  const there = sandbox();
+  const out = plan(there.run(["status"], { FAKE_EXISTS: "1" }));
+  assert.match(out, /info\s+wake function .*idle check/);
+  assert.deepEqual(there.changes(), []);
+});
+
+test("the wake package carries its own pinned ECS client, installed from the lockfile, because the runtime's is too old", () => {
+  const s = sandbox();
+  const r = s.run(["wake"], { DRY_RUN: "1" });
+  assert.equal(r.status, 0, r.stderr);
+  const pkg = JSON.parse(readFileSync(new URL("../tools/wake/package.json", import.meta.url), "utf8"));
+  // an exact version, never a range or a tag
+  assert.match(pkg.dependencies["@aws-sdk/client-ecs"], /^\d+\.\d+\.\d+$/);
+  const lock = JSON.parse(readFileSync(new URL("../tools/wake/package-lock.json", import.meta.url), "utf8"));
+  assert.equal(lock.packages["node_modules/@aws-sdk/client-ecs"].version, pkg.dependencies["@aws-sdk/client-ecs"]);
+});
+
+// a made-up marker for the address, so a test can search for it everywhere (the real one is never in a file)
+const ALARM = "ALARM-ADDRESS-SENTINEL-7f3a";
+
+test("the budget phase refuses to run without the alarm address, before any change", () => {
+  const s = sandbox();
+  const r = s.run(["budget"]);
+  assert.notEqual(r.status, 0);
+  assert.match(plan(r), /GRAFT_ALARM_EMAIL/);
+  assert.deepEqual(s.changes(), []);
+});
+
+test("the budget is 60 USD a month for this region, with a warning at 45 actual and at 60 forecast", () => {
+  const s = sandbox();
+  const out = plan(s.run(["budget"], { DRY_RUN: "1", GRAFT_ALARM_EMAIL: ALARM }));
+  assert.match(out, /create-budget --account-id \d{12} --budget file:/);
+  const sent = out;
+  assert.match(sent, /"BudgetName":"graft-dev-month"/);
+  assert.match(sent, /"Amount":"60","Unit":"USD"/);
+  assert.match(sent, /"TimeUnit":"MONTHLY"/);
+  assert.match(sent, /"CostFilters":\{"Region":\["ap-south-1"\]\}/, "this region only: the account holds another project elsewhere");
+  assert.match(sent, /"NotificationType":"ACTUAL".*"Threshold":45/);
+  assert.match(sent, /"NotificationType":"FORECASTED".*"Threshold":60/);
+  const custom = plan(sandbox().run(["budget", "--limit", "80", "--alarm", "50"], { DRY_RUN: "1", GRAFT_ALARM_EMAIL: ALARM }));
+  assert.match(custom, /"Amount":"80"/);
+  assert.match(custom, /"Threshold":50/);
+});
+
+test("the alarm address is never printed, logged, or put on a command line", () => {
+  const s = sandbox();
+  const dry = plan(s.run(["budget"], { DRY_RUN: "1", GRAFT_ALARM_EMAIL: ALARM }));
+  assert.doesNotMatch(dry, new RegExp(ALARM), "not even in a dry run's plan");
+  const real = sandbox();
+  const r = real.run(["budget"], { GRAFT_ALARM_EMAIL: ALARM });
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(real.sent().includes(ALARM), "it reaches the Budgets call, in a file");
+  assert.doesNotMatch(plan(r), new RegExp(ALARM), "never printed");
+  assert.doesNotMatch(real.ledger(), new RegExp(ALARM), "never in the ledger");
+  assert.doesNotMatch(real.calls().join("\n"), new RegExp(ALARM), "never on a command line");
+  assert.match(real.ledger(), /graft-dev-month/);
+});
+
+test("the budget phase rejects an alarm at or above the limit, and amounts that are not whole numbers", () => {
+  const bad = (args) => sandbox().run(["budget", ...args], { DRY_RUN: "1", GRAFT_ALARM_EMAIL: ALARM });
+  assert.notEqual(bad(["--limit", "60", "--alarm", "60"]).status, 0);
+  assert.notEqual(bad(["--limit", "60", "--alarm", "70"]).status, 0);
+  assert.notEqual(bad(["--limit", "sixty"]).status, 0);
+});
+
+test("a budget that exists is left alone, and status and teardown know about it", () => {
+  const exists = sandbox();
+  const r = exists.run(["budget"], { FAKE_EXISTS: "1", GRAFT_ALARM_EMAIL: ALARM });
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(exists.changes(), []);
+  assert.match(plan(sandbox().run(["status"])), /info\s+no cost budget graft-dev-month/);
+  assert.match(plan(sandbox().run(["status"], { FAKE_EXISTS: "1" })), /ok\s+budget graft-dev-month/);
+  assert.match(plan(sandbox().run(["teardown", "--yes"], { DRY_RUN: "1" })), /delete-budget --account-id \d{12} --budget-name graft-dev-month/);
+});
+
+test("warm brings the service up and tags it so the idle check leaves it alone for the window, 7 days by default", () => {
+  const before = Date.now();
+  const out = plan(sandbox().run(["warm"], { DRY_RUN: "1" }));
+  const m = out.match(/tag-resource --resource-arn \S+service\/graft-dev\/graft-dev --tags key=graft-warm-until,value=(\d+)/);
+  assert.ok(m, out);
+  const until = Number(m[1]);
+  const days = (until - before) / 86_400_000;
+  assert.ok(days > 6.99 && days < 7.01, `a week from now, not ${days} days`);
+  assert.match(out, /update-express-gateway-service .*minTaskCount=1,maxTaskCount=1/, "and the service is brought up");
+  const three = plan(sandbox().run(["warm", "--days", "3"], { DRY_RUN: "1" }));
+  const d3 = (Number(three.match(/value=(\d+)/)[1]) - Date.now()) / 86_400_000;
+  assert.ok(d3 > 2.99 && d3 < 3.01);
+});
+
+test("warm refuses a window that is not 1 to 14 whole days, before any change", () => {
+  for (const days of ["0", "15", "-1", "two"]) {
+    const s = sandbox();
+    const r = s.run(["warm", "--days", days], { DRY_RUN: "1" });
+    assert.notEqual(r.status, 0, `--days ${days}`);
+    assert.deepEqual(s.changes(), [], `--days ${days}`);
+  }
+});
+
+test("cool removes the tag and nothing else, so the idle check may stop the service when it is idle", () => {
+  const s = sandbox();
+  const r = s.run(["cool"]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(s.changes().map((c) => c.replace(/ --resource-arn \S+/, " <service>")), ["ecs untag-resource <service> --tag-keys graft-warm-until"]);
+});
+

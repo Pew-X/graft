@@ -11,6 +11,7 @@ import type { ReactNode } from "react";
 import { copy } from "../lib/copy.ts";
 import { themeInitScript } from "../lib/theme/init.ts";
 import { themeCss } from "../lib/theme/tokens.ts";
+import { WakeOnLoad } from "../components/WakeOnLoad.tsx";
 import "./roll.css";
 import "./make.css";
 
@@ -72,6 +73,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <feDisplacementMap in="SourceGraphic" in2="n" scale="5" />
           </filter>
         </svg>
+        <WakeOnLoad />
         {children}
       </body>
     </html>
