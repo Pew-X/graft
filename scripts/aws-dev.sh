@@ -610,7 +610,9 @@ phase_warm() {
   cost="about 2.6 USD a day while up, over the parked baseline: $days day(s) is about $((days * 26 / 10)) USD"
   mut "keep the service warm for $days day(s): the idle check will not stop it before the tag $WARM_TAG ($until, milliseconds since 1970)" \
     ecs tag-resource --resource-arn "$arn" --tags "key=$WARM_TAG,value=$until"
-  phase_unpark
+  # a service that is already up is left as it is: sending the same scale again could start a needless roll
+  up=$(probe ecs describe-services --cluster "$PREFIX" --services "$PREFIX" --query 'services[0].desiredCount')
+  if [ "$up" = 1 ]; then echo "the service is already up; only the warm window was set" >&2; else phase_unpark; fi
 }
 phase_cool() {
   arn="arn:aws:ecs:$REGION:$ACCOUNT:service/$PREFIX/$PREFIX"
@@ -658,6 +660,8 @@ phase_wake() {
  {"Sid":"ItsTasks","Effect":"Allow","Action":"ecs:DescribeTasks","Resource":"arn:aws:ecs:$REGION:$ACCOUNT:task/$PREFIX/*"},
  {"Sid":"ListItsTasks","Effect":"Allow","Action":"ecs:ListTasks","Resource":"*","Condition":{"ArnEquals":{"ecs:cluster":"arn:aws:ecs:$REGION:$ACCOUNT:cluster/$PREFIX"}}},
  {"Sid":"ReadRequestCounts","Effect":"Allow","Action":"cloudwatch:GetMetricStatistics","Resource":"*"},
+ {"Sid":"TaskDefinitions","Effect":"Allow","Action":["ecs:RegisterTaskDefinition","ecs:DescribeTaskDefinition","ecs:DeregisterTaskDefinition"],"Resource":"*"},
+ {"Sid":"PassTheTaskRoles","Effect":"Allow","Action":"iam:PassRole","Resource":["$(role_arn task)","$(role_arn exec)"],"Condition":{"StringEquals":{"iam:PassedToService":"ecs-tasks.amazonaws.com"}}},
  {"Sid":"PassTheInfrastructureRole","Effect":"Allow","Action":"iam:PassRole","Resource":"$(role_arn infra)","Condition":{"StringEquals":{"iam:PassedToService":"ecs.amazonaws.com"}}},
  {"Sid":"ItsOwnLogs","Effect":"Allow","Action":["logs:CreateLogStream","logs:PutLogEvents"],"Resource":"arn:aws:logs:$REGION:$ACCOUNT:log-group:/aws/lambda/$WAKE_FN:*"}]}
 EOF

@@ -156,7 +156,10 @@ test("nothing leaves the device before publish: only reads, and the one check of
   // Moving a control starts the preview by itself.
   await expect(page.getByRole("button", { name: "pause" })).toBeVisible();
   await page.waitForTimeout(500);
-  expect(requests.filter((r) => r.method !== "GET")).toEqual([]);
+  // the one thing sent is the quiet wake call to the site's own server (it carries nothing)
+  expect(requests.filter((r) => r.method !== "GET").map((r) => new URL(r.url).pathname)).toEqual([
+    "/api/wake",
+  ]);
   const origin = new URL(page.url()).origin;
   const away = requests.filter((r) => !r.url.startsWith(origin) && !r.url.startsWith("data:"));
   expect(away.map((r) => new URL(r.url).pathname)).toEqual(["/v1/features"]);
@@ -167,7 +170,8 @@ test("with uploads off, the sound can still be cut and flipped, and publishing i
 }) => {
   const posts: string[] = [];
   page.on("request", (r) => {
-    if (r.method() === "POST") posts.push(r.url());
+    // the quiet wake call is not a publish: it carries nothing and goes to the site's own server
+    if (r.method() === "POST" && !r.url().endsWith("/api/wake")) posts.push(r.url());
   });
   await page.goto("/make");
   await pick(page, stereo(60_000));

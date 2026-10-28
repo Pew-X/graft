@@ -204,15 +204,20 @@ test("the preview updates within half a second of a change, and the loop plays t
 test("nothing is sent anywhere while making: only reads from the site's own origin", async ({
   page,
 }) => {
-  const requests: Array<{ method: string; url: string }> = [];
-  page.on("request", (r) => requests.push({ method: r.method(), url: r.url() }));
+  const requests: Array<{ method: string; url: string; body: string | null }> = [];
+  page.on("request", (r) =>
+    requests.push({ method: r.method(), url: r.url(), body: r.postData() }),
+  );
   await page.goto(link(chain[0]!.id, [0, 43200], 3, 2));
   await ready(page);
   await page.getByRole("button", { name: "hear it" }).click();
   await page.getByRole("slider", { name: "speed" }).focus();
   await page.keyboard.press("ArrowRight");
   await page.waitForTimeout(400);
-  expect(requests.filter((r) => r.method !== "GET")).toEqual([]);
+  // the one thing sent is the quiet wake call to the site's own server, and it carries nothing
+  const sent = requests.filter((r) => r.method !== "GET");
+  expect(sent.map((r) => new URL(r.url).pathname)).toEqual(["/api/wake"]);
+  expect(sent.every((r) => r.body === null)).toBe(true);
   const origin = new URL(page.url()).origin;
   expect(requests.filter((r) => !r.url.startsWith(origin) && !r.url.startsWith("data:"))).toEqual(
     [],

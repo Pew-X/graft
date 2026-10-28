@@ -509,9 +509,10 @@ test("the wake role may change only the one service, and its permissions name no
   const doc = policy.slice(policy.indexOf('{"Version":"2012-10-17","Statement":[\n'));
   assert.match(out, /Trust|lambda\.amazonaws\.com/);
   assert.match(out, /"Action":\["ecs:DescribeServices".*"ecs:UpdateExpressGatewayService".*"Resource":"arn:aws:ecs:ap-south-1:\d{12}:service\/graft-dev\/graft-dev"/s);
-  // the only "*" resources are the two that cannot be narrowed (the task list, narrowed by cluster; the request counts)
-  const stars = [...out.matchAll(/"Action":"([^"]+)","Resource":"\*"/g)].map((m) => m[1]).sort();
-  assert.deepEqual(stars, ["cloudwatch:GetMetricStatistics", "ecs:ListTasks"]);
+  // the only "*" resources are the ones AWS cannot narrow: the task list (narrowed by cluster), the request
+  // counts, and task definitions (an Express update registers a new one; found on the first live wake)
+  const stars = [...out.matchAll(/"Action":(?:"([^"]+)"|\[([^\]]+)\]),"Resource":"\*"/g)].map((m) => m[1] ?? m[2].replace(/"/g, "")).sort();
+  assert.deepEqual(stars, ["cloudwatch:GetMetricStatistics", "ecs:ListTasks", "ecs:RegisterTaskDefinition,ecs:DescribeTaskDefinition,ecs:DeregisterTaskDefinition"]);
   assert.match(out, /"ecs:cluster":"arn:aws:ecs:ap-south-1:\d{12}:cluster\/graft-dev"/);
   assert.doesNotMatch(out, /"Action":"[a-z0-9-]+:\*"|"Action":"\*"/, "no service-wide wildcard action");
   assert.ok(doc.length > 0);
