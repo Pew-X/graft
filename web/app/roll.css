@@ -1111,16 +1111,41 @@ button:disabled {
   align-items: center;
 }
 .how-link {
-  /* a button is a 44 px target; the words stay as small as the link beside them */
+  /* help should be easy to find: a pill with a question mark, a 44 px target, the same small type */
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   min-height: 44px;
-  padding: 0 4px;
-  border: 0;
+  padding: 0 14px;
+  border: 1px solid color-mix(in srgb, currentColor 50%, transparent);
+  border-radius: 999px;
   background: none;
   font: inherit;
   letter-spacing: inherit;
   color: inherit;
-  text-decoration: underline;
   cursor: pointer;
+}
+.how-mark {
+  font-weight: 700;
+}
+@media (max-width: 420px) {
+  /* a narrow phone has no room for the words: a round question mark, still named "how it works" */
+  .how-link {
+    justify-content: center;
+    width: 44px;
+    padding: 0;
+  }
+  .how-mark {
+    font-size: 16px;
+  }
+  .how-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 /* THE FIRST PLAY'S CAPTION: a line in the marker hand, in the status slot, with a drawn underline. It

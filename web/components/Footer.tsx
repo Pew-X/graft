@@ -9,7 +9,10 @@ export function Footer({ onHow }: { onHow?: (() => void) | undefined } = {}) {
         <a href="/about">{copy.footer.about}</a>
         {onHow ? (
           <button type="button" className="how-link" onClick={onHow}>
-            {copy.footer.how}
+            <span className="how-mark" aria-hidden="true">
+              {copy.footer.howMark}
+            </span>
+            <span className="how-label">{copy.footer.how}</span>
           </button>
         ) : null}
       </span>

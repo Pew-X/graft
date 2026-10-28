@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { createApi, fetchChain } from "../lib/api/chain.ts";
 import { copy, fill } from "../lib/copy.ts";
 import { checkFlip, renderFlip } from "../lib/make/flip.ts";
@@ -12,6 +12,8 @@ import { browserRenderer } from "../lib/make/browser-renderer.ts";
 import type { Renderer } from "../lib/make/renderer.ts";
 import type { Sound } from "../lib/make/sounds.ts";
 import { entryAt, indexOf, parseSpeed, step, STOPS } from "../lib/make/speed.ts";
+import { next as nextGuide, replayAt, type MakeEvent, type MakePhase } from "../lib/coach/make.ts";
+import { readMade, writeMade } from "../lib/coach/seen.ts";
 import { type Async, useAsync } from "../lib/make/use-async.ts";
 import { fetchPcm } from "../lib/roll/pcm.ts";
 import { describeSpeed } from "../lib/roll/speed.ts";
@@ -20,6 +22,7 @@ import { type Features, readFeatures } from "../lib/own/features.ts";
 import { type Basis, DECLARATION_TEXT, sourceBody } from "../lib/own/source.ts";
 import { OwnSound } from "./OwnSound.tsx";
 import { PublishStep } from "./PublishStep.tsx";
+import { MakeGuide } from "./MakeGuide.tsx";
 import { TrimStep } from "./TrimStep.tsx";
 import { SoundPicker } from "./SoundPicker.tsx";
 import { Steps } from "./Steps.tsx";
@@ -92,6 +95,26 @@ export function Make({
   const engine = useAsync(`renderer:${engineTry}`, browserRenderer);
 
   const path = origin?.kind === "shipped" ? origin.sound.audioPath : null;
+
+  // The hints for making a flip: one line at a time under the step markers, until the visitor has been
+  // through them once (a note in the browser) or skips them. The slot keeps its height from the moment it
+  // is shown.
+  const [guide, setGuide] = useState<MakePhase>("done");
+  const [slot, setSlot] = useState(false);
+  const send = useCallback((event: MakeEvent) => setGuide((p) => nextGuide(p, event)), []);
+  const skipGuide = useCallback(() => send("skipped"), [send]);
+  const fadedGuide = useCallback(() => send("faded"), [send]);
+  useEffect(() => {
+    // read after the page is up, in a microtask: the server cannot know what the browser has stored
+    queueMicrotask(() => {
+      if (readMade()) return;
+      setGuide("pick");
+      setSlot(true);
+    });
+  }, []);
+  useEffect(() => {
+    if (guide === "done" && slot) writeMade();
+  }, [guide, slot]);
   const liveId = origin?.kind === "live" ? origin.id : null;
   const sound = useAsync(path ?? (liveId === null ? null : `live:${liveId}`), async (signal) => {
     if (path !== null) return fetchPcm(path, signal);
@@ -101,6 +124,18 @@ export function Make({
     return fetchPcm(last.audio.url, signal);
   });
 
+  const editing =
+    (origin !== null && sound.status === "ready") || (origin === null && own !== null);
+  const picking = origin === null && own === null && toTrim === null;
+  useEffect(() => {
+    if (guide === "pick" && editing) queueMicrotask(() => send("picked"));
+  }, [guide, editing, send]);
+  // which line fits what is on the screen now; none while a sound loads or is being trimmed
+  const line =
+    guide === "done" ? null : guide === "pick" ? (picking ? "pick" : null) : editing ? guide : null;
+  // The line sits under the step markers, which the editor draws once it is up and this page draws before.
+  const guideSlot = slot ? <MakeGuide line={line} onSkip={skipGuide} onFaded={fadedGuide} /> : null;
+
   return (
     <div className="make" data-testid="make">
       <div className="make-bar">
@@ -108,10 +143,23 @@ export function Make({
           {copy.make.home}
         </Link>
         <p className="kicker">{copy.make.kicker}</p>
+        <button
+          type="button"
+          className="back how"
+          onClick={() => {
+            setSlot(true);
+            setGuide(replayAt(editing));
+          }}
+        >
+          <span aria-hidden="true">{copy.footer.howMark}</span> {copy.make.guide.how}
+        </button>
       </div>
       {(origin === null && own !== null && toTrim === null) ||
       (origin !== null && sound.status === "ready") ? null : (
-        <Steps current={origin === null ? 1 : 2} />
+        <>
+          <Steps current={origin === null ? 1 : 2} />
+          {guideSlot}
+        </>
       )}
       {origin === null && own === null && toTrim === null ? (
         <p className="lede" data-testid="make-intro">
@@ -140,6 +188,8 @@ export function Make({
           engineFailed={engine.status === "failed"}
           onRetryEngine={() => setEngineTry((n) => n + 1)}
           start={start}
+          onGuide={send}
+          guideSlot={guideSlot}
           onChange={() => setOwn(null)}
         />
       ) : origin === null ? (
@@ -166,6 +216,8 @@ export function Make({
           engineFailed={engine.status === "failed"}
           onRetryEngine={() => setEngineTry((n) => n + 1)}
           start={start}
+          onGuide={send}
+          guideSlot={guideSlot}
           onChange={() => {
             // Back to the list. A sound named in the link is forgotten with it.
             if (from) router.push("/make");
@@ -220,6 +272,8 @@ function Editor({
   engineFailed,
   onRetryEngine,
   start,
+  onGuide,
+  guideSlot,
   onChange,
 }: {
   title: string | null;
@@ -234,6 +288,10 @@ function Editor({
   engineFailed: boolean;
   onRetryEngine: () => void;
   start: Start;
+  /** What the visitor did that the make flow's hints follow. */
+  onGuide: (event: MakeEvent) => void;
+  /** The hint line, drawn under the step markers. */
+  guideSlot: ReactNode;
   onChange: () => void;
 }) {
   const frames = samples.length;
@@ -299,7 +357,8 @@ function Editor({
   const touch = useCallback(() => {
     void previewer.unlock().catch(() => undefined);
     setListening(true);
-  }, [previewer]);
+    onGuide("heard");
+  }, [previewer, onGuide]);
 
   const direction = cents > 0 ? "up" : cents < 0 ? "down" : "src";
   const interval = speed.approximate
@@ -309,6 +368,7 @@ function Editor({
   return (
     <>
       <Steps current={publishing || publishingSource ? 3 : 2} />
+      {guideSlot}
       <div className="stage-head">
         {title ? (
           <h2 className="slab" data-k="src" data-dye="0">
@@ -324,7 +384,15 @@ function Editor({
         <h3 id="cut-label" className="kicker">
           {copy.make.cut.label} <span className="gloss">{copy.make.cut.gloss}</span>
         </h3>
-        <CutEditor samples={samples} cut={cut} onChange={setCut} onTouch={touch} />
+        <CutEditor
+          samples={samples}
+          cut={cut}
+          onChange={(c) => {
+            setCut(c);
+            onGuide("changed");
+          }}
+          onTouch={touch}
+        />
       </section>
 
       <section className="panel" aria-labelledby="speed-label">
@@ -343,6 +411,7 @@ function Editor({
             onClick={() => {
               touch();
               setStop((i) => step(i, -1));
+              onGuide("changed");
             }}
           >
             −
@@ -361,6 +430,7 @@ function Editor({
             onChange={(e) => {
               touch();
               setStop(Number(e.target.value));
+              onGuide("changed");
             }}
           />
           <button
@@ -370,6 +440,7 @@ function Editor({
             onClick={() => {
               touch();
               setStop((i) => step(i, 1));
+              onGuide("changed");
             }}
           >
             +
@@ -405,7 +476,10 @@ function Editor({
               className="pill"
               disabled={problem !== null || current === null || flipParent === null}
               aria-describedby="why-not"
-              onClick={() => setPublishing(true)}
+              onClick={() => {
+                setPublishing(true);
+                onGuide("shared");
+              }}
             >
               {copy.publish.open}
             </button>

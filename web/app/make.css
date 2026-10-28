@@ -957,3 +957,110 @@
 .waking .lede {
   margin-top: 22px;
 }
+
+/* THE MAKE FLOW'S HINTS: one line in the marker hand, in a slot that keeps its height so nothing below
+   it moves when the line changes or goes. Only its skip takes a press. */
+.make-bar .how {
+  gap: 6px;
+  margin-left: auto;
+  cursor: pointer;
+  background: transparent;
+}
+.make-bar .how span {
+  font-weight: 700;
+}
+.make-guide {
+  /* pinned while the hints run, so the line is still in view when the visitor is down at the controls */
+  position: sticky;
+  top: 44px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  min-height: 52px;
+  margin: 0.25rem 0 0.5rem;
+  background: var(--bg);
+  /* the page's ground reaches past the column on both sides, so a bracket handle that sticks out of it
+     does not show beside the bar */
+  box-shadow: 0 0 0 100vmax var(--bg);
+  clip-path: inset(0 -100vmax);
+  font-size: clamp(20px, 2.4vw, 26px);
+}
+.make-guide-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font:
+    400 1em / 1.15 var(--f-brush),
+    cursive;
+  color: var(--ink);
+  transform: rotate(-0.5deg);
+  transform-origin: left center;
+  animation: make-guide-in 0.3s ease-out both;
+}
+@media (max-width: 620px) {
+  /* two lines of room, so a longer line does not move what is below it */
+  .make-guide {
+    min-height: calc(2 * 1.15em + 12px);
+  }
+}
+.make-guide-skip {
+  flex: none;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.1em;
+  text-decoration: underline;
+  cursor: pointer;
+}
+@keyframes make-guide-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) rotate(-0.5deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .make-guide-text {
+    animation: none;
+  }
+}
+
+/* the about page's way back to the guided play: a plain link that is also a 44 px target */
+.about .tour-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 1rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+}
+
+/* a narrow phone: the bar keeps one row, the page's name gives way to the buttons */
+.make-bar .back,
+.make-bar .how {
+  white-space: nowrap;
+}
+@media (max-width: 420px) {
+  .make-bar .kicker {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}

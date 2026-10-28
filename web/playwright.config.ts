@@ -12,7 +12,7 @@ const returning = {
   origins: [
     {
       origin: "http://127.0.0.1:3100",
-      localStorage: [{ name: "graft.coach", value: "done" }],
+      localStorage: [{ name: "graft.coach", value: "done+made" }],
     },
   ],
 };

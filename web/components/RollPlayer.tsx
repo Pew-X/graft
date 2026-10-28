@@ -160,7 +160,8 @@ export function RollPlayer({
   useEffect(() => {
     // read after the page is up, in a microtask: the server cannot know what the browser has stored
     queueMicrotask(() => {
-      setPhase(readPhase());
+      // a link to "#how" (the about page's, or one a visitor keeps) plays the guide from the start
+      setPhase(window.location.hash === "#how" ? "armed" : readPhase());
       setPhaseKnown(true);
     });
   }, []);

@@ -298,6 +298,12 @@ export const copy = {
       heading: "what graft is",
       body: "every sound here began as one recording. people cut a piece of it and changed its speed, again and again. you can hear each step, and make the next one.",
     },
+    /** A way back to the guided first play, for anyone who wants it again. */
+    tour: {
+      heading: "see it played again",
+      body: "the roll plays itself once, with a few words on the screen. you can have that again from the start, as often as you like.",
+      link: "play the guide again",
+    },
     isNot: {
       heading: "what it is not",
       body: "not a sampler: one cut and one speed, with no pads, layers, effects or export. an independent experiment, not affiliated with or endorsed by any product named.",
@@ -323,7 +329,7 @@ export const copy = {
         tracker:
           "where error tracking is switched on, it runs without ip addresses, without session replay and with a scrubber.",
         browser:
-          "the only things graft can keep in your browser are your choice of light or dark, a note of how far you have got with the first-visit guide, and a manage key if you tick the box to keep one when you publish.",
+          "the only things graft can keep in your browser are your choice of light or dark, a note of how far you have got with the first-visit guide and the make-a-flip hints (one short word), and a manage key if you tick the box to keep one when you publish.",
       },
     },
     takedown: {
@@ -401,6 +407,16 @@ export const copy = {
       publish: "share",
     },
     local: "nothing leaves this device until you publish.",
+    /** One line at a time above the editor, each gone when the visitor does the thing it says. */
+    guide: {
+      pick: "pick any sound. you cut a piece of it next.",
+      hear: "this flip is already set up. press hear it.",
+      change: "now move a bracket or the speed, and hear it change.",
+      share: "like it? publish it with the button below.",
+      skip: "skip",
+      how: "how it works",
+      label: "a short guide to making a flip",
+    },
     pick: {
       heading: "pick a sound to start from",
       curated: "sounds made for graft",
@@ -481,6 +497,8 @@ export const copy = {
     disclaimer: "independent experiment, not affiliated with or endorsed by any product named.",
     about: "about",
     how: "how it works",
+    /** The mark before the words on the replay button: a question, so it reads as help. */
+    howMark: "?",
   },
   /** Marking a part of a stage on the record, to flip just that part. */
   mark: {

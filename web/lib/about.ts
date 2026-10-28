@@ -77,7 +77,11 @@ export const privacyClaims: readonly Claim[] = [
       },
       {
         file: "web/e2e/guide.spec.ts",
-        test: "the browser keeps one key with one of three words, and nothing else",
+        test: "the browser keeps one key with one word from a short list, and nothing else",
+      },
+      {
+        file: "web/e2e/make-guide.spec.ts",
+        test: "the page keeps its one key, with a word from the list",
       },
     ],
   },
