@@ -385,6 +385,8 @@ export const copy = {
       "publishing your own sound is switched off in this demo. you can still record or pick a sound and try it here: it stays on this device. the sounds below can be flipped and published.",
     off: "uploading your own sounds is switched off for now. your sound stays here: you can keep cutting and flipping it, and flip the sounds that are here.",
     closed: "publishing is switched off for now. nothing can be published until it is back.",
+    rightsNote:
+      "publish only sounds you made or may share; graft cannot check that for you. anyone can report a sound, and a sound that is reported can be hidden, with the flips built on it held while it is looked at.",
     sourceDone: "your sound is published. you can now publish the flip you made from it.",
   },
   make: {
