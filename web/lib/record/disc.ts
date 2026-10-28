@@ -45,6 +45,12 @@ export function layout(width: number, height: number, stages: number): DiscLayou
 /** Radius of a slot's outer edge. */
 export const bandOuter = (l: DiscLayout, slot: number): number => l.Ro - slot * (l.slotW + l.gap);
 
+/** A point just outside a slot's outer edge, on the line the needle moves along: where a small label sits. */
+export function outsideBand(l: DiscLayout, slot: number, gap: number): { x: number; y: number } {
+  const r = bandOuter(l, slot) + gap;
+  return l.portrait ? { x: l.cx, y: l.cy - r } : { x: l.cx - r, y: l.cy };
+}
+
 /** Where the needle is for a place `u` (0 to 1, outer edge to inner) in a slot. */
 export function needleAt(l: DiscLayout, slot: number, u: number): { x: number; y: number } {
   const r = bandOuter(l, slot) - u * l.slotW;

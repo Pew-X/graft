@@ -25,6 +25,8 @@ import { type Event, type Phase, follow, next as nextPhase } from "../lib/coach/
 import { captions, momentAt } from "../lib/coach/narration.ts";
 import { readPhase, writePhase } from "../lib/coach/seen.ts";
 import { captionBox } from "../lib/coach/where.ts";
+import { levelAt, liveDye } from "../lib/thread/live.ts";
+import { dyes } from "../lib/theme/tokens.ts";
 import { type Rect } from "../lib/coach/marks.ts";
 import { SAMPLE_RATE } from "../lib/playback/config.ts";
 import { readyCut, READY_SPEED } from "../lib/make/ready.ts";
@@ -506,6 +508,20 @@ export function RollPlayer({
     [current],
   );
   const heroBlock = blocks[Math.min(hero, stages - 1)];
+  // The stage on screen is live while it sounds: its colour goes to the tile, the thread and the lit
+  // groove. The thread alone steps aside for a hint (which points where it ends) and for marking a part.
+  const dyeNow = liveDye({
+    playing,
+    current,
+    hero,
+    state: heroBlock?.state,
+    dye: heroBlock?.dye,
+  });
+  const threadOn = dyeNow !== null && phase !== "hintNeedle" && phase !== "hintMark" && !marking;
+  const level = useCallback((): number => {
+    const at = live();
+    return at ? levelAt(peaks[at.stage] ?? [], at.position, lengths[at.stage] ?? 0) : 0;
+  }, [live, peaks, lengths]);
   // Where the hints point, measured on the real page each time they look.
   const findNeedle = useCallback((): Rect | null => {
     const l = layout(window.innerWidth, window.innerHeight, Math.max(1, stages));
@@ -544,6 +560,7 @@ export function RollPlayer({
       data-audio={load}
       data-reduced={reduced}
       data-guide={phase}
+      data-live={dyeNow ?? undefined}
     >
       {load === "ready" ? (
         <Disc
@@ -554,6 +571,7 @@ export function RollPlayer({
           live={live}
           playing={playing}
           reduced={reduced}
+          accent={dyeNow === null ? undefined : dyes[dyeNow]?.fill}
           focus={hero}
           onScrubStart={(stage, offset) => act((e) => e.scrubStart(stage, offset))}
           // The first touch may arrive before the audio engine exists; the move and the release wait
@@ -571,7 +589,14 @@ export function RollPlayer({
       ) : null}
 
       {load === "ready" && heroBlock?.state === "available" ? (
-        <Thread id={heroBlock.id} hero={hero} stages={stages} />
+        <Thread
+          id={heroBlock.id}
+          hero={hero}
+          stages={stages}
+          on={threadOn}
+          level={level}
+          reduced={reduced}
+        />
       ) : null}
 
       <header className="bar" ref={barEl}>

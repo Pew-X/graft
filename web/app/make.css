@@ -873,20 +873,23 @@
   fill: #070908;
 }
 .trace .grid line {
-  stroke: #5dff9c;
+  stroke: var(--beam, #5dff9c);
   stroke-opacity: 0.12;
   stroke-width: 0.6;
+  transition: stroke 0.2s ease;
 }
 .trace .beam {
   fill: none;
-  stroke: #5dff9c;
+  stroke: var(--beam, #5dff9c);
+  transition: stroke 0.2s ease;
   stroke-width: 1.6;
   stroke-linejoin: round;
   stroke-linecap: round;
 }
 .trace .beam-glow {
   fill: none;
-  stroke: #5dff9c;
+  stroke: var(--beam, #5dff9c);
+  transition: stroke 0.2s ease;
   stroke-width: 5;
   stroke-opacity: 0.22;
   stroke-linejoin: round;
