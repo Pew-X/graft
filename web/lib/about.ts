@@ -38,6 +38,19 @@ export const privacyClaims: readonly Claim[] = [
     ],
   },
   {
+    text: p.wake,
+    evidence: [
+      {
+        file: "web/lib/wake/forward.test.ts",
+        test: "with its settings it posts once to the function with the secret in a header, and the secret nowhere else",
+      },
+      {
+        file: "web/e2e/wake.spec.ts",
+        test: "opening the site asks the site's own server to wake the service, once, and a reload does not ask again",
+      },
+    ],
+  },
+  {
     text: p.noIp,
     evidence: [
       {

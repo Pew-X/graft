@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { LiveRoll } from "../../../components/LiveRoll.tsx";
+import { WakingChain } from "../../../components/WakingChain.tsx";
 import { createApi, fetchChain } from "../../../lib/api/chain.ts";
 import { previewOf } from "../../../lib/api/preview.ts";
 import { apiUrls } from "../../../lib/api/server.ts";
@@ -29,7 +30,9 @@ export async function generateMetadata({
 
 export default async function ChainPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const chain = await read(id);
+  // A service that did not answer is almost always one that was asleep: say so, and come back by itself.
+  const chain = await read(id).catch(() => undefined);
+  if (chain === undefined) return <WakingChain apiUrl={apiUrls().browser} />;
   if (chain === null) notFound();
   return (
     <main>
