@@ -5,6 +5,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { scan } from "./a11y.ts";
 import { layout, pointOn } from "./disc.ts";
+import { COACH_VALUES } from "../lib/coach/seen.ts";
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -250,13 +251,15 @@ test("a hint catches no press, never covers what it points at, and never moves t
   expect(after).toEqual(before);
 });
 
-test("the browser keeps one key with one of three words, and nothing else", async ({ page }) => {
+test("the browser keeps one key with one word from a short list, and nothing else", async ({
+  page,
+}) => {
   await arrive(page);
   await play(page).click();
   await caption(page).getByRole("button", { name: "skip" }).click();
   const store = await page.evaluate(() => Object.fromEntries(Object.entries(localStorage)));
   expect(Object.keys(store).filter((k) => k !== "graft.theme")).toEqual(["graft.coach"]);
-  expect(["narrated", "needle", "done"]).toContain(store["graft.coach"]);
+  expect(COACH_VALUES).toContain(store["graft.coach"]);
 });
 
 test("a browser that blocks storage still shows the guide, and moving through it does not throw", async ({
@@ -423,4 +426,80 @@ test("while the guide speaks the plain 'drag the needle.' caption stays out of t
   // the hint goes by itself, then the second, then nothing: the caption is back
   await expect(hint(page)).toHaveCount(0, { timeout: 25_000 });
   await expect(page.locator(".record-caption")).toBeVisible();
+});
+
+// ---- replay: a click anywhere the guide lives plays it again, whatever state the page is in ----------
+
+const how = (page: Page) => page.getByRole("button", { name: "how it works" });
+
+for (const size of SIZES) {
+  test.describe(`replay at ${size.name} ${size.width}x${size.height}`, () => {
+    test.use({ viewport: { width: size.width, height: size.height } });
+    test("the replay button is on the first screen, labelled, and a full-size target", async ({
+      page,
+    }) => {
+      await arriveWith(page, "done+made");
+      const b = await box(page, ".how-link");
+      expect(b, "the button is drawn").not.toBeNull();
+      expect(b!.h).toBeGreaterThanOrEqual(44);
+      await expect(how(page)).toBeInViewport({ ratio: 1 });
+      await expect(how(page)).toContainText("how it works");
+    });
+  });
+}
+
+test("replay in the middle of the narration starts it again from the first caption", async ({
+  page,
+}) => {
+  await arrive(page);
+  await play(page).click();
+  await expect(caption(page)).toHaveAttribute("data-moment", "stage:1", { timeout: 20_000 });
+  await how(page).click();
+  await expect(caption(page)).toHaveAttribute("data-moment", "teaser:3");
+});
+
+test("replay while a hint is up ends the hint and narrates again", async ({ page }) => {
+  await arriveWith(page, "narrated");
+  await expect(hint(page)).toContainText("drag the needle");
+  await how(page).click();
+  await expect(hint(page)).toHaveCount(0);
+  await expect(caption(page)).toHaveAttribute("data-moment", "teaser:3");
+});
+
+test("replay while marking a part narrates again and nothing throws", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await arriveWith(page, "done+made");
+  await page.getByRole("button", { name: "cut on the record" }).click();
+  await how(page).click();
+  await expect(caption(page)).toHaveAttribute("data-moment", "teaser:3");
+  expect(errors).toEqual([]);
+});
+
+test("a link ending in #how plays the guide from the start, even for a browser that finished it", async ({
+  page,
+}) => {
+  await page.addInitScript(() => localStorage.setItem("graft.coach", "done+made"));
+  await page.goto("/#how");
+  await expect(page.locator(".roll")).toHaveAttribute("data-audio", "ready");
+  await play(page).click();
+  await expect(caption(page)).toHaveAttribute("data-moment", "teaser:3");
+  expect(await stored(page), "a replay never sends a browser back").toBe("done+made");
+});
+
+test("the about page has a link that plays the guide again", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("graft.coach", "done+made"));
+  await page.goto("/about");
+  await page.getByRole("link", { name: "play the guide again" }).click();
+  await expect(page).toHaveURL(/\/#how$/);
+  await expect(page.locator(".roll")).toHaveAttribute("data-audio", "ready");
+  await play(page).click();
+  await expect(caption(page)).toHaveAttribute("data-moment", "teaser:3");
+});
+
+test("with the replay button in view the page has no serious accessibility violation", async ({
+  page,
+}, info) => {
+  await arriveWith(page, "done+made");
+  await scan(page, "roll with the replay button", info);
 });

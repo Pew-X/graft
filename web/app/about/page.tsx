@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Footer } from "../../components/Footer.tsx";
 import { copy, fill } from "../../lib/copy.ts";
 import sources from "../../snapshot/sources.json";
@@ -21,6 +22,13 @@ export default function About() {
         <p className="kicker">{a.title}</p>
         <h1 className="picker-title">{a.what.heading}</h1>
         <p>{a.what.body}</p>
+        <h2 className="kicker">{a.tour.heading}</h2>
+        <p>{a.tour.body}</p>
+        <p>
+          <Link href="/#how" className="tour-link">
+            {a.tour.link}
+          </Link>
+        </p>
         <h2 className="kicker">{a.isNot.heading}</h2>
         <p>{a.isNot.body}</p>
         <h2 className="kicker">{a.states.heading}</h2>

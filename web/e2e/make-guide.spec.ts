@@ -1,0 +1,195 @@
+// The make flow's hints: one line at a time above the editor, each gone when the visitor does the thing
+// it says, shown once, and replayable from a button. Each test names the guarantee it protects. These
+// specs start with empty storage; every other spec starts as a visitor who has been through the guide.
+// Driven in real Chromium against the built site.
+import { expect, test, type Page } from "@playwright/test";
+import { scan } from "./a11y.ts";
+import { COACH_VALUES } from "../lib/coach/seen.ts";
+
+test.use({ storageState: { cookies: [], origins: [] }, viewport: { width: 1280, height: 720 } });
+
+const PICK = "pick any sound. you cut a piece of it next.";
+const HEAR = "this flip is already set up. press hear it.";
+const CHANGE = "now move a bracket or the speed, and hear it change.";
+const SHARE = "like it? publish it with the button below.";
+
+const guide = (page: Page) => page.getByTestId("make-guide");
+const stored = (page: Page) => page.evaluate(() => localStorage.getItem("graft.coach"));
+const how = (page: Page) => page.getByRole("button", { name: "how it works" });
+const hearIt = (page: Page) => page.getByRole("button", { name: "hear it", exact: true });
+
+async function choose(page: Page): Promise<void> {
+  await page.goto("/make");
+  await expect(guide(page)).toContainText(PICK);
+  await page.getByRole("button", { name: "flip this sound: saber hum" }).click();
+  await expect(page.getByRole("slider", { name: "speed" })).toBeVisible();
+}
+
+test("on a first visit the picker says what to do, once, in a slot of its own", async ({
+  page,
+}) => {
+  await page.goto("/make");
+  await expect(guide(page)).toContainText(PICK);
+  await expect(guide(page).getByRole("button", { name: "skip" })).toBeVisible();
+  expect(await stored(page), "nothing is stored before the hints have been through").toBeNull();
+});
+
+test("the lines come one at a time, each when the last thing is done: pick, hear, change, publish", async ({
+  page,
+}) => {
+  await choose(page);
+  await expect(guide(page)).toContainText(HEAR);
+  await hearIt(page).click();
+  await expect(guide(page)).toContainText(CHANGE);
+  await page.getByRole("button", { name: "faster" }).click();
+  await expect(guide(page)).toContainText(SHARE);
+  await expect(page.getByRole("button", { name: "publish this flip" })).toBeEnabled();
+  await page.getByRole("button", { name: "publish this flip" }).click();
+  await expect(guide(page)).toHaveAttribute("data-line", "none");
+  await expect.poll(() => stored(page)).toBe("made");
+});
+
+test("moving a control before pressing hear it counts as hearing it, and the line moves on", async ({
+  page,
+}) => {
+  await choose(page);
+  await page.getByRole("button", { name: "slower" }).click();
+  await expect(guide(page)).toContainText(SHARE);
+});
+
+test("the last line goes by itself if it is not acted on, and the hints are over", async ({
+  page,
+}) => {
+  await choose(page);
+  await page.getByRole("button", { name: "faster" }).click();
+  await expect(guide(page)).toContainText(SHARE);
+  await expect(guide(page)).toHaveAttribute("data-line", "none", { timeout: 20_000 });
+  await expect.poll(() => stored(page)).toBe("made");
+});
+
+test("skip ends the hints at once, and a reload shows none of them again", async ({ page }) => {
+  await choose(page);
+  await guide(page).getByRole("button", { name: "skip" }).click();
+  await expect(guide(page)).toHaveAttribute("data-line", "none");
+  await expect.poll(() => stored(page)).toBe("made");
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "pick a sound to start from" })).toBeVisible();
+  await page.getByRole("button", { name: "flip this sound: saber hum" }).click();
+  await expect(page.getByRole("slider", { name: "speed" })).toBeVisible();
+  await expect(guide(page)).toHaveCount(0);
+});
+
+test("a visitor who arrives on a sound (from the header link) starts at hear it, not at the picker", async ({
+  page,
+}) => {
+  await page.goto("/make?from=02em31vdp528&cut=0-24000&speed=3/2");
+  await expect(page.getByRole("slider", { name: "speed" })).toBeVisible();
+  await expect(guide(page)).toContainText(HEAR);
+});
+
+test("the line never moves the page: the stage and the controls stay where they were as it changes", async ({
+  page,
+}) => {
+  await choose(page);
+  const top = () =>
+    page.evaluate(
+      () => document.querySelector(".stage-head")!.getBoundingClientRect().top + window.scrollY,
+    );
+  const before = await top();
+  await hearIt(page).click();
+  await expect(guide(page)).toContainText(CHANGE);
+  expect(await top()).toBe(before);
+  await page.getByRole("button", { name: "faster" }).click();
+  await expect(guide(page)).toContainText(SHARE);
+  expect(await top()).toBe(before);
+  await guide(page).getByRole("button", { name: "skip" }).click();
+  await expect(guide(page)).toHaveAttribute("data-line", "none");
+  expect(await top(), "the slot keeps its height when the line goes").toBe(before);
+});
+
+test("the replay button plays the hints again: at the picker, and with a sound in the editor", async ({
+  page,
+}) => {
+  await page.addInitScript(() => localStorage.setItem("graft.coach", "done+made"));
+  await page.goto("/make");
+  await expect(page.getByRole("heading", { name: "pick a sound to start from" })).toBeVisible();
+  await expect(guide(page)).toHaveCount(0);
+  await how(page).click();
+  await expect(guide(page)).toContainText(PICK);
+  await page.getByRole("button", { name: "flip this sound: saber hum" }).click();
+  await expect(guide(page)).toContainText(HEAR);
+  await guide(page).getByRole("button", { name: "skip" }).click();
+  await how(page).click();
+  await expect(guide(page)).toContainText(HEAR);
+  expect(await stored(page), "a replay never sends a browser back").toBe("done+made");
+});
+
+test("the replay button is a labelled full-size target on the first screen, phone and laptop", async ({
+  page,
+}) => {
+  for (const [width, height] of [
+    [1280, 720],
+    [390, 844],
+    [360, 640],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.goto("/make");
+    const b = await how(page).boundingBox();
+    expect(b!.height).toBeGreaterThanOrEqual(44);
+    await expect(how(page)).toBeInViewport({ ratio: 1 });
+  }
+});
+
+test("the page keeps its one key, with a word from the list", async ({ page }) => {
+  await choose(page);
+  await guide(page).getByRole("button", { name: "skip" }).click();
+  await expect.poll(() => stored(page)).not.toBeNull();
+  const store = await page.evaluate(() => Object.fromEntries(Object.entries(localStorage)));
+  expect(Object.keys(store).filter((k) => k !== "graft.theme")).toEqual(["graft.coach"]);
+  expect(COACH_VALUES).toContain(store["graft.coach"]);
+});
+
+test("with a line up the page has no serious accessibility violation", async ({ page }, info) => {
+  await choose(page);
+  await expect(guide(page)).toContainText(HEAR);
+  // the line fades in over 0.3 s; the scan reads its settled colour, not one mid-fade
+  await page.waitForTimeout(600);
+  await scan(page, "make flow with a hint", info);
+});
+
+test("the line is announced politely and the skip is the only thing in the slot that takes a press", async ({
+  page,
+}) => {
+  await choose(page);
+  await expect(guide(page).getByRole("status")).toHaveText(HEAR);
+  expect(await guide(page).getByRole("button").count()).toBe(1);
+});
+
+test.describe("reduced motion", () => {
+  test.use({ reducedMotion: "reduce" });
+  test("the line is plain text with no entrance", async ({ page }) => {
+    await choose(page);
+    const name = await guide(page)
+      .locator(".make-guide-text")
+      .evaluate((el) => getComputedStyle(el).animationName);
+    expect(name).toBe("none");
+  });
+});
+
+test.describe("phone", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
+  test("the line and its skip fit on a phone and the skip is a full-size target", async ({
+    page,
+  }) => {
+    await choose(page);
+    await expect(guide(page)).toContainText(HEAR);
+    const skip = await guide(page).getByRole("button", { name: "skip" }).boundingBox();
+    expect(skip!.height).toBeGreaterThanOrEqual(44);
+    // the slot and the replay button stay inside the screen (the cut's own bracket handle is not ours)
+    for (const part of [guide(page), how(page)]) {
+      const b = await part.boundingBox();
+      expect(b!.x).toBeGreaterThanOrEqual(0);
+      expect(b!.x + b!.width).toBeLessThanOrEqual(390);
+    }
+  });
+});

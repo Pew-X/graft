@@ -22,7 +22,7 @@ It is not a sampler, not a social network (no accounts, no feeds), and not a sta
 
 ## Try it
 
-The dev site is at https://graft-fawn-six.vercel.app. Press play: the first visit is narrated, one short caption for each step of how the sound was made, and then two small hints show what you can do next (drag the needle to hear any moment; mark a part of a stage, change its speed, flip it). "make a flip" in the header opens a ready-made flip of the stage in view, so one tap on "hear it" gives sound. Publishing a flip gives a link anyone can open and flip again.
+The dev site is at https://graft-fawn-six.vercel.app. Press play: the first visit is narrated, one short caption for each step of how the sound was made, and then two small hints show what you can do next (drag the needle to hear any moment; mark a part of a stage, change its speed, flip it). "make a flip" in the header opens a ready-made flip of the stage in view, so one tap on "hear it" gives sound. "? how it works" (on the roll, the make page and the about page) plays the guide again whenever you want it. Publishing a flip gives a link anyone can open and flip again.
 
 The home page plays from a snapshot that ships with the site, so it works even while the service is asleep. The service sleeps when nobody is using it (to keep the cloud bill small): opening any page asks it to wake, a chain page opened in the meantime says so and opens by itself, and a cold start was measured at about a minute, never instant. See "Deployment".
 
