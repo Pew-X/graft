@@ -108,6 +108,7 @@ export function CutEditor({
               role="slider"
               tabIndex={0}
               aria-label={copy.make.cut[which]}
+              aria-describedby={`${clip}-help`}
               aria-orientation="horizontal"
               aria-valuemin={0}
               aria-valuemax={total}
@@ -132,7 +133,10 @@ export function CutEditor({
           );
         })}
       </div>
-      <p className="help">{copy.make.cut.help}</p>
+      {/* the keyboard's part of the one-line hint above the editor, read out with each bracket */}
+      <p className="help" id={`${clip}-help`}>
+        {copy.make.cut.help}
+      </p>
       <p className="readout" data-testid="cut-readout">
         {inverted
           ? `${seconds(cut.start)} to ${seconds(cut.end)}`

@@ -294,6 +294,29 @@ button:disabled {
   padding: 0.25rem 0.9rem;
 }
 
+/* a line break inside the bar, so the sentence always starts a row of its own */
+.bar .bar-break {
+  order: 8;
+  flex: 0 0 100%;
+  height: 0;
+}
+.bar .sentence {
+  order: 9;
+  flex: 0 1 auto;
+  margin: 0;
+  padding: 0 0 4px;
+  /* on a wide screen the record fills the right side: the sentence keeps to the left of it, and never
+     runs wider than a comfortable line */
+  max-width: min(44rem, calc(100vw - var(--R) * 0.96 - 44px));
+  font:
+    400 clamp(21px, 2.3vw, 28px) / 1.12 var(--f-brush),
+    cursive;
+  color: var(--ink);
+  text-wrap: balance;
+  transform: rotate(-0.5deg);
+  transform-origin: left center;
+}
+
 /* the screen-sized window the roll slides in (the fade in portrait is on it, so it stays on the screen) */
 .viewport {
   position: absolute;
@@ -324,16 +347,6 @@ button:disabled {
 }
 .sheet[data-placed="false"] {
   transition: none;
-}
-.lead {
-  margin: 0 0 0 7vw;
-  padding: 34vh 0 14vh;
-  font:
-    italic 400 clamp(26px, 4vw, 40px) var(--f-serif),
-    ui-serif,
-    Georgia,
-    serif;
-  color: var(--muted);
 }
 .blocks {
   list-style: none;
@@ -797,6 +810,20 @@ button:disabled {
   color: var(--bg);
 }
 
+/* a short phone: the header, the sentence and the independence line already fill a third of the screen,
+   so the stage tightens its own gaps to keep its flip button whole and clear of the fade */
+@media (max-aspect-ratio: 9/10) and (max-height: 700px) {
+  .slab {
+    margin-bottom: 1.6vh;
+  }
+  .kicker-row {
+    margin-bottom: 4px;
+  }
+  .bar .sentence {
+    line-height: 1.05;
+  }
+}
+
 /* the independence line */
 .roll .footer {
   /* landscape: over the record, bottom right, on its own backing, so a tall stage never runs into it */
@@ -836,7 +863,6 @@ button:disabled {
   .bar .meta {
     display: none;
   }
-  .lead,
   .block {
     margin-left: 22px;
     max-width: calc(100vw - 44px);
@@ -875,11 +901,21 @@ button:disabled {
     left: 22px;
     bottom: 70px;
   }
+  .bar .sentence {
+    font-size: clamp(19px, 5.2vw, 24px);
+    max-width: calc(100vw - 44px);
+    /* clear of the two buttons above it, which are on the same side */
+    margin-top: 6px;
+  }
   .roll .footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 14px;
     left: 22px;
     right: 22px;
     bottom: auto;
-    top: 70px;
+    top: calc(var(--bar-h, 64px) + 2px);
     max-width: none;
     padding: 0;
     border-radius: 0;
@@ -889,6 +925,10 @@ button:disabled {
   }
   .roll .footer :is(a, .how-link) {
     color: inherit;
+  }
+  /* the note and its two links share a row, so the header does not crowd the stage's room */
+  .roll .footer p {
+    flex: 1 1 8rem;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1050,153 +1090,170 @@ button:disabled {
   cursor: pointer;
 }
 
-/* THE COACH: three notes cut from gold paper and marked in chalk, over the real screen. The veil only
-   dims; every press goes through it, so doing what a note says is also the way to the next one. */
-.coach {
-  position: fixed;
-  inset: 0;
-  z-index: 30;
-  pointer-events: none;
+/* THE FIRST PLAY'S CAPTION: a line in the marker hand, in the status slot, with a drawn underline. It
+   rides on the roll's own steps; where the record is, it keeps off it (the numbers come from the page). */
+.notes[data-caption="true"] {
+  left: var(--cap-left);
+  bottom: var(--cap-bottom);
+  transform: var(--cap-tf);
+  max-width: var(--cap-max);
+  width: var(--cap-max);
+  text-align: left;
 }
-/* the note says what the status pill would say, so the pill waits behind it */
-.roll:has(.coach) .notes {
-  visibility: hidden;
+.notes[data-caption="true"] .status {
+  display: none;
 }
-.coach-veil {
+.caption {
+  display: flex;
+  align-items: flex-end;
+  gap: 0 8px;
+  /* two lines are always kept, so a longer caption does not move the stage above it */
+  min-height: calc(2 * 1.12em + 14px);
+  font-size: clamp(20px, 2.5vw, 30px);
+}
+.caption-text {
+  position: relative;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0 2px 12px;
+  font:
+    400 1em / 1.12 var(--f-brush),
+    cursive;
+  color: var(--ink);
+  /* the page's ground behind the words, so they read over a ring if one passes under */
+  text-shadow:
+    0 0 6px var(--bg),
+    0 0 12px var(--bg),
+    0 0 2px var(--bg);
+  transform: rotate(-0.6deg);
+  transform-origin: left bottom;
+  animation: caption-in 0.3s ease-out both;
+}
+.caption-text svg {
   position: absolute;
-  inset: 0;
-  /* the page's own ground washed over it, so light stays warm and dark stays dark, never a grey film;
-     a spotlight leaves what the note points at clear (the middle of the screen until it is measured) */
-  --veil: color-mix(in srgb, var(--bg) 40%, transparent);
-  --sx: 50%;
-  --sy: 50%;
-  --sr: 0px;
-  background: radial-gradient(
-    circle at var(--sx) var(--sy),
-    transparent 0,
-    transparent var(--sr),
-    var(--veil) calc(var(--sr) + 150px)
-  );
-}
-.coach-marks {
-  position: absolute;
-  inset: 0;
+  left: 0;
+  bottom: 0;
+  height: 12px;
   overflow: visible;
 }
-.coach-marks .mark {
+.caption-text path {
   fill: none;
-  stroke: #f6f1e6;
-  stroke-width: 3.4;
+  stroke: var(--ink);
+  stroke-width: 2.6;
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
-  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.7));
-  animation: coach-draw 0.55s cubic-bezier(0.4, 0.1, 0.2, 1) forwards;
+  animation: caption-draw 0.5s 0.15s cubic-bezier(0.4, 0.1, 0.2, 1) forwards;
 }
-.coach-marks .mark:nth-child(2) {
-  animation-delay: 0.45s;
-}
-.coach-marks .mark:nth-child(3) {
-  animation-delay: 0.9s;
-}
-@keyframes coach-draw {
+@keyframes caption-draw {
   to {
     stroke-dashoffset: 0;
   }
 }
-.coach-card {
-  position: absolute;
-  box-sizing: border-box;
-  padding: 16px 20px 14px;
-  background: #e0a526;
-  color: #14110e;
-  pointer-events: auto;
-  /* a cut, not a box: slightly uneven corners */
-  clip-path: polygon(
-    0.8% 3%,
-    38% 0,
-    71% 2%,
-    100% 0.6%,
-    99.2% 44%,
-    100% 97%,
-    62% 100%,
-    27% 98%,
-    0 100%,
-    1.4% 52%
-  );
-  transform: rotate(-0.8deg);
-  animation: coach-in 0.35s ease-out both;
-}
-@keyframes coach-in {
+@keyframes caption-in {
   from {
     opacity: 0;
-    transform: translateY(6px) rotate(-0.8deg);
+    transform: translateY(5px) rotate(-0.6deg);
   }
 }
-.coach-count {
-  margin: 0 0 2px;
-  font:
-    500 11px var(--f-mono),
-    ui-monospace,
-    monospace;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-}
-.coach-title {
-  margin: 0 0 6px;
-  font:
-    400 clamp(30px, 6vw, 40px) / 1 var(--f-brush),
-    cursive;
-}
-.coach-body {
-  margin: 0 0 12px;
-  font:
-    500 15px/1.4 var(--f-sans),
-    ui-sans-serif,
-    system-ui,
-    sans-serif;
-}
-.coach-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-.coach-actions button {
+.caption-skip {
+  pointer-events: auto;
+  flex: none;
+  align-self: flex-end;
+  min-width: 44px;
   min-height: 44px;
-  padding: 0 18px;
-  border: 2px solid #14110e;
-  border-radius: 999px;
+  margin-bottom: -6px;
+  padding: 0 10px;
+  border: 0;
   background: transparent;
-  color: #14110e;
+  color: var(--muted);
   font:
-    500 13px var(--f-mono),
+    500 12px var(--f-mono),
     ui-monospace,
     monospace;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.1em;
+  text-decoration: underline;
   cursor: pointer;
 }
-.coach-actions .coach-next {
-  background: #14110e;
-  color: #f6f1e6;
-}
-.coach-actions .coach-skip {
-  border-color: transparent;
-  text-decoration: underline;
-}
-.coach-actions button:focus-visible {
-  outline: 3px solid #f6f1e6;
+.caption-skip:focus-visible {
+  outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
+
+/* THE HINTS: a few words on an ink tag with a short marker arrow, beside the thing they point at. They
+   catch no press (the whole layer ignores the pointer) and go by themselves. */
+.hint-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  pointer-events: none;
+}
+.hint-arrow {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+.hint-arrow path {
+  fill: none;
+  /* chalk with a dark edge: it reads over the paper and over the record alike */
+  stroke: #f6f1e6;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  filter: drop-shadow(0 0 1px #14110e) drop-shadow(0 0 2px #14110e);
+  animation:
+    caption-draw 0.45s cubic-bezier(0.4, 0.1, 0.2, 1) forwards,
+    hint-life 7s linear forwards;
+}
+.hint-arrow path:nth-child(2) {
+  animation-delay: 0.4s, 0s;
+}
+.hint-note {
+  position: absolute;
+  box-sizing: border-box;
+  max-width: min(280px, calc(100vw - 24px));
+  margin: 0;
+  padding: 8px 14px 9px;
+  background: var(--ink);
+  color: var(--bg);
+  font:
+    400 clamp(21px, 2.2vw, 26px) / 1.1 var(--f-brush),
+    cursive;
+  transform: rotate(-1deg);
+  animation:
+    caption-in 0.3s ease-out both,
+    hint-life 7s linear forwards;
+}
+@keyframes hint-life {
+  0%,
+  86% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
-  .coach-marks .mark {
+  .caption-text,
+  .hint-note {
+    animation: none;
+  }
+  .caption-text path,
+  .hint-arrow path {
     animation: none;
     stroke-dashoffset: 0;
   }
-  .coach-card {
-    animation: none;
-  }
+}
+
+/* WHAT GRAFT IS, in one line under the bar: the first thing a stranger reads. It is part of the bar, so
+   the stage's room is measured below it. */
+.bar {
+  flex-wrap: wrap;
+  row-gap: 0;
 }
 
 /* the stage's two ways to flip: the whole stage, or a part marked on the record */

@@ -261,3 +261,83 @@ test("a file over the size limit is refused by its size alone, without being rea
   });
   await expect(page.getByText("that file is too large")).toBeVisible();
 });
+
+// The way in from the header: a visitor who presses "make a flip" has not picked anything yet, so the
+// page opens on the sound on the roll with a ready cut and speed, and one tap gives sound.
+test.describe("arriving from the header's make a flip", () => {
+  test("it opens on the sound that was on the roll, already cut and sped up, and one tap plays it", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await expect(page.locator(".roll")).toHaveAttribute("data-audio", "ready");
+    const finished = chain.at(-1)!;
+    await page.getByRole("link", { name: "make a flip" }).click();
+    await expect(page).toHaveURL(
+      new RegExp(`/make\\?from=${finished.id}&cut=0-43200&speed=3%2F2$`),
+    );
+    await ready(page);
+    await expect(page.getByTestId("cut-readout")).toContainText("0.000 to 0.900");
+    await expect(page.locator(".speed-readout .percent")).toHaveText("150%");
+    const hear = page.getByRole("button", { name: "hear it" });
+    await expect(hear).toBeEnabled();
+    await hear.click();
+    await expect(page.getByRole("button", { name: "pause" })).toBeVisible();
+  });
+
+  test("the way in follows the stage in view: a different stage on the roll, a different sound", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await expect(page.locator(".roll")).toHaveAttribute("data-audio", "ready");
+    const link = page.getByRole("link", { name: "make a flip" });
+    await expect(link).toHaveAttribute("href", new RegExp(`from=${chain.at(-1)!.id}`));
+    // playing walks the roll from the source forward: the stage in view, and so the sound, changes
+    await page.locator(".controls .primary").click();
+    await expect(page.locator(".roll")).toHaveAttribute("data-hero", "0", { timeout: 15_000 });
+    await expect(link).toHaveAttribute("href", new RegExp(`from=${chain[0]!.id}`));
+  });
+
+  test("a stage's own flip this keeps its own start: whole sound, no ready-made cut", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await expect(page.locator(".roll")).toHaveAttribute("data-audio", "ready");
+    await page.locator('.block[data-hero="true"] .flip').click();
+    await expect(page).toHaveURL(/\/make\?from=[a-z0-9]+$/);
+  });
+
+  test("the hash of what you hear is one level down, in the details, and the page speaks plainly", async ({
+    page,
+  }) => {
+    await page.goto(link(chain.at(-1)!.id, [0, 43200], 3, 2));
+    await ready(page);
+    const main = page.locator("main");
+    await expect(main.locator(".panel.result > .actions")).toBeVisible();
+    // the code is not on the page until the details are opened
+    await expect(main.getByText("hash of what you hear")).toBeHidden();
+    await main.locator("details.details summary").click();
+    await expect(main.getByText("hash of what you hear")).toBeVisible();
+    // one-line hints, and no frames or hash in the flow itself
+    await expect(main.getByText("drag the brackets to keep a piece")).toBeVisible();
+    await expect(main.getByText("faster is higher, slower is lower")).toBeVisible();
+    await expect(main.locator(".cut-editor .help")).toHaveText(/arrow keys/);
+    // present for the keyboard and screen readers, but one pixel big: not a second line on the page
+    const help = await main.locator(".cut-editor .help").boundingBox();
+    expect(help!.width).toBeLessThanOrEqual(1);
+    expect(help!.height).toBeLessThanOrEqual(1);
+  });
+
+  test("the picker's intro is one short line and the steps read pick, cut and speed, share", async ({
+    page,
+  }) => {
+    await page.goto("/make");
+    await expect(page.getByTestId("make-intro")).toHaveText(
+      "cut a piece of a sound. play it faster or slower. hear it. share it if you like.",
+    );
+    await expect(page.getByTestId("steps").locator("li")).toHaveText([
+      /pick/,
+      /cut and speed/,
+      /share/,
+    ]);
+  });
+});

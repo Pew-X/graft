@@ -87,6 +87,24 @@ export function arrowPath(from: Point, to: Point, seed: number): { shaft: string
   return { shaft, head };
 }
 
+/**
+ * A hand-drawn underline under something `width` pixels wide: one wobbling stroke from the left to
+ * the right, a little lower at one end, as a marker does. Drawn on a box of height 12, with the line
+ * at about the middle.
+ */
+export function underlinePath(width: number, seed: number): string {
+  const rand = seeded(seed);
+  const points: string[] = [];
+  const steps = Math.max(6, Math.round(width / 24));
+  const slope = (rand() - 0.5) * 3;
+  for (let i = 0; i <= steps; i++) {
+    const x = (i / steps) * width;
+    const y = 6 + slope * (i / steps - 0.5) + (rand() - 0.5) * 1.6;
+    points.push(`${i === 0 ? "M" : "L"}${fmt(x)} ${fmt(y)}`);
+  }
+  return points.join(" ");
+}
+
 export type Side = "above" | "below" | "left" | "right";
 
 /**

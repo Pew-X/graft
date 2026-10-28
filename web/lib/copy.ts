@@ -9,10 +9,11 @@ export const copy = {
     name: "graft",
     line: "a sound's ancestry, rolled as credits.",
     description: "A sound's ancestry, rolled as playable credits.",
+    /** What graft is, in one breath: on the first screen, and in the about page and the README. */
+    sentence: "a sound has a past. hear how this one was made, then make the next step.",
   },
   hint: {
     locked: "tap play to hear it. nothing sounds until you do.",
-    order: "the finished flip plays first, then the credits go back to the source.",
     loading: "loading the sounds.",
     loadFailed: "the sounds could not be loaded. reload to try again.",
     soundFailed: "the sound could not start. tap play to try again.",
@@ -28,7 +29,6 @@ export const copy = {
     playAll: "play all",
   },
   roll: {
-    lead: "a sound has a past.",
     meta: "stage {n} of {total} · {meta}",
     metaShort: "stage {n} of {total}",
     kicker: "no. {n} · {kind}",
@@ -117,7 +117,7 @@ export const copy = {
     heading: "publish",
     public: "what you publish is public. anyone with the link can hear it and flip it.",
     noAccount:
-      "there is no account. when it is published you get a ticket with a key on it, once: keep it if you may want to close the flip or withdraw it. a published flip cannot be edited; to change it, flip it again.",
+      "there is no account. you get a key once, when it is published: keep it if you may want to close the flip or withdraw it. a published flip cannot be edited; flip it again to change it.",
     title: "title",
     titleGloss: "up to 60 characters, shown as typed",
     name: "your name",
@@ -286,7 +286,7 @@ export const copy = {
     title: "about graft",
     what: {
       heading: "what graft is",
-      body: "a lineage player with a small flip tool. every sound here began as a source and was cut and sped up or slowed down, flip by flip. the roll plays the credits back from the newest flip to the source, so you can hear where a sound came from.",
+      body: "every sound here began as one recording. people cut a piece of it and changed its speed, again and again. you can hear each step, and make the next one.",
     },
     isNot: {
       heading: "what it is not",
@@ -312,7 +312,7 @@ export const copy = {
         tracker:
           "where error tracking is switched on, it runs without ip addresses, without session replay and with a scrubber.",
         browser:
-          "the only things graft can keep in your browser are your choice of light or dark, a note that you have seen the first-visit guide, and a manage key if you tick the box to keep one when you publish.",
+          "the only things graft can keep in your browser are your choice of light or dark, a note of how far you have got with the first-visit guide, and a manage key if you tick the box to keep one when you publish.",
       },
     },
     takedown: {
@@ -380,13 +380,12 @@ export const copy = {
     title: "make a flip",
     kicker: "make a flip",
     home: "← graft",
-    intro:
-      "a flip is a sound with a part cut out and its speed changed. pick a sound, or record your own, then cut it, change its speed and hear it. you can publish it to get a link to share.",
+    intro: "cut a piece of a sound. play it faster or slower. hear it. share it if you like.",
     steps: {
       label: "steps",
-      pick: "pick a sound",
-      cut: "cut it and change its speed",
-      publish: "publish it, if you like",
+      pick: "pick",
+      cut: "cut and speed",
+      publish: "share",
     },
     local: "nothing leaves this device until you publish.",
     pick: {
@@ -406,16 +405,16 @@ export const copy = {
     },
     cut: {
       label: "the cut",
-      gloss: "the part of the sound that is kept",
+      gloss: "drag the brackets to keep a piece",
       start: "start of the cut",
       end: "end of the cut",
-      help: "drag the two brackets, or focus one and use the arrow keys: one millisecond a press, ten with shift.",
+      help: "the two brackets can also be moved from the keyboard: the arrow keys move one millisecond a press, ten with shift.",
       tag: { start: "start", end: "end" },
       range: "{from} to {to} seconds, {length} kept",
     },
     speed: {
       label: "speed",
-      gloss: "how fast it is played back. faster is higher, slower is lower.",
+      gloss: "faster is higher, slower is lower",
       slower: "slower",
       faster: "faster",
       approximate: "about {interval}",
@@ -426,20 +425,19 @@ export const copy = {
       comesOut: "comes out {length} seconds long",
       updating: "the sound is being worked out again. wait a moment, then publish.",
       hash: "hash of what you hear",
-      hashGloss: "worked out here, and checked against the service's own when you publish",
+      hashGloss: "a code worked out from the sound. it is checked again when you publish.",
     },
     hear: { play: "hear it", pause: "pause", why: "why you cannot hear it yet" },
     refusals: {
-      cutShort: "the cut is too short. it needs at least {min} frames, about 10 milliseconds.",
-      cutLong: "the cut is too long. it can be at most {max} frames, 10 seconds.",
+      cutShort: "the cut is too short. keep at least 10 milliseconds.",
+      cutLong: "the cut is too long. keep at most 10 seconds.",
       cutInverted: "the cut ends before it starts. move the end handle to the right of the start.",
       cutOutside: "the cut reaches outside the sound. pull the handles back inside it.",
       speedRange: "that speed is out of range. it has to be between a quarter and four times.",
       speedTerms: "that speed cannot be sent. pick another.",
       outputShort:
-        "this flip would come out too short, under {min} frames. cut a longer part or play it slower.",
-      outputLong:
-        "this flip would come out too long, over {max} frames, 20 seconds. cut less or play it faster.",
+        "this flip would come out too short, under 10 milliseconds. cut a longer part or play it slower.",
+      outputLong: "this flip would come out too long, over 20 seconds. cut less or play it faster.",
     },
   },
   end: {
@@ -489,26 +487,31 @@ export const copy = {
       failed: "the sound could not be made. try again.",
     },
   },
-  /** The first-visit coach: three short notes, drawn over the real screen, shown once. */
-  coach: {
-    label: "how it works",
-    count: "{n} of {total}",
-    next: "next",
-    back: "back",
+  /**
+   * The first play tells how the sound was made, one caption for each moment of the roll, drawn from the
+   * chain's own data. No caption names a maker: the credit stays in the stage's label.
+   */
+  narration: {
+    label: "how it was made",
+    teaser: "this is the finished sound.",
+    teaserOne: "this is the sound.",
+    began: "it began as \u201c{name}\u201d.",
+    cutUp: "then a piece was cut out and sped up.",
+    cutDown: "then a piece was cut out and slowed down.",
+    cutSame: "then a piece was cut out and kept at the same speed.",
+    cutOnly: "then a piece was cut out.",
+    wholeUp: "then it was sped up.",
+    wholeDown: "then it was slowed down.",
+    wholeSame: "then it was kept as it was.",
+    missing: "this step is no longer here. its credit stays.",
+    rest: "that is how it was made. tap any ring to hear that step.",
+    restOne: "that is all of it so far. tap the ring to hear it.",
     skip: "skip",
-    done: "start listening",
-    play: {
-      title: "press play.",
-      body: "you hear the finished flip first. then the credits go back, stage by stage, to the sound it began as.",
-    },
-    needle: {
-      title: "drag the needle.",
-      body: "the record is the whole chain: one ring for each stage, the first one outermost. put the needle anywhere to hear that moment.",
-    },
-    make: {
-      title: "make your own.",
-      body: "pick a stage, cut a part of it, change its speed and hear it. you can mark the part right on the record. publish it and the chain grows by one.",
-    },
+  },
+  /** Two small hints after the first play, each shown once. */
+  hints: {
+    needle: "drag the needle to hear any moment.",
+    mark: "like a part? mark it, change its speed, flip it.",
   },
 } as const;
 

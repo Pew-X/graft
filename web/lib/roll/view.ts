@@ -63,6 +63,8 @@ export interface Block {
   meta: string;
   /** The frames of the stage before it that a flip kept; null for a source and for a stage not shown. */
   cutFrames: readonly [number, number] | null;
+  /** The speed as a fraction; null for a source, and for a stage whose speed is not known. */
+  speed: { p: number; q: number } | null;
   state: StageState;
   /** "flipped 3 times", for a stage that can be heard; null otherwise or when not known. */
   flipped: string | null;
@@ -167,6 +169,10 @@ export function blockFor(stage: StageInput, index: number, flipped: string | nul
     lettering: letteringOf(stage.kind, { p: stage.speed_p, q: stage.speed_q }),
     meta: metaOf(stage.kind, stage.speed_p, stage.speed_q),
     cutFrames: stage.kind === "flip" ? [stage.cut_start, stage.cut_end] : null,
+    speed:
+      stage.kind === "flip" && stage.speed_p !== null && stage.speed_q !== null
+        ? { p: stage.speed_p, q: stage.speed_q }
+        : null,
     state: "available",
     flipped,
     index,

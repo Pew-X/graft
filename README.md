@@ -1,6 +1,8 @@
 # graft
 
-A sound's ancestry, rolled as playable credits. Open a sound, hear the chain of cuts and flips that led to it, scrub through it, and make one new flip of your own.
+A sound has a past. Hear how this one was made, then make the next step.
+
+graft is a sound's ancestry, rolled as playable credits. Open a sound, hear the chain of cuts and flips that led to it, scrub through it, and make one new flip of your own.
 
 ![The home page: the last stage of the seeded chain as a torn-paper title, its credits beside it, and the record with its needle](assets/readme/home-roll.jpg)
 
@@ -10,7 +12,7 @@ Every fact the project shows about a sound is one of three things: declared (sai
 
 ## What it is, and is not
 
-A visitor opens a sound and sees its ancestry as a roll of credit stages beside a large record. Each stage is one flip: a cut of the sound before it, at a speed. Pressing play hears the finished flip first and then each step back to the source; dragging the needle jumps to a step. "Make a flip" cuts a stage, hears it, and publishes it, so the chain grows by one. Nothing sounds until the visitor presses play.
+A visitor opens a sound and sees its ancestry as a roll of credit stages beside a large record. Each stage is one flip: a cut of the sound before it, at a speed. Pressing play hears the finished flip first, then each step from the source forward to the finished flip, with a short caption for each (the first visit only); dragging the needle jumps to a step. "Make a flip" cuts a stage, hears it, and publishes it, so the chain grows by one. Nothing sounds until the visitor presses play.
 
 The server renders every published flip with one canonical, integer-only renderer, so the same input gives the same bytes on every host the tests cover. The renderer is a single WebAssembly artefact for that reason, and the claim is "reproducible for this renderer version and these published vectors"; the repository carries the vectors and the replay tool that check it. The rest of the service is Rust to keep one language end to end and to learn it, not because the product needs it.
 

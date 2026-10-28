@@ -5,14 +5,14 @@ import { existsSync } from "node:fs";
 const built = Boolean(process.env["CI"]) && existsSync(".next/BUILD_ID");
 
 // Full Chromium, not the stripped-down headless shell (which crashed in an earlier check).
-// Every spec starts as a returning visitor who has already seen the first-visit coach, so its notes do
-// not cover the page; the coach's own spec starts with empty storage instead.
+// Every spec starts as a returning visitor who has finished the first-visit guide, so its captions and
+// hints do not cover the page; the guide's own spec starts with empty storage instead.
 const returning = {
   cookies: [],
   origins: [
     {
       origin: "http://127.0.0.1:3100",
-      localStorage: [{ name: "graft.coach", value: "seen" }],
+      localStorage: [{ name: "graft.coach", value: "done" }],
     },
   ],
 };
