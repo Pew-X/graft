@@ -409,3 +409,18 @@ for (const size of SIZES) {
     });
   }
 }
+
+test("while the guide speaks the plain 'drag the needle.' caption stays out of the way, and comes back after", async ({
+  page,
+}) => {
+  await arrive(page);
+  await play(page).click();
+  await expect(caption(page)).toBeVisible();
+  await expect(page.locator(".record-caption")).toBeHidden();
+  await caption(page).getByRole("button", { name: "skip" }).click();
+  await expect(hint(page)).toContainText("drag the needle");
+  await expect(page.locator(".record-caption")).toBeHidden();
+  // the hint goes by itself, then the second, then nothing: the caption is back
+  await expect(hint(page)).toHaveCount(0, { timeout: 25_000 });
+  await expect(page.locator(".record-caption")).toBeVisible();
+});
