@@ -4,6 +4,8 @@ A sound has a past. Hear how this one was made, then make the next step.
 
 graft is a sound's ancestry, rolled as playable credits. Open a sound, hear the chain of cuts and flips that led to it, scrub through it, and make one new flip of your own.
 
+In graft's words: a **flip** is a sound with a part cut out and its speed changed; a **stage** is one flip (or the first, the **source**); the **chain** is the stages from the source to the newest flip; the **roll** is the chain shown as credits, one stage after another, beside a **record** you can drag a needle across.
+
 ![The home page: the last stage of the seeded chain as a torn-paper title, its credits beside it, and the record with its needle](assets/readme/home-roll.jpg)
 
 graft is an independent experiment. It is not affiliated with or endorsed by any product named in it.
@@ -17,6 +19,12 @@ A visitor opens a sound and sees its ancestry as a roll of credit stages beside 
 The server renders every published flip with one canonical, integer-only renderer, so the same input gives the same bytes on every host the tests cover. The renderer is a single WebAssembly artefact for that reason, and the claim is "reproducible for this renderer version and these published vectors"; the repository carries the vectors and the replay tool that check it. The rest of the service is Rust to keep one language end to end and to learn it, not because the product needs it.
 
 It is not a sampler, not a social network (no accounts, no feeds), and not a statement about scale: no number here is extrapolated to a number of users. It does not check who made a sound or whether they hold the right to share it; it says so on the page.
+
+## Try it
+
+The dev site is at https://graft-fawn-six.vercel.app. Press play: the first visit is narrated, one short caption for each step of how the sound was made, and then two small hints show what you can do next (drag the needle to hear any moment; mark a part of a stage, change its speed, flip it). "make a flip" in the header opens a ready-made flip of the stage in view, so one tap on "hear it" gives sound. Publishing a flip gives a link anyone can open and flip again.
+
+The home page plays from a snapshot that ships with the site, so it works even while the service is asleep. The service sleeps when nobody is using it (to keep the cloud bill small): opening any page asks it to wake, a chain page opened in the meantime says so and opens by itself, and a cold start was measured at about a minute, never instant. See "Deployment".
 
 ## How it is put together
 
@@ -58,6 +66,9 @@ Every statement the roll makes about a stage carries one of three states, writte
 Ten short sounds, all made for graft by `scripts/curated-sources.mjs` (a synthesizer in a script, no samples, no downloads): 808 sub, chip arpeggio, power up, saber hum, laser zap, metal clang, house stab, dm9 chord, upright bass and trap hats. Each is declared as "own work, synthesized for graft", which graft prints as typed and does not check, and each is stored as canonical audio in `seed/sources/` with its hash in `seed/sources.json`. There is nothing third-party in the set, so there is no licence page to link; if a downloaded sound is ever added it will carry its licence, its link and the date the licence was checked. `node scripts/curated-sources.mjs --check` remakes the files and says if any differs.
 
 ## Run it
+
+To just see it on your machine, with the service, a database and the seeded chain: `sh scripts/dev-local.sh` (needs Docker, Rust and pnpm; the site is then at http://127.0.0.1:3100). The rest of this section is the individual pieces and the tests.
+
 
 Needs the pinned Rust toolchain (installed from `rust-toolchain.toml` by rustup) and Node 24 with pnpm.
 
@@ -106,6 +117,8 @@ It serves `GET /v1/chains/{id}` and `GET /v1/publications/{id}`, `POST /v1/publi
 ## Deployment
 
 A dev environment is deployed: the site on Vercel and the service as one container on AWS (ECS Express Mode on Fargate ARM64, Aurora Serverless v2 and S3, in Mumbai). It was created by `scripts/aws-dev.sh`, which names only `graft-dev-*` resources, records every change, and can remove them all. The service can be parked (`scripts/aws-dev.sh park`: no running task, so the database pauses about 16 minutes later) and woken again; the costs are estimates, about 4 USD a day running and about 1.3 USD a day parked, and no budget alarm is set. The GitHub deploy workflow (`.github/workflows/deploy.yml`) is written and has never run. There is no staging or production environment. ARCHITECTURE.md, "Hosting and environments", says what was shown and what was not; "Measured numbers" has the first load measurement and its limits.
+
+**Sleeping and waking.** A small function (`tools/wake`, made by `scripts/aws-dev.sh wake`) starts the service when a call carries a shared secret and, when switched on, stops it after 30 minutes with no request (and never inside a warm window set by `make warm`). The site's own server forwards the call when a page opens (`/api/wake`, settings `GRAFT_WAKE_URL` and `GRAFT_WAKE_SECRET`, inert without them). A monthly budget (`scripts/aws-dev.sh budget`) emails a warning at 45 USD of a 60 USD ceiling; it warns and does not stop spending. The decisions are plain functions with tests, and the cold start, the warm window and the health-check question were checked against the real service (the runbook in ARCHITECTURE.md has the rows).
 
 Secrets, by name only (they live in the platform's store, never in this repository): `GRAFT_DATABASE_URL`, `GRAFT_ADMIN_SECRET`, optionally `GRAFT_ERROR_TRACKER_DSN`, and `GRAFT_BLOB_S3_ACCESS_KEY_ID` with `GRAFT_BLOB_S3_SECRET_ACCESS_KEY` only when the bucket is not reached through the container's role. Visitor uploads are off in every environment until the launch gate decides otherwise.
 
