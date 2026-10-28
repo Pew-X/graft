@@ -22,8 +22,10 @@ export async function generateMetadata({
 }: {
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
-  const chain = await read((await params).id).catch(() => null);
-  if (!chain) return { title: copy.notFound.title, robots: { index: false } };
+  // a service that did not answer is asleep, not missing: the tab says so, and is not offered to search
+  const chain = await read((await params).id).catch(() => undefined);
+  if (chain === undefined) return { title: copy.waking.title, robots: { index: false } };
+  if (chain === null) return { title: copy.notFound.title, robots: { index: false } };
   const { title, description } = previewOf(chain);
   return { title, description, openGraph: { title, description, type: "website" } };
 }
