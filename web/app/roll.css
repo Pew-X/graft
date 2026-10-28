@@ -179,28 +179,51 @@ button:disabled {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.thread .under {
-  stroke: #070908;
-  stroke-width: 4.5;
+/* The live stage's colour: one colour means one live stage (set only while that stage sounds). */
+.roll[data-live="0"] {
+  --live: var(--dye-0);
 }
-.thread .glow {
-  stroke: #5dff9c;
-  stroke-width: 7;
-  stroke-opacity: 0.22;
+.roll[data-live="1"] {
+  --live: var(--dye-1);
+}
+.roll[data-live="2"] {
+  --live: var(--dye-2);
+}
+.roll[data-live="3"] {
+  --live: var(--dye-3);
+}
+/* The thread exists only while its stage sounds, and fades in and out rather than snapping. */
+.thread {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.thread[data-on="true"] {
+  opacity: 1;
+}
+.roll[data-reduced="true"] .thread {
+  transition: none;
+}
+/* thin and crisp: a hairline in the stage's colour over a darker edge of the same colour, so it reads on
+   the dark record and on the cream page alike. It brightens a little with the stage's loudness (--amp). */
+.thread .edge {
+  stroke: color-mix(in srgb, var(--live, var(--dye)) 45%, #000);
+  stroke-width: 3.2;
+  stroke-opacity: 0.55;
 }
 .thread .beam {
-  stroke: #5dff9c;
-  stroke-width: 1.6;
+  stroke: var(--live, var(--dye));
+  stroke-width: calc(1.1px + var(--amp, 0) * 1.1px);
+  stroke-opacity: calc(0.72 + var(--amp, 0) * 0.28);
 }
-/* while something sounds, a bright pulse runs along the cable toward the record */
+/* while something sounds, one soft light runs along the line toward the record, as bright as the sound */
 .thread .pulse {
-  stroke: #eafff2;
-  stroke-width: 2.6;
-  stroke-dasharray: 40 960;
+  stroke: #fff;
+  stroke-width: 1.6;
+  stroke-dasharray: 36 964;
   opacity: 0;
 }
 .roll[data-sounding="true"] .thread .pulse {
-  opacity: 1;
+  opacity: calc(var(--amp, 0) * 0.85);
   animation: thread-run 1.6s linear infinite;
 }
 @keyframes thread-run {
@@ -216,9 +239,14 @@ button:disabled {
   opacity: 0;
 }
 .thread .jack {
-  fill: #070908;
-  stroke: #5dff9c;
-  stroke-width: 2;
+  fill: var(--live, var(--dye));
+  stroke: color-mix(in srgb, var(--live, var(--dye)) 45%, #000);
+  stroke-width: 1.5;
+}
+
+/* the oscilloscope tile takes the live stage's colour while it sounds, and is green again at rest */
+.roll[data-live] .block[data-hero="true"] .trace-face .trace {
+  --beam: var(--live);
 }
 
 /* the header over everything */
@@ -348,7 +376,7 @@ button:disabled {
   z-index: 2;
   pointer-events: none;
   will-change: transform;
-  transition: transform 0.7s cubic-bezier(0.22, 0.7, 0.2, 1);
+  transition: transform 0.26s cubic-bezier(0.22, 0.7, 0.2, 1);
 }
 .sheet[data-placed="false"] {
   transition: none;

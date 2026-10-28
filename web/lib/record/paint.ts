@@ -13,7 +13,7 @@
  * turn and are not pushed, so the layer only changes when the playhead passes a groove and can be
  * drawn once and reused.
  */
-import { bandOuter, layout, needleAt, hit, type DiscLayout } from "./disc.ts";
+import { bandOuter, layout, needleAt, hit, outsideBand, type DiscLayout } from "./disc.ts";
 import type { Mark } from "./mark.ts";
 
 export interface StageLook {
@@ -46,6 +46,12 @@ export interface Scene {
   mark?: (Mark & { label?: string }) | null;
   /** The record has the keyboard's focus: a ring is drawn around the stylus, where the keys act. */
   focused?: boolean;
+  /**
+   * The colour of what is lit: the groove at the playhead, the beam on the label and the stylus's tip. Green
+   * (the default) at rest; the live stage's dye, `#rrggbb`, while it sounds, so one colour means one live
+   * stage. The keyboard's focus ring and the marking brackets stay green whatever this is.
+   */
+  accent?: string;
 }
 
 const TAU = Math.PI * 2;
@@ -103,7 +109,7 @@ export function paintGrooves(ctx: CanvasRenderingContext2D, s: Scene): void {
       else groups.set(key, [g]);
     }
     for (const [key, members] of groups) {
-      ctx.strokeStyle = key.startsWith("p") ? PHOSPHOR : look.dye;
+      ctx.strokeStyle = key.startsWith("p") ? (s.accent ?? PHOSPHOR) : look.dye;
       ctx.globalAlpha = Number(key.slice(1));
       ctx.beginPath();
       for (const g of members) {
@@ -185,15 +191,17 @@ function paintBeam(ctx: CanvasRenderingContext2D, l: DiscLayout, s: Scene, disc:
   ctx.stroke();
   for (const sign of [1, -1]) {
     trace(sign);
-    ctx.strokeStyle = "rgba(168,255,184,.28)";
+    ctx.strokeStyle = s.accent ?? "rgba(168,255,184,.28)";
+    ctx.globalAlpha = s.accent ? 0.28 : 1;
     ctx.stroke();
+    ctx.globalAlpha = 1;
     ctx.save();
     ctx.beginPath();
     ctx.rect(cx - half, cy - l.Ri, 2 * half * s.u, 2 * l.Ri);
     ctx.clip();
-    ctx.shadowColor = PHOSPHOR;
+    ctx.shadowColor = s.accent ?? PHOSPHOR;
     ctx.shadowBlur = 8;
-    ctx.strokeStyle = PHOSPHOR;
+    ctx.strokeStyle = s.accent ?? PHOSPHOR;
     trace(sign);
     ctx.stroke();
     ctx.restore();
@@ -273,6 +281,37 @@ function paintMark(
     );
     ctx.shadowBlur = 0;
   }
+}
+
+/** Black or white, whichever reads on `fill` (`#rrggbb`). */
+function onColour(fill: string): string {
+  const c = (i: number): number => {
+    const v = parseInt(fill.slice(i, i + 2), 16) / 255;
+    return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * c(1) + 0.7152 * c(3) + 0.0722 * c(5) > 0.3 ? "#0c0b0a" : "#ffffff";
+}
+
+/**
+ * The live stage's number, in its colour, just outside its band: the same number as on its title, so the
+ * stage and its ring are said in a number as well as a colour (which is all a phone has, with no room
+ * for a cable). Only while the stage sounds.
+ */
+function paintNumeral(ctx: CanvasRenderingContext2D, l: DiscLayout, s: Scene): void {
+  const fill = s.accent;
+  if (!fill) return;
+  const at = outsideBand(l, Math.min(s.active, l.slots - 1), 15);
+  ctx.save();
+  ctx.font = '600 11px ui-monospace, "JetBrains Mono", monospace';
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = fill;
+  ctx.beginPath();
+  ctx.arc(at.x, at.y, 9.5, 0, TAU);
+  ctx.fill();
+  ctx.fillStyle = onColour(fill);
+  ctx.fillText(String(s.active + 1), at.x, at.y + 0.5);
+  ctx.restore();
 }
 
 export function paintOverlay(ctx: CanvasRenderingContext2D, s: Scene): void {
@@ -358,13 +397,15 @@ export function paintOverlay(ctx: CanvasRenderingContext2D, s: Scene): void {
   ctx.beginPath();
   ctx.arc(P.x, P.y, 3.5, 0, TAU);
   ctx.fill();
-  ctx.shadowColor = PHOSPHOR;
+  ctx.shadowColor = s.accent ?? PHOSPHOR;
   ctx.shadowBlur = 14;
-  ctx.fillStyle = PHOSPHOR;
+  ctx.fillStyle = s.accent ?? PHOSPHOR;
   ctx.beginPath();
   ctx.arc(tip.x, tip.y, 3, 0, TAU);
   ctx.fill();
   ctx.shadowBlur = 0;
+
+  if (s.accent && !(s.hover && tip.over)) paintNumeral(ctx, l, s);
 
   if (s.hover && tip.over) {
     // A ghost ring where the music really is, and the name of the stage under the stylus.

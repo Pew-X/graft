@@ -37,6 +37,8 @@ interface Props {
   live: () => Live | null;
   playing: boolean;
   reduced: boolean;
+  /** What is lit is drawn in this colour (`#rrggbb`) while the stage on screen sounds; green when not given. */
+  accent?: string | undefined;
   /** The stage the page is showing (the one playing, or the one the visitor moved to). */
   focus: number;
   /** Scrubbing is always an audition: these drive the engine. */
@@ -67,6 +69,7 @@ export function Disc({
   live,
   playing,
   reduced,
+  accent,
   focus,
   onScrubStart,
   onScrubMove,
@@ -166,6 +169,7 @@ export function Disc({
         reduced,
         cached: slow,
         mark: marked,
+        ...(accent ? { accent } : {}),
       };
       const l = layout(size.w, size.h, stages);
       const over = pointer.current ? hit(l, pointer.current.x, pointer.current.y, null) : null;
@@ -180,7 +184,7 @@ export function Disc({
       if (slow) {
         // The drawn copy of the grooves, redrawn only when the playhead passes a groove.
         const step = Math.floor(u * (groovesIn(l) - 1));
-        const key = `${size.w}x${size.h}|${theme}|${stage}|${step}|${stages}|${peaks.length}`;
+        const key = `${size.w}x${size.h}|${theme}|${stage}|${step}|${stages}|${peaks.length}|${accent ?? ""}`;
         if (cache.current?.key !== key) {
           const bitmap = cache.current?.bitmap ?? document.createElement("canvas");
           bitmap.width = el.width;
@@ -198,7 +202,7 @@ export function Disc({
       }
       paintOverlay(ctx, scene);
     },
-    [size, theme, looks, lengths, stages, reduced, live, blocks, peaks.length],
+    [size, theme, looks, lengths, stages, reduced, live, blocks, peaks.length, accent],
   );
 
   // Draw once whenever something changes, and every frame while the disc is turning.

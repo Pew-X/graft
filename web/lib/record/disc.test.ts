@@ -5,7 +5,7 @@
 // Portrait, 390 x 844: R = min(0.9 W, 0.42 H) = 351, centre (195, 879.1), slots 44.5068 wide.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { bandOuter, hit, layout, needleAt, peaksOf } from "./disc.ts";
+import { bandOuter, hit, layout, needleAt, outsideBand, peaksOf } from "./disc.ts";
 
 const near = (a: number, b: number, eps = 1e-3): boolean => Math.abs(a - b) < eps;
 const land = layout(1000, 600, 4);
@@ -111,4 +111,19 @@ test("peaks are the loudest sample in each slice, as a fraction of full scale", 
   const pcm = Int16Array.from([0, 16384, -32768, 0, 8192, -8192, 0, 0]);
   assert.deepEqual(peaksOf(pcm, 4), [0.5, 1, 0.25, 0]);
   assert.deepEqual(peaksOf(new Int16Array(0), 3), [0, 0, 0]);
+});
+
+test("a label just outside a band sits on the needle's line, a set gap beyond the band's outer edge", () => {
+  for (const [w, h] of [
+    [1280, 720],
+    [390, 844],
+  ] as const) {
+    const l = layout(w, h, 4);
+    for (const slot of [0, 2, 3]) {
+      const p = outsideBand(l, slot, 15);
+      assert.ok(Math.abs(Math.hypot(p.x - l.cx, p.y - l.cy) - (bandOuter(l, slot) + 15)) < 1e-9);
+      if (l.portrait) assert.equal(p.x, l.cx, "portrait: straight above the centre");
+      else assert.equal(p.y, l.cy, "landscape: straight left of the centre");
+    }
+  }
 });
