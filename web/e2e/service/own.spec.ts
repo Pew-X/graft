@@ -142,6 +142,18 @@ test("a picked file is cut and flipped on the device, published as a source unde
   await expect(page.locator(".roll")).toHaveAttribute("data-audio", "ready");
 });
 
+test("with uploads on the page says plainly what graft cannot check, before anything is picked", async ({
+  page,
+}) => {
+  await viaUploads(page);
+  await page.goto("/make");
+  const note = page.getByTestId("rights-note");
+  await expect(note).toBeVisible();
+  await expect(note).toContainText("graft cannot check that for you");
+  await expect(note).toContainText("anyone can report a sound");
+  await expect(page.getByTestId("uploads-off")).toHaveCount(0);
+});
+
 test("nothing leaves the device before publish: only reads, and the one check of what is open", async ({
   page,
 }) => {
@@ -174,6 +186,8 @@ test("with uploads off, the sound can still be cut and flipped, and publishing i
     if (r.method() === "POST" && !r.url().endsWith("/api/wake")) posts.push(r.url());
   });
   await page.goto("/make");
+  // with uploads off there is no rights note: nothing can be published, so there is nothing to warn about
+  await expect(page.getByTestId("rights-note")).toHaveCount(0);
   await pick(page, stereo(60_000));
   await expect(page.getByRole("slider", { name: "speed" })).toBeVisible();
   const publish = page.getByRole("button", { name: "publish your sound" });

@@ -568,6 +568,9 @@ function Editor({
               <span>{fill(copy.own.confirm, { statement: DECLARATION_TEXT })}</span>
             </label>
             <p className="hint">{copy.own.declared}</p>
+            <p className="hint" data-testid="rights-note-publish">
+              {copy.own.rightsNote}
+            </p>
           </fieldset>
         </PublishStep>
       ) : null}
