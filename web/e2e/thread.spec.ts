@@ -165,6 +165,23 @@ for (const size of [
       await expect(roll(page)).toHaveAttribute("data-live", /[0-3]/);
     });
 
+    test("while a first-visit hint is up the cable stays away, and it comes back when the guide is done", async ({
+      page,
+    }) => {
+      // a browser that has been through the narration: the first hint is next
+      await page.addInitScript(() => localStorage.setItem("graft.coach", "narrated"));
+      await page.goto("/");
+      await expect(roll(page)).toHaveAttribute("data-audio", "ready");
+      await page.getByRole("button", { name: "play", exact: true }).click();
+      await expect(roll(page)).toHaveAttribute("data-live", /[0-3]/);
+      await expect(page.getByTestId("hint")).toBeVisible();
+      await expect(thread(page)).toHaveAttribute("data-on", "false");
+      // the hints go by themselves after a few seconds; then nothing is left in the way
+      await expect(page.getByTestId("hint")).toHaveCount(0, { timeout: 25_000 });
+      await expect(roll(page)).toHaveAttribute("data-guide", "done");
+      await expect(thread(page)).toHaveAttribute("data-on", "true");
+    });
+
     test("the roll slides to the next stage in a quarter of a second, not most of one", async ({
       page,
     }) => {
