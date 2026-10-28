@@ -26,6 +26,8 @@
 #                              revision if the new one never becomes ready
 #   park | unpark              stop the service's task so the database can pause (the load balancer stays and
 #                              still bills), or bring the one task back
+#   warm [--days 7] | cool    keep the service up for a window (default 7 days): it is brought up and a tag the
+#                              idle check reads says not to stop it until the window ends. cool ends the window
 #   wake [--schedule on|off]  the wake and park function (tools/wake): a Lambda with its own web address that
 #                              starts the service when someone visits (it needs the shared secret) and a
 #                              five-minute check that stops it when idle. The check is created OFF; turn it
@@ -44,7 +46,7 @@
 set -eu
 
 die() { echo "aws-dev: $*" >&2; exit 2; }
-usage() { sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+usage() { sed -n '2,42p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
 PREFIX=graft-dev
 CIDR=10.42.0.0/16
@@ -594,6 +596,28 @@ phase_unpark() {
   scale_service 1 1
 }
 
+# ---- warm and cool -------------------------------------------------------------------------------
+# The idle check (tools/wake) never stops the service while its "graft-warm-until" tag is in the future.
+# warm brings the service up and sets the tag; cool removes it, and the idle check then stops the service
+# once it has been idle for 30 minutes. A day's cost while up is about 2.6 USD over the parked baseline.
+WARM_TAG=graft-warm-until
+phase_warm() {
+  days=$(opt --days "$@"); days=${days:-7}
+  case "$days" in ''|*[!0-9]*) die "--days is a whole number of days" ;; esac
+  { [ "$days" -ge 1 ] && [ "$days" -le 14 ]; } || die "--days is from 1 to 14 (the budget assumes about a week)"
+  arn="arn:aws:ecs:$REGION:$ACCOUNT:service/$PREFIX/$PREFIX"
+  until=$(( ($(date +%s) + days * 86400) * 1000 ))
+  cost="about 2.6 USD a day while up, over the parked baseline: $days day(s) is about $((days * 26 / 10)) USD"
+  mut "keep the service warm for $days day(s): the idle check will not stop it before the tag $WARM_TAG ($until, milliseconds since 1970)" \
+    ecs tag-resource --resource-arn "$arn" --tags "key=$WARM_TAG,value=$until"
+  phase_unpark
+}
+phase_cool() {
+  arn="arn:aws:ecs:$REGION:$ACCOUNT:service/$PREFIX/$PREFIX"
+  cost="stops the extra cost once the idle check parks the service (30 minutes of no use)"
+  mut "end the warm window: the idle check may stop the service when it is idle" ecs untag-resource --resource-arn "$arn" --tag-keys "$WARM_TAG"
+}
+
 # ---- wake -----------------------------------------------------------------------------------------
 # A visit wakes the service; a five-minute check stops it when nobody has used it (tools/wake has the
 # decisions and their tests). One small Lambda with a web address, its own role that may touch only the
@@ -936,7 +960,7 @@ phase_teardown() {
 }
 
 case "$phase" in
-  network|registry|storage|cors|roles|queue|logs|push|database|secrets|release|service|redeploy|park|unpark|wake|budget|load-up|load-down|status|teardown) ;;
+  network|registry|storage|cors|roles|queue|logs|push|database|secrets|release|service|redeploy|park|unpark|warm|cool|wake|budget|load-up|load-down|status|teardown) ;;
   *) usage ;;
 esac
 guard

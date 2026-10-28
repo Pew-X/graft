@@ -637,3 +637,33 @@ test("a budget that exists is left alone, and status and teardown know about it"
   assert.match(plan(sandbox().run(["teardown", "--yes"], { DRY_RUN: "1" })), /delete-budget --account-id \d{12} --budget-name graft-dev-month/);
 });
 
+test("warm brings the service up and tags it so the idle check leaves it alone for the window, 7 days by default", () => {
+  const before = Date.now();
+  const out = plan(sandbox().run(["warm"], { DRY_RUN: "1" }));
+  const m = out.match(/tag-resource --resource-arn \S+service\/graft-dev\/graft-dev --tags key=graft-warm-until,value=(\d+)/);
+  assert.ok(m, out);
+  const until = Number(m[1]);
+  const days = (until - before) / 86_400_000;
+  assert.ok(days > 6.99 && days < 7.01, `a week from now, not ${days} days`);
+  assert.match(out, /update-express-gateway-service .*minTaskCount=1,maxTaskCount=1/, "and the service is brought up");
+  const three = plan(sandbox().run(["warm", "--days", "3"], { DRY_RUN: "1" }));
+  const d3 = (Number(three.match(/value=(\d+)/)[1]) - Date.now()) / 86_400_000;
+  assert.ok(d3 > 2.99 && d3 < 3.01);
+});
+
+test("warm refuses a window that is not 1 to 14 whole days, before any change", () => {
+  for (const days of ["0", "15", "-1", "two"]) {
+    const s = sandbox();
+    const r = s.run(["warm", "--days", days], { DRY_RUN: "1" });
+    assert.notEqual(r.status, 0, `--days ${days}`);
+    assert.deepEqual(s.changes(), [], `--days ${days}`);
+  }
+});
+
+test("cool removes the tag and nothing else, so the idle check may stop the service when it is idle", () => {
+  const s = sandbox();
+  const r = s.run(["cool"]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(s.changes().map((c) => c.replace(/ --resource-arn \S+/, " <service>")), ["ecs untag-resource <service> --tag-keys graft-warm-until"]);
+});
+
