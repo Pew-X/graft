@@ -82,7 +82,7 @@ jobs:
         with:
           node-version-file: .node-version
       - name: Tests for the repository scripts
-        run: node --test scripts/*.test.mjs loadtest/*.test.mjs
+        run: node --test scripts/*.test.mjs loadtest/*.test.mjs tools/wake/*.test.mjs
       - name: Only code, scripts, README and ARCHITECTURE are tracked; no emails; vocabulary
         run: node scripts/check-repo.mjs
       - name: Pull request title is a plain conventional message
