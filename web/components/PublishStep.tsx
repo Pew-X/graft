@@ -173,7 +173,7 @@ export function PublishStep({
           </a>
         </p>
         <div className="actions">
-          {/* a new tab: the ticket below is shown once, and leaving this tab would lose it */}
+          {/* a new tab, so this screen (the ticket below is shown once) is still here when they come back */}
           <a className="pill" href={`/p/${outcome.id}`} target="_blank" rel="noopener">
             {copy.publish.done.open}
           </a>

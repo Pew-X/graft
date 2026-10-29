@@ -51,6 +51,20 @@ interface Props {
   onMark?: (mark: Mark | null) => void;
 }
 
+/** The keys that act on the record: the ring that shows where they act comes back with one of these. */
+const RING_KEYS = new Set([
+  "Enter",
+  " ",
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowUp",
+  "ArrowDown",
+  "Home",
+  "End",
+  "[",
+  "]",
+]);
+
 const SAMPLE_RATE = 48_000;
 const DISC_TURNS_PER_SECOND = 0.55; // 33 and a third revolutions a minute
 
@@ -303,7 +317,7 @@ export function Disc({
     redraw();
   };
   const onKey = (event: KeyboardEvent): void => {
-    if (!focused.current && event.key !== "Tab" && event.key !== "Shift") {
+    if (!focused.current && RING_KEYS.has(event.key)) {
       focused.current = true; // the keys are acting again: show where
       redraw();
     }

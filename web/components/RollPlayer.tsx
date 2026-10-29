@@ -801,6 +801,7 @@ export function RollPlayer({
           // captions); and a stop on its own would read as a narration that went quiet.
           const running = engineNow.current;
           if (running) {
+            setNotice("");
             running.routeChange();
             guide("replay");
             running.play();

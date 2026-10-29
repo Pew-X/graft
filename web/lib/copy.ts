@@ -38,7 +38,7 @@ export const copy = {
     label: "the credits",
     stage: "stage {n} of {total}: {title}",
     more: "more",
-    moreLabel: "show the rest of this stage",
+    moreLabel: "more of this stage",
   },
   record: {
     label: "the record",
