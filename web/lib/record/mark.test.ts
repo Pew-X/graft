@@ -3,12 +3,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  cutHash,
   MAX_FRAMES,
   MIN_FRAMES,
   makeAddress,
   markBetween,
   markFrames,
   markSeconds,
+  parseCutHash,
 } from "./mark.ts";
 
 test("two places in either order make one mark, in order and inside the stage", () => {
@@ -60,4 +62,43 @@ test("the make address carries the stage and the cut, encoded", () => {
 test("the marked part's length in seconds", () => {
   assert.ok(Math.abs(markSeconds(markBetween(0, 0.25, 0.75), 57_600) - 0.6) < 1e-9);
   assert.equal(markSeconds(markBetween(0, 0, 0), 57_600), 0);
+});
+
+test("a marked part and its speed survive a round trip through the address fragment", () => {
+  const mark = markBetween(3, 0.25, 0.75);
+  assert.equal(cutHash(mark, { p: 3, q: 2 }), "#cut=3:0.25-0.75@3-2");
+  assert.deepEqual(parseCutHash("#cut=3:0.25-0.75@3-2", 4), { mark, speed: { p: 3, q: 2 } });
+  assert.equal(cutHash(mark, null), "#cut=3:0.25-0.75");
+  assert.deepEqual(parseCutHash(cutHash(mark, null), 4), { mark, speed: null });
+  assert.equal(cutHash(markBetween(0, 0, 1), null), "#cut=0:0-1");
+  assert.deepEqual(parseCutHash("#cut=0:0-1", 1), { mark: markBetween(0, 0, 1), speed: null });
+});
+
+test("an address fragment is never trusted: anything but what the page wrote is nothing", () => {
+  for (const bad of [
+    "",
+    "#how",
+    "#cut=",
+    "#cut=4:0.25-0.75", // no stage 4 in a chain of four
+    "#cut=-1:0.25-0.75",
+    "#cut=3:0.75-0.25", // out of order
+    "#cut=3:0.25-1.5",
+    "#cut=3:0.25-NaN",
+    "#cut=3:0.25-0.75@0-2",
+    "#cut=3:0.25-0.75@3-2x",
+    "#cut=3:0.25-0.75&x=1",
+    "#cut=3:0.25-0.75@99999999-1",
+    "#cut=3:1e-3-0.75",
+    "#cut=3:.5-0.75",
+    "#cut=03:0.25-0.75x",
+    `#cut=3:0.25-0.75${"@3-2".repeat(2)}`,
+  ])
+    assert.equal(parseCutHash(bad, 4), null, bad);
+});
+
+test("a speed the record does not offer is dropped and the part is kept", () => {
+  assert.deepEqual(parseCutHash("#cut=2:0.1-0.2@5-3", 4), {
+    mark: { stage: 2, from: 0.1, to: 0.2 },
+    speed: null,
+  });
 });

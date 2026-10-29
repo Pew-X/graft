@@ -144,3 +144,39 @@ test("flipping without choosing a speed asks for none", async ({ page }) => {
     .click();
   await page.waitForURL(/\/make\?from=.*&cut=\d+-\d+$/);
 });
+
+test("Back from the make page finds the part still marked, with its speed", async ({ page }) => {
+  await arrive(page);
+  const seconds = await markHalf(page);
+  await chip(page, /\+7/).click();
+  await bar(page)
+    .getByRole("button", { name: /flip this part/ })
+    .click();
+  await page.waitForURL(/\/make\?from=/);
+  await page.goBack();
+  await expect(page.locator(".roll")).toHaveAttribute("data-audio", "ready");
+  // the part is marked again, to within the few frames four decimals cost, and so is its speed
+  await expect(bar(page)).toBeVisible();
+  const label = await bar(page)
+    .getByRole("button", { name: /flip this part/ })
+    .innerText();
+  expect(Number(label.match(/(\d+\.\d+) s/)![1])).toBeCloseTo(seconds, 1);
+  await expect(chip(page, /\+7/)).toHaveAttribute("aria-pressed", "true");
+  await expect(toggle(page)).toHaveAttribute("aria-pressed", "true");
+  // dismissing the part takes it out of the address, so a reload does not bring it back
+  await page.keyboard.press("Escape");
+  await expect(bar(page)).toHaveCount(0);
+  expect(new URL(page.url()).hash).toBe("");
+  await page.reload();
+  await expect(page.locator(".roll")).toHaveAttribute("data-audio", "ready");
+  await expect(bar(page)).toHaveCount(0);
+});
+
+test("an address that only looks like a marked part marks nothing", async ({ page }) => {
+  for (const bad of ["#cut=9:0.1-0.2", "#cut=3:0.9-0.1", "#cut=3:0.1-0.2@7-1&x", "#cut=<script>"]) {
+    await page.goto(`/${bad}`);
+    await expect(page.locator(".roll")).toHaveAttribute("data-audio", "ready");
+    await page.waitForTimeout(300);
+    await expect(bar(page), bad).toHaveCount(0);
+  }
+});

@@ -31,7 +31,14 @@ import { type Rect } from "../lib/coach/marks.ts";
 import { SAMPLE_RATE } from "../lib/playback/config.ts";
 import { readyCut, READY_SPEED } from "../lib/make/ready.ts";
 import { layout, needleAt, peaksOf } from "../lib/record/disc.ts";
-import { type Mark, makeAddress, markFrames, markSeconds } from "../lib/record/mark.ts";
+import {
+  type Mark,
+  cutHash,
+  makeAddress,
+  markFrames,
+  markSeconds,
+  parseCutHash,
+} from "../lib/record/mark.ts";
 import { startTelemetry } from "../lib/telemetry/browser.ts";
 import type { Telemetry } from "../lib/telemetry/telemetry.ts";
 import type { Loader } from "../lib/roll/audio.ts";
@@ -59,6 +66,21 @@ const clock = {
   setTimeout: (fn: () => void, seconds: number) => window.setTimeout(fn, seconds * 1000),
   clearTimeout: (id: number) => window.clearTimeout(id),
 };
+
+/** Put the marked part into this page's own address (keeping the router's history state), or remove it. */
+function writeCut(fragment: string | null): void {
+  try {
+    const here = window.location;
+    if (fragment === null && !here.hash.startsWith("#cut=")) return;
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${here.pathname}${here.search}${fragment ?? ""}`,
+    );
+  } catch {
+    /* an address that cannot be written is only a Back that does not keep the cut */
+  }
+}
 
 function audioConstructor(): AudioContextConstructor | undefined {
   const w = window as unknown as {
@@ -152,6 +174,8 @@ export function RollPlayer({
   // marking a part of a stage on the record, to flip just that part
   const [marking, setMarking] = useState(false);
   const [mark, setMark] = useState<Mark | null>(null);
+  // a cut that came back with the browser's Back button: its speed, for the edit bar to start at
+  const [restoredSpeed, setRestoredSpeed] = useState<{ p: number; q: number } | null>(null);
   // the first-visit guide: the first play narrates itself, then two small hints, each once. Where it
   // starts is read from the browser after the page is up (the server cannot know), and every step
   // forward is written back.
@@ -488,7 +512,22 @@ export function RollPlayer({
   const toggleMarking = useCallback(() => {
     setMarking((on) => !on);
     setMark(null);
+    setRestoredSpeed(null);
+    writeCut(null);
   }, []);
+  // The visitor left for the make page with a part marked and came back with Back: the address still
+  // says which part (and its speed), so the page opens with it marked again.
+  const cutHere = openMake !== undefined && stages > 0;
+  useEffect(() => {
+    if (!cutHere) return;
+    queueMicrotask(() => {
+      const back = parseCutHash(window.location.hash, stages);
+      if (!back) return;
+      setMarking(true);
+      setMark(back.mark);
+      setRestoredSpeed(back.speed);
+    });
+  }, [cutHere, stages]);
   // escape leaves marking and clears the part
   useEffect(() => {
     if (!marking) return undefined;
@@ -496,6 +535,8 @@ export function RollPlayer({
       if (e.key === "Escape") {
         setMarking(false);
         setMark(null);
+        setRestoredSpeed(null);
+        writeCut(null);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -742,11 +783,19 @@ export function RollPlayer({
           samples={stageAudio[mark.stage] ?? null}
           cut={markCut}
           label={markLabel ?? ""}
+          initialSpeed={restoredSpeed}
           onFlip={(speed) => {
             const id = blocks[mark.stage]?.id;
-            if (id) openMake?.(id, markCut, speed ?? undefined);
+            if (!id) return;
+            // the part goes into this page's address first, so Back from the make page finds it marked
+            writeCut(cutHash(mark, speed));
+            openMake?.(id, markCut, speed ?? undefined);
           }}
-          onClear={() => setMark(null)}
+          onClear={() => {
+            setMark(null);
+            setRestoredSpeed(null);
+            writeCut(null);
+          }}
           onBeforeHear={() => act((e) => e.pause())}
         />
       ) : null}
@@ -795,6 +844,8 @@ export function RollPlayer({
           // hints are for a page that is not in the middle of cutting.
           setMarking(false);
           setMark(null);
+          setRestoredSpeed(null);
+          writeCut(null);
           // What was sounding stops and the roll starts again in the same update as the guide restarts.
           // Left sounding, an audition (a ring tapped, a part dragged) is read as the visitor taking
           // over, which ended the narration before it began (the first audit saw a replay with no

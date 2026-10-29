@@ -22,6 +22,7 @@ export function EditPart({
   samples,
   cut,
   label,
+  initialSpeed = null,
   onFlip,
   onClear,
   onBeforeHear,
@@ -31,12 +32,14 @@ export function EditPart({
   cut: { start: number; end: number };
   /** "0.50 s", the part's length, for the button. */
   label: string;
+  /** The speed the bar starts at: one it had when the visitor left for the make page and came back. */
+  initialSpeed?: Speed | null;
   onFlip: (speed: Speed | null) => void;
   onClear: () => void;
   /** Called as hearing starts, so the roll's own sound can stop. */
   onBeforeHear: () => void;
 }) {
-  const [speed, setSpeed] = useState<Speed | null>(null);
+  const [speed, setSpeed] = useState<Speed | null>(initialSpeed);
   const [hearing, setHearing] = useState(false);
   const [failed, setFailed] = useState(false);
   const [previewer] = useState(
