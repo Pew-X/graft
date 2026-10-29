@@ -14,6 +14,7 @@ import {
   type Scene,
   type StageLook,
 } from "../lib/record/paint.ts";
+import { shorten } from "../lib/coach/narration.ts";
 import type { Block } from "../lib/roll/view.ts";
 import { useResolvedTheme } from "../lib/theme/use-theme.ts";
 import { dyes } from "../lib/theme/tokens.ts";
@@ -190,7 +191,8 @@ export function Disc({
       if (over) {
         scene.hover = {
           band: over.band,
-          name: `${String(over.band + 1).padStart(2, "0")} · ${blocks[over.band]?.title ?? copy.end.value}`,
+          // a title is typed by a stranger: cut short so it cannot be drawn off the canvas
+          name: `${String(over.band + 1).padStart(2, "0")} · ${shorten(blocks[over.band]?.title ?? copy.end.value)}`,
         };
       }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);

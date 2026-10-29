@@ -409,12 +409,15 @@ export function paintOverlay(ctx: CanvasRenderingContext2D, s: Scene): void {
 
   if (s.hover && tip.over) {
     // A ghost ring where the music really is, and the name of the stage under the stylus.
+    // dashed and faint, so it reads as "where the sound really is" and not as a second stylus
     ctx.strokeStyle = PHOSPHOR;
-    ctx.globalAlpha = 0.8;
+    ctx.globalAlpha = 0.55;
     ctx.lineWidth = 1.2;
+    ctx.setLineDash([2, 3]);
     ctx.beginPath();
     ctx.arc(auto.x, auto.y, 6, 0, TAU);
     ctx.stroke();
+    ctx.setLineDash([]);
     ctx.globalAlpha = 1;
     ctx.font = '600 13px ui-monospace, "JetBrains Mono", monospace';
     ctx.fillStyle = th.text;

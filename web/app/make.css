@@ -4,6 +4,10 @@
   max-width: 44rem;
   margin: 0 auto;
   padding: 1.25rem 1rem 3rem;
+  /* the end bracket's 44 px touch box sits past the right edge of the waveform: on a phone it made the
+     whole page scroll sideways by about 27 px (found by the hostile text test). Clipped, not hidden: no
+     scroll container is made. */
+  overflow-x: clip;
 }
 .make .kicker {
   margin: 0 0 0.6rem;
@@ -36,6 +40,9 @@
 }
 .slab-text {
   display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  unicode-bidi: isolate;
   padding: 0.14em 0.38em 0.2em;
   background: var(--dye);
   color: var(--dye-text);
@@ -596,11 +603,14 @@
 }
 .sound-title-plain {
   margin: 0;
+  overflow-wrap: anywhere;
+  unicode-bidi: isolate;
   font:
     700 1.4rem/1.2 var(--f-sans),
     sans-serif;
 }
 .report-dialog {
+  overflow-wrap: anywhere;
   max-width: min(36rem, calc(100vw - 2rem));
   padding: 1.25rem;
   border: 2px solid var(--ink);
