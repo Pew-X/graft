@@ -103,7 +103,7 @@ export function RollPlayer({
   openMake,
   makeHref,
   apiUrl,
-  manageHref,
+  flipsHref,
 }: {
   blocks: readonly Block[];
   load: Loader;
@@ -119,8 +119,8 @@ export function RollPlayer({
   makeHref?: string | undefined;
   /** Where the service is, for reports. Without it there is nowhere to send one, so no report control is shown. */
   apiUrl?: string | undefined;
-  /** The manage page of the flip this page shows, when this browser kept its key: the footer links to it. */
-  manageHref?: string | undefined;
+  /** The list of the flips this browser holds a key for, when it holds any: the footer links to it. */
+  flipsHref?: string | undefined;
 }) {
   const [load, setLoad] = useState<Load>("loading");
   const [attempt, setAttempt] = useState(0);
@@ -837,7 +837,7 @@ export function RollPlayer({
         <ReportDialog target={reporting} apiUrl={apiUrl} onClose={() => setReporting(null)} />
       ) : null}
       <Footer
-        manageHref={manageHref}
+        flipsHref={flipsHref}
         onHow={() => {
           // the guide again from the start: the roll begins at its first step, and this press allows sound.
           // A cut that is open goes first: its menu would sit over the captions, and the guide's own

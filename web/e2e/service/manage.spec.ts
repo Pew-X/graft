@@ -132,6 +132,42 @@ test("a key kept in this browser can be used from there, and forgotten", async (
   ).toBe(0);
 });
 
+test("a flip this browser holds a key for is listed, managed from the list, shown withdrawn, and forgotten", async ({
+  page,
+  request,
+}) => {
+  const stage = await publishFlip(request, SEEDED_LAST, "listed flip");
+  await page.addInitScript(
+    ([id, key]) => {
+      // seeded once per tab: a reload must keep what the page itself has stored since
+      if (sessionStorage.getItem("seeded")) return;
+      sessionStorage.setItem("seeded", "1");
+      localStorage.setItem("graft.manage-keys", JSON.stringify({ [id!]: key! }));
+    },
+    [stage.id, stage.manageKey] as const,
+  );
+  await page.goto("/flips");
+  const row = page.locator(".your-flip");
+  await expect(row).toContainText("listed flip");
+  await expect(row).toContainText("open to new flips");
+  await row.getByRole("link", { name: "manage" }).click();
+  await page.getByRole("button", { name: "use the key kept in this browser" }).click();
+  await page.getByRole("button", { name: "withdraw it" }).click();
+  await page.getByRole("button", { name: "yes, withdraw it" }).click();
+  await expect(page.getByText("withdrawn.")).toBeVisible();
+  // the list says so, and no longer offers to open it
+  await page.goto("/flips");
+  await expect(row).toContainText("withdrawn");
+  await expect(row.getByRole("link", { name: "open", exact: true })).toHaveCount(0);
+  // forgetting the key is the browser's own act, and leaves nothing behind
+  await row.getByRole("button", { name: "forget", exact: true }).click();
+  await row.getByRole("button", { name: "yes, forget it" }).click();
+  await expect(page.getByText("no flips here yet")).toBeVisible();
+  expect(
+    await page.evaluate(() => Object.keys(localStorage).filter((k) => k !== "graft.coach").length),
+  ).toBe(0);
+});
+
 test("a link to nothing says there is no publication, and the controls are not shown", async ({
   page,
 }) => {

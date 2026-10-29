@@ -25,6 +25,9 @@ export default async function ManagePage({ params }: { params: Promise<{ id: str
             {copy.make.home}
           </Link>
           <p className="kicker">{copy.manage.title}</p>
+          <Link href="/flips" className="back">
+            {copy.manage.flips}
+          </Link>
         </div>
         <ManagePublication id={id} apiUrl={apiUrls().browser} />
       </main>

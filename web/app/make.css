@@ -1077,3 +1077,47 @@
     white-space: nowrap;
   }
 }
+
+/* your flips: the flips this browser holds a key for */
+.your-flips .flip-list {
+  list-style: none;
+  margin: 1rem 0;
+  padding: 0;
+}
+.your-flip {
+  padding: 1rem 0;
+  border-top: 1px solid var(--line);
+}
+.your-flip .flip-title {
+  margin: 0;
+  font:
+    700 1.4rem/1.2 var(--f-sans),
+    sans-serif;
+  overflow-wrap: anywhere;
+  unicode-bidi: isolate;
+}
+.your-flip .hint {
+  display: block;
+  margin: 0.25rem 0 0.75rem;
+}
+.your-flip .actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.your-flip .forget-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.your-flip .forget-ask .hint {
+  flex: 1 1 100%;
+  margin: 0;
+}
+.your-flips .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}

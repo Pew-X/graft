@@ -3,16 +3,10 @@
 import { useState, useSyncExternalStore } from "react";
 import { copy } from "../lib/copy.ts";
 import { type Result, setForkPermission, withdraw } from "../lib/manage/client.ts";
+import { readPublication } from "../lib/manage/read.ts";
 import { forgetKey, keptKeys } from "../lib/publish/keep.ts";
 import { useAsync } from "../lib/make/use-async.ts";
 import { Trace } from "./Trace.tsx";
-
-interface Shown {
-  state: string;
-  title: string;
-  author: string;
-  forkPermitted: boolean | null;
-}
 
 function storage(): Storage | null {
   try {
@@ -30,18 +24,7 @@ const noop = () => () => undefined;
  * action and held in nothing but this component's state.
  */
 export function ManagePublication({ id, apiUrl }: { id: string; apiUrl: string }) {
-  const read = useAsync(`publication:${id}`, async (signal): Promise<Shown | null> => {
-    const response = await fetch(`${apiUrl}/v1/publications/${encodeURIComponent(id)}`, { signal });
-    if (response.status === 404) return null;
-    if (!response.ok) throw new Error(String(response.status));
-    const entry = (await response.json()) as Record<string, unknown>;
-    return {
-      state: String(entry["state"]),
-      title: String(entry["title"] ?? ""),
-      author: String(entry["author"] ?? ""),
-      forkPermitted: typeof entry["fork_permitted"] === "boolean" ? entry["fork_permitted"] : null,
-    };
-  });
+  const read = useAsync(`publication:${id}`, (signal) => readPublication(apiUrl, id, signal));
   const hasKept = useSyncExternalStore(
     noop,
     () => (keptKeys(storage())[id] ? "yes" : "no"),

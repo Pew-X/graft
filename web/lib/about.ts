@@ -73,7 +73,7 @@ export const privacyClaims: readonly Claim[] = [
     evidence: [
       {
         file: "web/e2e/service/publish.spec.ts",
-        test: "the key is kept in this browser only when the maker chooses",
+        test: "the key is kept in this browser by default, and it is the only thing stored about their publications",
       },
       {
         file: "web/e2e/guide.spec.ts",

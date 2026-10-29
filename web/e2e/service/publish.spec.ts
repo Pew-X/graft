@@ -75,7 +75,16 @@ test("publishing makes one flip: the link opens the chain with it last, and the 
   expect(await page.content()).not.toContain(key);
   const chain = await request.get(`${API}/v1${href.replace("/p/", "/chains/")}`);
   expect(await chain.text()).not.toContain(key);
-  expect(await page.evaluate(() => JSON.stringify({ ...localStorage }))).not.toContain(key);
+  // The browser holds it in the one place meant for it (kept by default, so "your flips" can list the
+  // flip), and in no other storage.
+  const held = await page.evaluate(() => ({
+    keys: JSON.stringify({ ...localStorage }),
+    session: JSON.stringify({ ...sessionStorage }),
+  }));
+  expect(held.session).not.toContain(key);
+  expect(Object.keys(JSON.parse(held.keys) as object).filter((k) => k !== "graft.coach")).toEqual([
+    "graft.manage-keys",
+  ]);
 });
 
 test("an answer lost on the way back is retried with the same key and makes exactly one flip", async ({
@@ -328,7 +337,7 @@ test("the ticket's picture is drawn from the public id, and the secret key is on
   await expect(page.getByText("a published flip is fixed.")).toBeVisible();
 });
 
-test("the key is kept in this browser only when the maker chooses, and then it is the only thing stored about their publications", async ({
+test("the key is kept in this browser by default, and it is the only thing stored about their publications", async ({
   page,
   request,
 }) => {
@@ -337,23 +346,28 @@ test("the key is kept in this browser only when the maker chooses, and then it i
   await fill(page);
   expect(
     await page.evaluate(() => Object.keys(localStorage).filter((k) => k !== "graft.coach").length),
+    "nothing is stored before publishing",
   ).toBe(0);
   await page.getByRole("button", { name: "publish", exact: true }).click();
   await expect(page.getByRole("heading", { name: "published" })).toBeVisible();
-  expect(
-    await page.evaluate(() => Object.keys(localStorage).filter((k) => k !== "graft.coach").length),
-    "publishing alone stores nothing",
-  ).toBe(0);
   const key = await page.getByTestId("manage-key").innerText();
-  await page.getByLabel(/keep this key in this browser/).check();
+  const href = (await page.getByTestId("published-link").getAttribute("href"))!;
+  const id = href.replace("/p/", "");
+  // kept as soon as it is shown, with the box ticked to say so, under the one key meant for it
+  await expect(page.getByLabel(/keep this key in this browser/)).toBeChecked();
   await expect(page.getByText("kept in this browser.")).toBeVisible();
   const stored = await page.evaluate(() =>
     Object.fromEntries(Object.entries(localStorage).filter(([k]) => k !== "graft.coach")),
   );
   expect(Object.keys(stored)).toEqual(["graft.manage-keys"]);
-  expect(Object.values(JSON.parse(stored["graft.manage-keys"]!) as Record<string, string>)).toEqual(
-    [key],
-  );
+  expect(JSON.parse(stored["graft.manage-keys"]!) as Record<string, string>).toEqual({
+    [id]: key,
+  });
+  // the flip is listed under "your flips", with its title
+  await page.goto("/flips");
+  await expect(page.locator(".your-flip")).toHaveCount(1);
+  await expect(page.locator(".your-flip")).toContainText("open to new flips");
+  // (unticking the box forgets the key: checked against a stand-in service in e2e/flips.spec.ts)
 });
 
 test("the step is keyboard-complete: focus lands on the title, errors take focus, and the dialog's labels are real", async ({
