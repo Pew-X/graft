@@ -53,7 +53,7 @@ async function markHalf(page: Page): Promise<number> {
   return Number(label.match(/(\d+\.\d+) s/)![1]);
 }
 
-test("a marked part offers six speeds, none chosen, and cannot be heard until one is", async ({
+test("a marked part offers six speeds, none chosen, and can be heard as it is", async ({
   page,
 }) => {
   await arrive(page);
@@ -63,7 +63,7 @@ test("a marked part offers six speeds, none chosen, and cannot be heard until on
   expect(await all.evaluateAll((els) => els.map((e) => e.getAttribute("aria-pressed")))).toEqual(
     Array(6).fill("false"),
   );
-  await expect(hear(page)).toBeDisabled();
+  await expect(hear(page)).toBeEnabled();
   // each chip says the semitones it shows and the interval in words
   await expect(chip(page, /^\+7, a fifth up$/)).toHaveText("+7");
   await expect(chip(page, /^−12, an octave down$/)).toHaveText("−12");
@@ -84,7 +84,22 @@ test("choosing a speed says what the part becomes, worked from the part's own le
   // choosing it again gives the choice back
   await chip(page, /\+7/).click();
   await expect(chip(page, /\+7/)).toHaveAttribute("aria-pressed", "false");
-  await expect(hear(page)).toBeDisabled();
+});
+
+test("hearing a part before choosing a speed loops the part as it is, at its own length", async ({
+  page,
+}) => {
+  await watchLoops(page);
+  await arrive(page);
+  const seconds = await markHalf(page);
+  await hear(page).click();
+  await expect(hear(page)).toHaveText("stop");
+  await expect.poll(async () => (await loops(page)).length).toBe(1);
+  expect((await loops(page))[0]).toBeCloseTo(seconds, 1);
+  // choosing a speed then replaces the loop, as it does for any other change
+  await chip(page, /−12/).click();
+  await expect.poll(async () => (await loops(page)).length).toBe(2);
+  expect((await loops(page))[1]).toBeCloseTo(seconds * 2, 1);
 });
 
 test("hearing it loops the real rendering at that speed, and a new speed replaces the loop", async ({

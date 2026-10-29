@@ -274,15 +274,13 @@
   outline: 3px solid var(--focus);
 }
 .cut-editor .help {
-  /* kept for the keyboard and screen readers; the one visible hint is the line above the editor */
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
+  /* said to the eye as well as to a screen reader: the keyboard moves the brackets, and nothing else says so */
+  margin: 0.5rem 0 0;
+  font:
+    400 12px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+  color: var(--muted);
 }
 .cut-editor .readout {
   margin: 0.5rem 0 0;
@@ -303,11 +301,15 @@
   display: inline-flex;
   flex-direction: column;
   align-items: flex-start;
+  max-width: 100%;
   margin-bottom: 1rem;
-  padding: 0.1em 0.4em 0.2em;
+  /* The torn edges are cut in pixels, not in percent of the height: the edge rises the same few pixels
+     whatever the size, so the last word of a long line under the number is never clipped. The padding
+     below and to the right keeps the words clear of those edges. */
+  padding: 0.1em 0.5em 0.5em 0.4em;
   background: var(--dye);
   color: var(--dye-text);
-  clip-path: polygon(0.8% 9%, 99% 0, 100% 91%, 0 100%);
+  clip-path: polygon(0.8% 8px, 99% 0, 100% calc(100% - 6px), 0 100%);
   transform: rotate(-2deg);
 }
 .speed-readout[data-k="up"] {
@@ -336,6 +338,7 @@
     monospace;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+  overflow-wrap: anywhere;
 }
 .speed-control {
   display: flex;

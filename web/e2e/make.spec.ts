@@ -325,11 +325,10 @@ test.describe("arriving from the header's make a flip", () => {
     // one-line hints, and no frames or hash in the flow itself
     await expect(main.getByText("drag the brackets to keep a piece")).toBeVisible();
     await expect(main.getByText("faster is higher, slower is lower")).toBeVisible();
+    // the keyboard's part is said on the page (the first audit found nobody knew the arrows worked) and
+    // is still what a screen reader hears with each bracket
     await expect(main.locator(".cut-editor .help")).toHaveText(/arrow keys/);
-    // present for the keyboard and screen readers, but one pixel big: not a second line on the page
-    const help = await main.locator(".cut-editor .help").boundingBox();
-    expect(help!.width).toBeLessThanOrEqual(1);
-    expect(help!.height).toBeLessThanOrEqual(1);
+    await expect(main.locator(".cut-editor .help")).toBeVisible();
   });
 
   test("the picker's intro is one short line and the steps read pick, cut and speed, share", async ({
