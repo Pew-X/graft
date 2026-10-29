@@ -1146,7 +1146,8 @@
   /* the glow of a tube is many times wider than its line: the small copy, blurred, added to the picture */
   filter: blur(8px) saturate(1.2);
   mix-blend-mode: screen;
-  opacity: 0.5;
+  /* the glass glows with the sound: a little at rest, a good deal at the loudest (--glow is set each frame) */
+  opacity: calc(0.28 + var(--glow, 0) * 0.5);
 }
 .record-scope .scope-sheet {
   position: absolute;

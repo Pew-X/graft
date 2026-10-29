@@ -2,7 +2,15 @@
 
 import { useEffect, useRef } from "react";
 import { FrameGovernor } from "../lib/record/frames.ts";
-import { beamLevel, delayPairs, delaySamples, nextGain, readout } from "../lib/own/scope.ts";
+import {
+  beamLevel,
+  delayPairs,
+  delaySamples,
+  gainFor,
+  nextReference,
+  slewDelay,
+  tunedDelay,
+} from "../lib/own/scope.ts";
 
 /** The house screen and beam (the trace tile's own values): always dark, as a real one is, in both themes. */
 const SCREEN = "#070908";
@@ -10,18 +18,20 @@ const BEAM = "#5dff9c";
 /** Where the beam is brightest it runs white-hot, as a phosphor does where it is hit hardest. */
 const HOT = "#d9ffe8";
 /** How much of the last frame the next one leaves lit: the afterglow, a few tenths of a second. */
-const FADE = 0.15;
+const FADE = 0.075;
 const FFT = 2048;
-/** The screen is ten by eight divisions of a 4:3 tube; the picture keeps to the middle of it. */
+/** The screen is eight by six divisions of a 4:3 tube; the picture keeps to the middle of it. */
 const COLS = 8;
 const ROWS = 6;
+/** The loops that carry a voice are low; above this the beam only jitters, so it is not followed. */
+const CEILING_HZ = 1500;
 
 interface Tap {
   context: AudioContext;
   analyser: AnalyserNode;
 }
 
-/** The microphone's stream into one analyser, past a high-pass that removes rumble. Never connected to the speakers. */
+/** The microphone's stream into one analyser, between a high-pass for rumble and a low-pass for jitter. Never connected to the speakers. */
 function tap(stream: MediaStream): Tap | null {
   const Context =
     window.AudioContext ??
@@ -32,21 +42,41 @@ function tap(stream: MediaStream): Tap | null {
   const rumble = context.createBiquadFilter();
   rumble.type = "highpass";
   rumble.frequency.value = 70;
+  const jitter = context.createBiquadFilter();
+  jitter.type = "lowpass";
+  jitter.frequency.value = CEILING_HZ;
+  jitter.Q.value = 0.7;
   const analyser = context.createAnalyser();
   analyser.fftSize = FFT;
   analyser.smoothingTimeConstant = 0;
   source.connect(rumble);
-  rumble.connect(analyser);
+  rumble.connect(jitter);
+  jitter.connect(analyser);
   return { context, analyser };
+}
+
+/** The newest samples as floats; a browser without the float call (older Safari) gives bytes, made into floats. */
+function read(
+  analyser: AnalyserNode,
+  into: Float32Array<ArrayBuffer>,
+  bytes: Uint8Array<ArrayBuffer>,
+): void {
+  if (typeof analyser.getFloatTimeDomainData === "function") {
+    analyser.getFloatTimeDomainData(into);
+    return;
+  }
+  analyser.getByteTimeDomainData(bytes);
+  for (let i = 0; i < bytes.length; i++) into[i] = ((bytes[i] ?? 128) - 128) / 128;
 }
 
 /**
  * The recording scope: an oscilloscope in X-Y mode, the glowing loops of a vintage tape machine on a tube.
- * The sound drives both axes: x is the microphone now, y is the microphone a moment earlier, so a steady
- * tone is an ellipse, a louder one a bigger one, a rising pitch a faster turn, and speech a living tangle.
- * The beam leaves an afterglow, runs dimmer where it moves fast and white-hot where it lingers or crosses
- * itself. The graticule and the glass are a second, still canvas laid over the beam's, as a real one is a
- * sheet in front of the tube. It draws only what the sound is: silence is a dot.
+ * The sound drives both axes: x is the microphone now, y is the microphone a moment earlier, and that
+ * moment follows the sound (the first zero of its autocorrelation, a quarter of a tone's period), so a
+ * steady tone is a circle, a voice a figure that turns as the pitch does, and the size follows the
+ * loudness against what is usual for the sound. The beam leaves an afterglow, runs dimmer where it moves
+ * fast and white-hot where it lingers or crosses itself, and the glass round it glows with the sound. It
+ * draws only what the sound is: silence is a dot. There is no writing on it, as there is none on a tube.
  */
 export function RecordScope({ stream }: { stream: MediaStream }) {
   const beam = useRef<HTMLCanvasElement>(null);
@@ -65,11 +95,13 @@ export function RecordScope({ stream }: { stream: MediaStream }) {
     const { context, analyser } = tapped;
     void context.resume().catch(() => undefined);
     const rate = context.sampleRate;
-    const delay = delaySamples(rate);
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const governor = new FrameGovernor();
     const data = new Float32Array(FFT);
-    let gain = 1;
+    const bytes = new Uint8Array(FFT);
+    let delay = delaySamples(rate);
+    let reference = 0.05;
+    let glow = 0;
     let width = 0;
     let height = 0;
     let frame = 0;
@@ -98,7 +130,7 @@ export function RecordScope({ stream }: { stream: MediaStream }) {
       const s = sheetEl.getContext("2d");
       if (s) {
         s.setTransform(dpr, 0, 0, dpr, 0, 0);
-        glass(s, width, height, readout(rate));
+        glass(s, width, height);
       }
     };
     size();
@@ -121,13 +153,22 @@ export function RecordScope({ stream }: { stream: MediaStream }) {
       // from frame to frame and not a set of pieces
       const since = last === 0 ? 16 : Math.min(60, timestamp - last);
       last = timestamp;
-      analyser.getFloatTimeDomainData(data);
+      read(analyser, data, bytes);
+      // the delay follows the sound, looked for every third frame and glided to
+      if (frames % 3 === 0) {
+        const found = tunedDelay(data, rate);
+        if (found !== null) delay = slewDelay(delay, Math.round(found));
+      }
       const count = Math.min(FFT, Math.round((since / 1000) * rate) + delay + 8);
       const fresh = data.subarray(FFT - count);
       let peak = 0;
       for (const v of fresh) peak = Math.max(peak, Math.abs(v));
-      gain = nextGain(gain, peak);
+      reference = nextReference(reference, peak);
+      const gain = gainFor(reference);
       const pairs = delayPairs(fresh, delay, gain);
+      // how big the figure is this frame, 0 to 1: the glass glows with it, and fades when the sound does
+      const reach = Math.min(1, peak * gain);
+      glow = reach > glow ? glow + (reach - glow) * 0.35 : glow * 0.96;
 
       // the afterglow: the last frame is dimmed, not wiped
       ctx.globalCompositeOperation = "source-over";
@@ -152,7 +193,7 @@ export function RecordScope({ stream }: { stream: MediaStream }) {
         px = x;
         py = y;
       }
-      if (pairs.length === 1 || pairs.length === 0) {
+      if (pairs.length <= 1 || peak < 0.002) {
         // silence: the beam sits as a point
         ctx.fillStyle = BEAM;
         ctx.globalAlpha = 0.9;
@@ -170,8 +211,6 @@ export function RecordScope({ stream }: { stream: MediaStream }) {
           ctx.lineTo(x1, y1);
         }
         const a = alphas[b] ?? 0.2;
-        // the halo, the glow, the body, then the core: where the beam is brightest it runs white-hot, with
-        // green only at its edge, as a phosphor does
         // the glow adds light (a lit phosphor glows over a lit one); the line itself is painted, so a
         // curve drawn again and again stays a line and does not run to a white disc
         ctx.globalCompositeOperation = "lighter";
@@ -194,13 +233,19 @@ export function RecordScope({ stream }: { stream: MediaStream }) {
         }
       }
       ctx.globalAlpha = 1;
-      // the bloom: a small copy of the picture, which the page blurs and lays over it, lights the glass round the figure
+      // the bloom: a small copy of the picture, which the page blurs and lays over it, lights the glass
+      // round the figure; the louder the sound, the more of it
       const bctx = bloomEl.getContext("2d");
       if (bctx) {
         bctx.globalCompositeOperation = "copy";
         bctx.drawImage(beamEl, 0, 0, bloomEl.width, bloomEl.height);
       }
+      box.style.setProperty("--glow", glow.toFixed(3));
       box.dataset["frames"] = String(frames);
+      box.dataset["delay"] = String(delay);
+      box.dataset["rate"] = String(rate);
+      box.dataset["peak"] = peak.toFixed(4);
+      box.dataset["reference"] = reference.toFixed(4);
     };
     frame = requestAnimationFrame(draw);
 
@@ -247,44 +292,47 @@ function grain(size: number): HTMLCanvasElement {
 }
 
 /**
- * The sheet in front of the tube: a graticule of eight by six divisions with a centre cross ticked five to
- * a division, the glass (a dark vignette at the corners, a soft glare, a fine grain), and what the two axes are.
+ * The sheet in front of the tube: a graticule so faint it is felt more than seen, a tube that is lit
+ * from within (a green haze that is brightest in the middle), the glass (a dark vignette at the corners, a
+ * soft glare, a fine grain). No axes and no words: a tube has none.
  */
-function glass(ctx: CanvasRenderingContext2D, width: number, height: number, axes: string): void {
+function glass(ctx: CanvasRenderingContext2D, width: number, height: number): void {
   ctx.clearRect(0, 0, width, height);
+  // the tube lit from within
+  const lit = ctx.createRadialGradient(
+    width / 2,
+    height / 2,
+    0,
+    width / 2,
+    height / 2,
+    Math.hypot(width, height) * 0.56,
+  );
+  // eased in many small steps, so no edge can be seen: a haze, not a plate
+  for (const [at, alpha] of [
+    [0, 0.1],
+    [0.2, 0.085],
+    [0.4, 0.056],
+    [0.6, 0.03],
+    [0.8, 0.011],
+    [1, 0],
+  ] as const)
+    lit.addColorStop(at, `rgba(40, 150, 95, ${alpha})`);
+  ctx.fillStyle = lit;
+  ctx.fillRect(0, 0, width, height);
+  // the graticule, faint
   ctx.strokeStyle = BEAM;
   ctx.lineWidth = 1;
-  ctx.globalAlpha = 0.11;
+  ctx.globalAlpha = 0.055;
   ctx.beginPath();
-  for (let i = 0; i <= COLS; i++) {
+  for (let i = 1; i < COLS; i++) {
     const x = Math.round((width * i) / COLS) + 0.5;
     ctx.moveTo(x, 0);
     ctx.lineTo(x, height);
   }
-  for (let j = 0; j <= ROWS; j++) {
+  for (let j = 1; j < ROWS; j++) {
     const y = Math.round((height * j) / ROWS) + 0.5;
     ctx.moveTo(0, y);
     ctx.lineTo(width, y);
-  }
-  ctx.stroke();
-  // the centre cross, with five small ticks to a division
-  ctx.globalAlpha = 0.28;
-  ctx.beginPath();
-  const cx = Math.round(width / 2) + 0.5;
-  const cy = Math.round(height / 2) + 0.5;
-  ctx.moveTo(0, cy);
-  ctx.lineTo(width, cy);
-  ctx.moveTo(cx, 0);
-  ctx.lineTo(cx, height);
-  for (let t = 0; t <= COLS * 5; t++) {
-    const x = Math.round((width * t) / (COLS * 5)) + 0.5;
-    ctx.moveTo(x, cy - (t % 5 === 0 ? 4 : 2));
-    ctx.lineTo(x, cy + (t % 5 === 0 ? 4 : 2));
-  }
-  for (let t = 0; t <= ROWS * 5; t++) {
-    const y = Math.round((height * t) / (ROWS * 5)) + 0.5;
-    ctx.moveTo(cx - (t % 5 === 0 ? 4 : 2), y);
-    ctx.lineTo(cx + (t % 5 === 0 ? 4 : 2), y);
   }
   ctx.stroke();
   ctx.globalAlpha = 1;
@@ -292,13 +340,17 @@ function glass(ctx: CanvasRenderingContext2D, width: number, height: number, axe
   const vignette = ctx.createRadialGradient(
     width / 2,
     height / 2,
-    Math.min(width, height) * 0.35,
+    0,
     width / 2,
     height / 2,
     Math.hypot(width, height) * 0.58,
   );
-  vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
-  vignette.addColorStop(1, "rgba(0, 0, 0, 0.5)");
+  // darkness grows with the square of the distance from the middle, in small steps: no radius at which it
+  // begins, so no disc can be seen inside it
+  for (let step = 0; step <= 8; step++) {
+    const t = step / 8;
+    vignette.addColorStop(t, `rgba(0, 0, 0, ${(0.55 * t * t * t).toFixed(3)})`);
+  }
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, width, height);
   const glare = ctx.createLinearGradient(0, 0, width * 0.7, height * 0.9);
@@ -311,12 +363,4 @@ function glass(ctx: CanvasRenderingContext2D, width: number, height: number, axe
     ctx.fillStyle = pattern;
     ctx.fillRect(0, 0, width, height);
   }
-  // the readout, in the house mono
-  ctx.font = '500 10px "JetBrains Mono", ui-monospace, monospace';
-  ctx.textBaseline = "bottom";
-  ctx.textAlign = "left";
-  ctx.fillStyle = "rgba(93, 255, 156, 0.62)";
-  ctx.fillText(axes, 10, height - 8);
-  ctx.textBaseline = "top";
-  ctx.fillText("x-y", 10, 8);
 }
