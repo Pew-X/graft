@@ -173,7 +173,8 @@ export function PublishStep({
           </a>
         </p>
         <div className="actions">
-          <a className="pill" href={`/p/${outcome.id}`}>
+          {/* a new tab: the ticket below is shown once, and leaving this tab would lose it */}
+          <a className="pill" href={`/p/${outcome.id}`} target="_blank" rel="noopener">
             {copy.publish.done.open}
           </a>
           <a className="pill" href={`/manage/${outcome.id}`}>
@@ -251,6 +252,7 @@ export function PublishStep({
                       : ""}
                 </span>
               </div>
+              <p>{copy.publish.done.keyWhat}</p>
               <p>{copy.publish.done.keyOnce}</p>
               <p>{copy.publish.done.keyIsNot}</p>
               <label className="check">
