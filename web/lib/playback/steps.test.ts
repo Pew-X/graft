@@ -75,11 +75,15 @@ test("rest is the last step and the only one with no end", () => {
   }
 });
 
-test("after an audition roll resumes at that stage's step, and at rest for the finished flip", () => {
+test("after an audition roll resumes at that stage's step, and at the source for the finished flip", () => {
   assert.equal(stepAfterAudition(4, 0), 1);
   assert.equal(stepAfterAudition(4, 2), 3);
-  assert.equal(stepAfterAudition(4, 3), 5, "the finished flip has been heard in full: go to rest");
-  assert.equal(stepAfterAudition(1, 0), 2);
+  assert.equal(
+    stepAfterAudition(4, 3),
+    1,
+    "nothing follows the finished flip: the story starts over",
+  );
+  assert.equal(stepAfterAudition(1, 0), 1, "a chain of one tells its one stage again");
 });
 
 test("a chain needs at least one stage", () => {

@@ -51,7 +51,7 @@ const EVENTS: Record<string, Event> = {
  * first press of play, next or previous from idle starts the teaser; a tap on a stage auditions it from the start; a second tap on
  * the stage that is playing pauses it and a tap after its end replays it; scrubbing is always an
  * audition; the main control after an audition resumes roll mode at that stage's step (the finished
- * flip goes to rest); pause and resume are exact and stay in the same mode; stale timer events do nothing.
+ * flip starts the story over at the source); pause and resume are exact and stay in the same mode; stale timer events do nothing.
  */
 const EXPECTED: Record<string, Record<string, State>> = {
   idle: {

@@ -109,7 +109,7 @@ test("a second tap on the stage that is playing pauses it, and play resumes it f
   assert.ok(resumed && near(resumed.offset, 0.3), `resumed at offset ${resumed?.offset}`);
 });
 
-test("after an audition the main control continues the roll from that stage's step, and from rest for the finished flip", () => {
+test("after an audition the main control continues the roll from that stage's step, and from the source for the finished flip", () => {
   const { graph, engine } = setup();
   engine.tapStage(1);
   engine.play();
@@ -120,10 +120,10 @@ test("after an audition the main control continues the roll from that stage's st
   engine.play();
   assert.deepEqual(
     engine.state,
-    { kind: "rolling", step: 5, elapsed: 0 },
-    "the finished flip goes to rest",
+    { kind: "rolling", step: 1, elapsed: 0 },
+    "nothing follows the finished flip: the story starts over at the source",
   );
-  assert.equal(graph.sounding[0]?.stage, 3);
+  assert.equal(graph.sounding[0]?.stage, 0);
 });
 
 test("pause and resume in roll mode are exact: the same step, the same point in the repeat, the rest of the dwell", () => {
