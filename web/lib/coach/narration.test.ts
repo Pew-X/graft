@@ -36,7 +36,7 @@ test("the four moments of the seeded chain, in the order the sound plays", () =>
   assert.deepEqual(
     buildSteps(stages.length).map((step) => captions(step, stages, frames)),
     [
-      "this is the finished sound.",
+      "this is the finished sound. now hear how it was made.",
       "it began as “dm9 chord”.",
       // 0 to 43200 of the 57600 frames before it, at 3/2
       "then a piece was cut out and sped up.",
@@ -116,7 +116,7 @@ test("a chain of one stage, two stages and twelve all begin and end the same way
   ]);
   const two = all([source(), flip([0, 100], { p: 3, q: 2 })]);
   assert.equal(two.length, 4);
-  assert.equal(two[0], "this is the finished sound.");
+  assert.equal(two[0], "this is the finished sound. now hear how it was made.");
   const twelve = all([
     source(),
     ...Array.from({ length: 11 }, () => flip([0, 100], { p: 3, q: 2 })),
