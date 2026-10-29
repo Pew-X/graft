@@ -42,9 +42,10 @@ export function restStep(stages: number): number {
 
 /**
  * The step roll mode resumes at after an audition of `stage`: the start of that stage's step, and
- * for the finished flip, rest (it has already been heard in full).
+ * for the finished flip, the first stage: nothing is left after it to continue to, and resting on a
+ * sound that has just been heard felt like a loop that would not let go (found in the first live audit).
  */
 export function stepAfterAudition(stages: number, stage: number): number {
   assertStages(stages);
-  return stage >= stages - 1 ? restStep(stages) : stage + 1;
+  return stage >= stages - 1 ? 1 : stage + 1;
 }

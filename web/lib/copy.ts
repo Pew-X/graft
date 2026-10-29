@@ -227,14 +227,47 @@ export const copy = {
       fixed:
         "a published flip is fixed. to change it, flip it again: that makes a new stage after it and leaves this one as it was.",
       keep: "keep this key in this browser",
-      keepGloss: "optional. graft keeps it here only because you chose to.",
+      keepGloss:
+        "so this flip is listed under your flips and you can manage it later. untick it to forget the key now.",
       kept: "kept in this browser.",
+      forgotten: "forgotten. copy the key now: it is shown only once.",
+      flips: "your flips",
       keepFailed: "this browser would not store it. copy the key somewhere safe instead.",
       mismatch:
         "what was stored is the service's render, which differs from the preview you heard. yours was not stored.",
       replay: "this flip was already published by an earlier try. nothing was made twice.",
       manage: "manage this publication",
     },
+  },
+  /** The page that lists the flips this browser holds a key for. */
+  flips: {
+    title: "your flips",
+    intro:
+      "the flips you published from this browser. graft has no account: this list is only the manage key of each flip, kept in this browser.",
+    here: "forgetting a key here removes it from this browser. it does not withdraw the flip.",
+    empty:
+      "no flips here yet. a flip you publish is listed here, in the browser you published it from.",
+    make: "make a flip",
+    loading: "looking for your flips.",
+    open: "open",
+    manage: "manage",
+    forget: "forget",
+    forgetAsk:
+      "forget this key? you will not be able to close or withdraw this flip from here again. the flip stays published.",
+    forgetYes: "yes, forget it",
+    forgetNo: "keep it",
+    forgottenOne: "forgotten.",
+    states: {
+      open: "open to new flips",
+      closed: "closed to new flips",
+      withdrawn: "withdrawn",
+      missing: "not found: it may have been removed",
+      checking: "checking.",
+      unreachable: "the service is not answering. it may be waking up.",
+    },
+    retry: "try again",
+    older: "{n} older flips are also kept in this browser.",
+    untitled: "a flip",
   },
   report: {
     open: "report this sound",
@@ -268,7 +301,8 @@ export const copy = {
       "the manage key you were shown when you published opens two controls for that one publication, and nothing else.",
     keyLabel: "manage key",
     keyGloss:
-      "it is sent with each action and is not kept unless you chose to keep it in this browser.",
+      "it is sent with each action. this browser keeps it only if the keep box was ticked when you published.",
+    flips: "your flips",
     useKept: "use the key kept in this browser",
     forgetKept: "forget the key kept in this browser",
     forgotten: "forgotten. this browser no longer holds the key.",
@@ -334,7 +368,7 @@ export const copy = {
         tracker:
           "where error tracking is switched on, it runs without ip addresses, without session replay and with a scrubber.",
         browser:
-          "the only things graft can keep in your browser are your choice of light or dark, a note of how far you have got with the first-visit guide and the make-a-flip hints (one short word), and a manage key if you tick the box to keep one when you publish.",
+          "the only things graft can keep in your browser are your choice of light or dark, a note of how far you have got with the first-visit guide and the make-a-flip hints (one short word), and the manage key of each flip you publish from it, so that your flips can be listed here. you can untick the box when you publish, or forget a key on the your flips page.",
       },
     },
     takedown: {
@@ -502,8 +536,8 @@ export const copy = {
   footer: {
     disclaimer: "independent experiment, not affiliated with or endorsed by any product named.",
     about: "about",
-    /** On a flip's own page, in the browser that kept its key: the way back to its manage page. */
-    manage: "manage",
+    /** In a browser that holds the key of a flip it published: the way to its list. */
+    flips: "your flips",
     how: "how it works",
     /** The mark before the words on the replay button: a question, so it reads as help. */
     howMark: "?",

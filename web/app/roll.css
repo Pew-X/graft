@@ -502,6 +502,8 @@ button:disabled {
   position: relative;
   display: inline-block;
   max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
   text-align: left;
   border: 0;
   padding: 0.14em 0.38em 0.2em;
@@ -562,6 +564,9 @@ button:disabled {
 }
 .slab .title {
   display: inline;
+  /* typed by a stranger: one long word breaks where it must, and right-to-left text keeps to its own box */
+  overflow-wrap: anywhere;
+  unicode-bidi: isolate;
 }
 /* the plain way to play a stage, kept small */
 .slab .play-word {
@@ -631,6 +636,7 @@ button:disabled {
 }
 .line dd {
   margin: 4px 0 0;
+  overflow-wrap: anywhere;
   font:
     500 clamp(18px, 3.6vw, 24px) / 1.25 var(--f-sans),
     ui-sans-serif,

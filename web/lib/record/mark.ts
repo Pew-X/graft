@@ -55,3 +55,50 @@ export function makeAddress(
 export function markSeconds(mark: Mark, frames: number): number {
   return ((clamp01(mark.to) - clamp01(mark.from)) * Math.max(0, frames)) / RATE;
 }
+
+/** The speeds the record offers on a marked part: the only ones a restored cut may come back with. */
+const OFFERED: ReadonlyArray<readonly [number, number]> = [
+  [1, 2],
+  [2, 3],
+  [3, 4],
+  [4, 3],
+  [3, 2],
+  [2, 1],
+];
+
+const place = (n: number): string => String(Math.round(clamp01(n) * 10_000) / 10_000);
+
+/**
+ * The marked part and its speed as the page's own address fragment (`#cut=3:0.25-0.75@3-2`), written as
+ * the visitor leaves for the make page, so the browser's Back finds the cut still marked. Four decimals:
+ * the same part to within a few frames.
+ */
+export function cutHash(mark: Mark, speed: { p: number; q: number } | null): string {
+  const base = `#cut=${mark.stage}:${place(mark.from)}-${place(mark.to)}`;
+  return speed ? `${base}@${speed.p}-${speed.q}` : base;
+}
+
+/**
+ * A marked part read back from an address fragment, or null for anything that is not exactly what
+ * `cutHash` writes: it comes from the address bar, so it is never trusted. A stage that is not in the
+ * chain, places out of order or outside the stage, and a speed that is not one the record offers are
+ * all refused (a bad speed alone loses the speed and keeps the part).
+ */
+export function parseCutHash(
+  hash: string,
+  stages: number,
+): { mark: Mark; speed: { p: number; q: number } | null } | null {
+  const found =
+    /^#cut=(\d{1,2}):(0|1|0\.\d{1,4})-(0|1|0\.\d{1,4})(?:@([1-9]\d{0,6})-([1-9]\d{0,6}))?$/.exec(
+      hash,
+    );
+  if (!found) return null;
+  const stage = Number(found[1]);
+  const from = Number(found[2]);
+  const to = Number(found[3]);
+  if (!Number.isInteger(stage) || stage >= stages || from > to) return null;
+  const p = Number(found[4]);
+  const q = Number(found[5]);
+  const offered = OFFERED.some(([a, b]) => a === p && b === q);
+  return { mark: { stage, from, to }, speed: offered ? { p, q } : null };
+}

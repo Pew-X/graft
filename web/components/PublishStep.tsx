@@ -10,7 +10,7 @@ import {
   publishWithRetries,
 } from "../lib/publish/client.ts";
 import { NAME_MAX, TITLE_MAX, hintFor } from "../lib/publish/hints.ts";
-import { keepKey } from "../lib/publish/keep.ts";
+import { forgetKey, keepKey } from "../lib/publish/keep.ts";
 import { Trace } from "./Trace.tsx";
 import { newRetryKey } from "../lib/publish/retry-key.ts";
 import { wireFor } from "../lib/publish/wire.ts";
@@ -22,6 +22,14 @@ type Phase =
   | { name: "refused"; refusal: Refusal }
   | { name: "gaveUp"; outcome: Extract<Outcome, { kind: "gaveUp" }> }
   | { name: "done"; outcome: Extract<Outcome, { kind: "published" }> };
+
+function browserStorage(): Storage | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null; // storage blocked
+  }
+}
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -106,7 +114,9 @@ export function PublishStep({
   const [phase, setPhase] = useState<Phase>({ name: "form" });
   const [copied, setCopied] = useState<"no" | "yes" | "failed">("no");
   const [keyCopied, setKeyCopied] = useState<"no" | "yes" | "failed">("no");
-  const [kept, setKept] = useState<"no" | "yes" | "failed">("no");
+  // the key is kept in this browser as soon as it is shown (so the flip is listed under "your flips"), and
+  // unticking the box forgets it again
+  const [kept, setKept] = useState<"no" | "yes" | "failed" | "forgotten">("no");
   const heading = useRef<HTMLHeadingElement>(null);
   const message = useRef<HTMLDivElement>(null);
   const titleInput = useRef<HTMLDivElement>(null);
@@ -143,6 +153,8 @@ export function PublishStep({
         },
       );
       if (outcome.kind === "published") {
+        if (outcome.manageKey)
+          setKept(keepKey(browserStorage(), outcome.id, outcome.manageKey) ? "yes" : "failed");
         setPhase({ name: "done", outcome });
         onPublished?.(outcome.id);
       } else if (outcome.kind === "refused")
@@ -179,6 +191,9 @@ export function PublishStep({
           </a>
           <a className="pill" href={`/manage/${outcome.id}`}>
             {copy.publish.done.manage}
+          </a>
+          <a className="pill" href="/flips" target="_blank" rel="noopener">
+            {copy.publish.done.flips}
           </a>
           <button
             type="button"
@@ -260,15 +275,15 @@ export function PublishStep({
                   type="checkbox"
                   checked={kept === "yes"}
                   onChange={(e) => {
-                    if (!e.target.checked) return;
-                    let storage: Storage | null = null;
-                    try {
-                      storage = window.localStorage;
-                    } catch {
-                      /* storage blocked */
+                    if (!e.target.checked) {
+                      forgetKey(browserStorage(), outcome.id);
+                      setKept("forgotten");
+                      return;
                     }
                     setKept(
-                      keepKey(storage, outcome.id, outcome.manageKey ?? "") ? "yes" : "failed",
+                      keepKey(browserStorage(), outcome.id, outcome.manageKey ?? "")
+                        ? "yes"
+                        : "failed",
                     );
                   }}
                 />
@@ -282,7 +297,9 @@ export function PublishStep({
                   ? copy.publish.done.kept
                   : kept === "failed"
                     ? copy.publish.done.keepFailed
-                    : ""}
+                    : kept === "forgotten"
+                      ? copy.publish.done.forgotten
+                      : ""}
               </p>
             </div>
           </div>
