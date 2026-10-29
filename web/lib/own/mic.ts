@@ -4,6 +4,8 @@ export const MAX_SECONDS = 15;
 export type MicProblem = "denied" | "unavailable";
 
 export interface Recording {
+  /** The open microphone, so a picture of what it hears can be drawn while it is held (the recording indicator stays the browser's). */
+  stream: MediaStream;
   /** Stop and hand back what was recorded. */
   stop(): Promise<Blob>;
   /** Stop and throw away what was recorded, and let the microphone go. */
@@ -47,6 +49,7 @@ export async function startRecording(
   return {
     ok: true,
     recording: {
+      stream,
       cancel: () => {
         clearTimeout(timer);
         recorder.ondataavailable = null;

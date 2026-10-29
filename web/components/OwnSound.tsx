@@ -4,12 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { copy } from "../lib/copy.ts";
 import { type Decoded, decodeToCanonical, tooBigToRead } from "../lib/own/decode.ts";
 import { type Recording, startRecording } from "../lib/own/mic.ts";
+import { RecordScope } from "./RecordScope.tsx";
 import { MAX_FRAMES } from "../lib/own/source.ts";
 
 type Status =
   | { name: "idle" }
   | { name: "asking" }
-  | { name: "recording" }
+  | { name: "recording"; stream: MediaStream }
   | { name: "reading" }
   | { name: "problem"; text: string };
 
@@ -68,7 +69,7 @@ export function OwnSound({
       return;
     }
     recording.current = started.recording;
-    setStatus({ name: "recording" });
+    setStatus({ name: "recording", stream: started.recording.stream });
   }
 
   return (
@@ -114,6 +115,7 @@ export function OwnSound({
           />
         </label>
       </div>
+      {status.name === "recording" ? <RecordScope stream={status.stream} /> : null}
       {uploads === true ? (
         <p className="notice own-rights" data-testid="rights-note">
           {copy.own.rightsNote}
