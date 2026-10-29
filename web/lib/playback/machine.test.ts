@@ -48,7 +48,7 @@ const EVENTS: Record<string, Event> = {
 
 /**
  * The expected result of every state meeting every event, written by hand from the spec (Appendix E):
- * first tap from idle starts the teaser; a tap on a stage auditions it from the start; a second tap on
+ * first press of play, next or previous from idle starts the teaser; a tap on a stage auditions it from the start; a second tap on
  * the stage that is playing pauses it and a tap after its end replays it; scrubbing is always an
  * audition; the main control after an audition resumes roll mode at that stage's step (the finished
  * flip goes to rest); pause and resume are exact and stay in the same mode; stale timer events do nothing.
@@ -62,8 +62,8 @@ const EXPECTED: Record<string, Record<string, State>> = {
     "scrub start": aud(2, 0.5),
     "scrub move": aud(2, 0.6),
     "scrub end": idle,
-    next: idle,
-    previous: idle,
+    next: roll(0, 0),
+    previous: roll(0, 0),
     "dwell ended": idle,
     "audition ended": idle,
     "tab hidden": idle,

@@ -22,7 +22,7 @@ const SENTENCE = "a sound has a past. hear how this one was made, then make the 
 const STAGES = 4;
 /** What the roll says, moment by moment, for the seeded chain: wording hand-worked from its data. */
 const NARRATION = [
-  ["teaser:3", "this is the finished sound."],
+  ["teaser:3", "this is the finished sound. now hear how it was made."],
   ["stage:0", "it began as “dm9 chord”."],
   ["stage:1", "then a piece was cut out and sped up."],
   ["stage:2", "then a piece was cut out and slowed down."],
@@ -70,6 +70,10 @@ test("before play a first visit shows the sentence and nothing else: no caption,
 }) => {
   await arrive(page);
   await expect(page.locator(".bar .sentence")).toHaveText(SENTENCE);
+  // the line over the controls says what the first play is, in the words of the sentence
+  await expect(page.getByRole("status").first()).toContainText(
+    "tap play to hear how this was made",
+  );
   await page.waitForTimeout(1500);
   await expect(caption(page)).toHaveCount(0);
   await expect(hint(page)).toHaveCount(0);
@@ -458,6 +462,13 @@ test("replay in the middle of the narration starts it again from the first capti
   await expect(caption(page)).toHaveAttribute("data-moment", "teaser:3");
 });
 
+test("an arrow pressed on a fresh page starts the first play, as play does", async ({ page }) => {
+  await arrive(page);
+  await page.getByRole("button", { name: "next stage" }).click();
+  await expect(caption(page)).toHaveAttribute("data-moment", "teaser:3");
+  await expect(page.locator(".roll")).toHaveAttribute("data-playback", "rolling");
+});
+
 test("replay while a hint is up ends the hint and narrates again", async ({ page }) => {
   await arriveWith(page, "narrated");
   await expect(hint(page)).toContainText("drag the needle");
@@ -474,6 +485,28 @@ test("replay while marking a part narrates again and nothing throws", async ({ p
   await how(page).click();
   await expect(caption(page)).toHaveAttribute("data-moment", "teaser:3");
   expect(errors).toEqual([]);
+});
+
+test("replay with a part marked closes the cut, so its menu is not left over the captions", async ({
+  page,
+}) => {
+  await arriveWith(page, "done+made");
+  await page.getByRole("button", { name: "cut on the record" }).click();
+  const a = await pointOn(page, STAGES, 3, 0.25);
+  const b = await pointOn(page, STAGES, 3, 0.75);
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(b.x, b.y, { steps: 8 });
+  await page.mouse.up();
+  const menu = page.getByRole("group", { name: "cut on the record" });
+  await expect(menu).toBeVisible();
+  await how(page).click();
+  await expect(menu).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "cut on the record" })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+  await expect(caption(page)).toHaveAttribute("data-moment", "teaser:3");
 });
 
 test("a link ending in #how plays the guide from the start, even for a browser that finished it", async ({
