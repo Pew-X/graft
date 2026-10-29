@@ -47,7 +47,7 @@ test("a published flip has a link that opens the whole chain, ending with it", a
   await expect(roll(page)).toHaveAttribute("data-sounding", "true");
 });
 
-test("the link preview is the final stage's title and one plain line, and nothing else", async ({
+test("the link preview is the final stage's title and one plain line, with the card as its only picture", async ({
   page,
   request,
 }) => {
@@ -59,16 +59,13 @@ test("the link preview is the final stage's title and one plain line, and nothin
   expect(await meta('meta[name="description"]')).toBe(line);
   expect(await meta('meta[property="og:title"]')).toBe("preview test flip");
   expect(await meta('meta[property="og:description"]')).toBe(line);
-  const properties = await page
-    .locator('meta[property^="og:"]')
-    .evaluateAll((els) => els.map((e) => e.getAttribute("property")));
-  expect(properties.sort()).toEqual(["og:description", "og:title", "og:type"]);
-  // The framework mirrors the title and line for other readers; there is no image of any kind.
+  // The words are the title and the line, as before. The only picture is the share card, which the
+  // framework names from the page's own image file (its address, type and size), and nothing else is added.
   const names = await page
     .locator('meta[name^="twitter:"], meta[property^="og:"]')
     .evaluateAll((els) => els.map((e) => e.getAttribute("name") ?? e.getAttribute("property")));
-  expect(names.filter((n) => /image/.test(n ?? ""))).toEqual([]);
-  expect(names.sort()).toEqual([
+  const words = names.filter((n) => !/image/.test(n ?? ""));
+  expect(words.sort()).toEqual([
     "og:description",
     "og:title",
     "og:type",
@@ -76,6 +73,15 @@ test("the link preview is the final stage's title and one plain line, and nothin
     "twitter:description",
     "twitter:title",
   ]);
+  const pictures = names.filter((n) => /image/.test(n ?? ""));
+  expect(pictures.length, "the card is advertised").toBeGreaterThan(0);
+  for (const n of pictures)
+    expect(n, "only the card's own tags").toMatch(/^(og:image|twitter:image)/);
+  expect(await meta('meta[property="og:image"]')).toContain(`/p/${id}/opengraph-image`);
+  await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute(
+    "content",
+    "summary_large_image",
+  );
 });
 
 test("a stage withdrawn by the operator reads 'no longer here' with its credit, and its audio is never asked for", async ({

@@ -2,9 +2,10 @@ import { copy } from "../copy.ts";
 import type { Chain } from "./chain.ts";
 
 /**
- * The link preview of a chain: a title and one plain line, and nothing else (no poster, no card, no
- * share template). The title is the final stage's; a final stage that is not here has no title to
- * give, so the preview falls back to the site's own.
+ * The link preview of a chain: a title and one plain line. The title is the final stage's; a final stage
+ * that is not here has no title to give, so the preview falls back to the site's own. The picture beside
+ * them (the share card, `app/p/[id]/opengraph-image.tsx`) is held to the same words: it draws a title only
+ * where this does, so a withdrawn or hidden stage shows the site's name there too.
  */
 export function previewOf(chain: Chain): { title: string; description: string } {
   const last = chain.stages.at(-1);
