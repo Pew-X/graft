@@ -51,6 +51,20 @@ interface Props {
   onMark?: (mark: Mark | null) => void;
 }
 
+/** The keys that act on the record: the ring that shows where they act comes back with one of these. */
+const RING_KEYS = new Set([
+  "Enter",
+  " ",
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowUp",
+  "ArrowDown",
+  "Home",
+  "End",
+  "[",
+  "]",
+]);
+
 const SAMPLE_RATE = 48_000;
 const DISC_TURNS_PER_SECOND = 0.55; // 33 and a third revolutions a minute
 
@@ -247,6 +261,9 @@ export function Disc({
     const hitAt = point && target(point.x, point.y);
     if (!hitAt || hitAt.empty || playable[hitAt.band] === false) return; // no sound there
     event.currentTarget.setPointerCapture(event.pointerId);
+    // a press is the pointer's, not the keyboard's: the ring that shows where the keys act goes away
+    // (it stayed on the stylus's tip after the record had been tabbed to, until a reload)
+    focused.current = false;
     held.current = hitAt.band;
     dragging.current = true;
     pointer.current = point;
@@ -300,6 +317,10 @@ export function Disc({
     redraw();
   };
   const onKey = (event: KeyboardEvent): void => {
+    if (!focused.current && RING_KEYS.has(event.key)) {
+      focused.current = true; // the keys are acting again: show where
+      redraw();
+    }
     if (marking && onMark) {
       const length = lengths[cursor.stage] ?? 0;
       const u = length > 0 ? cursor.offset / length : 0;

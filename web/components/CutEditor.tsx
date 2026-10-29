@@ -133,10 +133,6 @@ export function CutEditor({
           );
         })}
       </div>
-      {/* the keyboard's part of the one-line hint above the editor, read out with each bracket */}
-      <p className="help" id={`${clip}-help`}>
-        {copy.make.cut.help}
-      </p>
       <p className="readout" data-testid="cut-readout">
         {inverted
           ? `${seconds(cut.start)} to ${seconds(cut.end)}`
@@ -145,6 +141,10 @@ export function CutEditor({
               to: seconds(cut.end),
               length: seconds(cut.end - cut.start),
             })}
+      </p>
+      {/* what the keyboard does to the brackets: seen, and read out with each bracket */}
+      <p className="help" id={`${clip}-help`}>
+        {copy.make.cut.help}
       </p>
     </div>
   );

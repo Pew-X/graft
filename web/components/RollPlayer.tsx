@@ -81,6 +81,7 @@ export function RollPlayer({
   openMake,
   makeHref,
   apiUrl,
+  manageHref,
 }: {
   blocks: readonly Block[];
   load: Loader;
@@ -96,6 +97,8 @@ export function RollPlayer({
   makeHref?: string | undefined;
   /** Where the service is, for reports. Without it there is nowhere to send one, so no report control is shown. */
   apiUrl?: string | undefined;
+  /** The manage page of the flip this page shows, when this browser kept its key: the footer links to it. */
+  manageHref?: string | undefined;
 }) {
   const [load, setLoad] = useState<Load>("loading");
   const [attempt, setAttempt] = useState(0);
@@ -440,7 +443,12 @@ export function RollPlayer({
           ? copy.offline
           : copy.hint.loadFailed
         : state.kind === "idle"
-          ? [copy.hint.locked, unplayableText].filter(Boolean).join(" ")
+          ? [
+              phaseKnown && phase === "armed" ? copy.hint.lockedFirst : copy.hint.locked,
+              unplayableText,
+            ]
+              .filter(Boolean)
+              .join(" ")
           : "");
   const moment = narrating ? momentAt(state, stages) : null;
   const captionText = moment
@@ -780,8 +788,25 @@ export function RollPlayer({
         <ReportDialog target={reporting} apiUrl={apiUrl} onClose={() => setReporting(null)} />
       ) : null}
       <Footer
+        manageHref={manageHref}
         onHow={() => {
-          // the guide again from the start: the roll begins at its first step, and this press allows sound
+          // the guide again from the start: the roll begins at its first step, and this press allows sound.
+          // A cut that is open goes first: its menu would sit over the captions, and the guide's own
+          // hints are for a page that is not in the middle of cutting.
+          setMarking(false);
+          setMark(null);
+          // What was sounding stops and the roll starts again in the same update as the guide restarts.
+          // Left sounding, an audition (a ring tapped, a part dragged) is read as the visitor taking
+          // over, which ended the narration before it began (the first audit saw a replay with no
+          // captions); and a stop on its own would read as a narration that went quiet.
+          const running = engineNow.current;
+          if (running) {
+            setNotice("");
+            running.routeChange();
+            guide("replay");
+            running.play();
+            return;
+          }
           guide("replay");
           act((e) => {
             e.routeChange();

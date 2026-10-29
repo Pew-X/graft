@@ -159,3 +159,20 @@ for (const size of SIZES) {
     });
   });
 }
+
+test("'more' under a long stage is a real button, and pressing it scrolls the stage", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await open(page);
+  // Found in the first live audit: it was a word drawn after the stage that looked pressable and was not.
+  const more = page.getByRole("button", { name: "more of this stage" });
+  await expect(more).toBeVisible();
+  const top = (): Promise<number> =>
+    page.evaluate(
+      () => document.querySelector<HTMLElement>('.block[data-hero="true"] > article')!.scrollTop,
+    );
+  const before = await top();
+  await more.click();
+  await expect.poll(top).toBeGreaterThan(before);
+});

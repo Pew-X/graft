@@ -14,6 +14,8 @@ export const copy = {
   },
   hint: {
     locked: "tap play to hear it. nothing sounds until you do.",
+    /** The same, for a first visit: it says what the first play is, in the words of the sentence above it. */
+    lockedFirst: "tap play to hear how this was made. nothing sounds until you do.",
     loading: "loading the sounds.",
     loadFailed: "the sounds could not be loaded. reload to try again.",
     soundFailed: "the sound could not start. tap play to try again.",
@@ -35,6 +37,8 @@ export const copy = {
     kickerYours: "no. {n} · yours",
     label: "the credits",
     stage: "stage {n} of {total}: {title}",
+    more: "more",
+    moreLabel: "more of this stage",
   },
   record: {
     label: "the record",
@@ -203,7 +207,7 @@ export const copy = {
     done: {
       heading: "published",
       link: "the link to your flip",
-      open: "open it",
+      open: "open it in a new tab",
       copy: "copy the link",
       copied: "copied.",
       copyFailed: "copying did not work here. select the link and copy it.",
@@ -212,8 +216,9 @@ export const copy = {
       traceCaption:
         "this line is drawn from the flip's id: the same flip always draws the same line.",
       stubHand: "keep this.",
-      keyOnce:
-        "it is shown once and cannot be shown again. you need it to close this flip to new flips, or to withdraw it.",
+      keyWhat:
+        "the link above is what you share. this ticket is only for you: it is how you withdraw this flip later, or close it to new flips.",
+      keyOnce: "it is shown once and cannot be shown again, so copy it now.",
       keyIsNot:
         "it is not a login and not who you are. if you lose it, the only loss is that this flip's settings cannot be changed.",
       copyKey: "copy the key",
@@ -437,7 +442,7 @@ export const copy = {
       gloss: "drag the brackets to keep a piece",
       start: "start of the cut",
       end: "end of the cut",
-      help: "the two brackets can also be moved from the keyboard: the arrow keys move one millisecond a press, ten with shift.",
+      help: "or click a bracket and use the arrow keys: one millisecond a press, ten with shift.",
       tag: { start: "start", end: "end" },
       range: "{from} to {to} seconds, {length} kept",
     },
@@ -478,7 +483,8 @@ export const copy = {
     declared: "declared",
     computed: "computed",
     unknown: "unknown",
-    asTyped: "as typed",
+    // said on every credit line a person typed: it says the words are theirs and graft did not check them
+    asTyped: "not checked",
   },
   details: {
     summary: "details",
@@ -496,6 +502,8 @@ export const copy = {
   footer: {
     disclaimer: "independent experiment, not affiliated with or endorsed by any product named.",
     about: "about",
+    /** On a flip's own page, in the browser that kept its key: the way back to its manage page. */
+    manage: "manage",
     how: "how it works",
     /** The mark before the words on the replay button: a question, so it reads as help. */
     howMark: "?",
@@ -524,7 +532,7 @@ export const copy = {
    */
   narration: {
     label: "how it was made",
-    teaser: "this is the finished sound.",
+    teaser: "this is the finished sound. now hear how it was made.",
     teaserOne: "this is the sound.",
     began: "it began as \u201c{name}\u201d.",
     cutUp: "then a piece was cut out and sped up.",
@@ -557,10 +565,10 @@ export function fill(template: string, values: Record<string, string | number>):
 export const roles: Record<string, { word: string; gloss: string }> = {
   source: { word: "source", gloss: "the sound it began as" },
   flip: { word: "flip", gloss: "what was done to it" },
-  "flipped by": { word: "flipped by", gloss: "who made this stage, as typed" },
-  by: { word: "by", gloss: "who made it, as typed" },
+  "flipped by": { word: "flipped by", gloss: "who made this stage, in their own words" },
+  by: { word: "by", gloss: "who made it, in their own words" },
   "forked from": { word: "forked from", gloss: "the stage this one was cut from" },
-  licence: { word: "licence", gloss: "the terms it was shared under, as typed" },
+  licence: { word: "licence", gloss: "the terms it was shared under, as the maker wrote them" },
   declaration: { word: "declaration", gloss: "what the maker said about sharing it" },
   rights: { word: "rights", gloss: "whether the right to share it is established" },
   cut: { word: "the cut", gloss: "the part that was kept" },

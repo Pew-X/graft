@@ -145,13 +145,17 @@ export function transition(state: State, event: Event, stages: number): Result {
     case "idle":
       switch (event.type) {
         case "play":
-          return go(state, { kind: "rolling", step: 0, elapsed: 0 }, stages); // first tap: the teaser
+        case "next":
+        case "previous":
+          // The first press of any transport control starts the story at the teaser: an arrow that
+          // did nothing on a fresh page read as broken.
+          return go(state, { kind: "rolling", step: 0, elapsed: 0 }, stages);
         case "tapStage":
           return badStage(event.stage)
             ? nothing
             : go(state, audition(stageIn(event.stage), 0), stages, true);
         default:
-          return nothing; // pause, next, previous and the timers' events mean nothing here
+          return nothing; // pause and the timers' events mean nothing here
       }
 
     case "rolling":

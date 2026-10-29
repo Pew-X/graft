@@ -13,6 +13,29 @@ function Stated({ state, asTyped }: { state: string; asTyped: boolean }) {
   );
 }
 
+/**
+ * "more ↓" under a stage that has more than fits. The page's styles show it only while there is more
+ * (it is a button, so a press scrolls the stage, instead of a word that looks pressable and is not).
+ */
+function MoreCue() {
+  return (
+    <button
+      type="button"
+      className="more-cue"
+      aria-label={copy.roll.moreLabel}
+      onClick={(event) => {
+        const article = event.currentTarget.parentElement?.querySelector(":scope > article");
+        if (!article) return;
+        const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        article.scrollBy({ top: article.clientHeight * 0.8, behavior: still ? "auto" : "smooth" });
+      }}
+    >
+      {copy.roll.more}
+      <span aria-hidden="true"> {"\u2193"}</span>
+    </button>
+  );
+}
+
 function Line({ line }: { line: FaceLine }) {
   return (
     <div className="line" data-honesty={line.honesty}>
@@ -183,6 +206,7 @@ export const CreditBlock = memo(function CreditBlock({
           </button>
         ) : null}
       </article>
+      {hero ? <MoreCue /> : null}
     </li>
   );
 });
@@ -231,6 +255,7 @@ export const EndBlock = memo(function EndBlock({
           {copy.flip.label}
         </button>
       </article>
+      {hero ? <MoreCue /> : null}
     </li>
   );
 });

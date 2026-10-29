@@ -54,15 +54,16 @@ export function EditPart({
   // is read as two numbers, not as the object the page makes afresh on every render.
   const { start, end } = cut;
   useEffect(() => {
-    if (!hearing || speed === null || samples === null) {
+    if (!hearing || samples === null) {
       previewer.stop();
       return undefined;
     }
     let current = true;
+    // no speed chosen means the part as it is: the same speed, one to one
+    const p = speed?.p ?? 1;
+    const q = speed?.q ?? 1;
     browserRenderer()
-      .then((engine) =>
-        renderFlip(engine, samples, { cut: { start, end }, p: speed.p, q: speed.q }),
-      )
+      .then((engine) => renderFlip(engine, samples, { cut: { start, end }, p, q }))
       .then(async (made) => {
         if (!current) return;
         if (!made.ok) throw new Error("refused");
@@ -118,7 +119,7 @@ export function EditPart({
         type="button"
         className="hear"
         aria-pressed={hearing}
-        disabled={speed === null || samples === null}
+        disabled={samples === null}
         onClick={() => {
           if (hearing) {
             setHearing(false);
