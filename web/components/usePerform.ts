@@ -37,6 +37,8 @@ interface Options {
   pauseRoll: () => void;
   /** The narration, if it is running, ends as if skipped. */
   endNarration: () => void;
+  /** A part being marked on the record ends (clears): its tools and the pad bank share the bottom of the page. */
+  endMarking: () => void;
   /** Where words for the visitor go (the polite status line). */
   say: (text: string) => void;
   /** Whether a part is being marked on the record: Escape belongs to it first. */
@@ -59,6 +61,7 @@ export function usePerform({
   prepare,
   pauseRoll,
   endNarration,
+  endMarking,
   say,
   marking,
   setShown,
@@ -161,14 +164,21 @@ export function usePerform({
 
   // A phrase in the address (a link that was sent) is offered, never played by itself.
   useEffect(() => {
-    if (!PERFORM_ON || stages < 2) return;
-    queueMicrotask(() => {
+    if (!PERFORM_ON || stages < 2) return undefined;
+    const read = (): void => {
+      // a recording in hand is not interrupted by an address someone pastes or edits
+      if (recorder.active) return;
       const found = parsePhraseHash(window.location.hash, stages);
       if (!found) return;
       setPhrase(found);
+      setLinkable(true);
       setInvited(true);
-    });
-  }, [stages]);
+    };
+    queueMicrotask(read);
+    // a link pasted into a page that is already open changes only the address fragment: no reload
+    window.addEventListener("hashchange", read);
+    return () => window.removeEventListener("hashchange", read);
+  }, [recorder, stages]);
 
   const finishRecording = useCallback((): void => {
     if (!recorder.active) return;
@@ -286,6 +296,7 @@ export function usePerform({
     setShown(null);
     pauseRoll();
     endNarration();
+    endMarking();
     // what is printed on the keys, where the browser can say (labels only: the keys are by position)
     void printedMarks((navigator as unknown as { keyboard?: KeyboardLike }).keyboard).then(
       setMarks,
@@ -342,7 +353,7 @@ export function usePerform({
       .catch(failed);
     ready.current = chain;
     return chain;
-  }, [audio, endNarration, light, pauseRoll, prepare, say, setShown]);
+  }, [audio, endMarking, endNarration, light, pauseRoll, prepare, say, setShown]);
 
   const enter = useCallback((): void => {
     void begin();

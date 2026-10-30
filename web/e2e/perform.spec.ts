@@ -137,21 +137,40 @@ test("escape silences what sounds, and a second escape leaves perform", async ({
   expect(await started(page)).toEqual([FRAMES[2]]);
 });
 
-test("escape belongs to marking a part first: it leaves marking and perform stays on", async ({
-  page,
-}) => {
+test("marking a part and performing are one at a time, in both directions", async ({ page }) => {
   await arrive(page);
   await enter(page);
+  // starting to mark a part leaves perform: the cut tools and the pads never share the bottom of the page
   await page
     .getByRole("button", { name: /cut on the record/i })
     .first()
     .click();
   await expect(page.locator(".mark-toggle").first()).toHaveAttribute("aria-pressed", "true");
-  await page.keyboard.press("Escape");
-  await expect(page.locator(".mark-toggle").first()).toHaveAttribute("aria-pressed", "false");
+  await expect(roll(page)).toHaveAttribute("data-perform", "false");
+  await expect(page.locator(".bank")).toHaveCount(0);
+  // turning perform on ends the marking, and the address loses the cut
+  await toggle(page).click();
   await expect(roll(page)).toHaveAttribute("data-perform", "true");
+  await expect(page.locator(".mark-toggle").first()).toHaveAttribute("aria-pressed", "false");
+  expect(new URL(page.url()).hash).toBe("");
+  // escape then leaves perform as it always did
+  await page.keyboard.press("Escape");
   await page.keyboard.press("Escape");
   await expect(roll(page)).toHaveAttribute("data-perform", "false");
+});
+
+test("a part marked and kept in the address is ended by perform, and the phrase link then plays", async ({
+  page,
+}) => {
+  await spy(page);
+  await page.goto("/#cut=3:0-0.25");
+  await expect(roll(page)).toHaveAttribute("data-audio", "ready");
+  await expect(page.locator(".mark-toggle").first()).toHaveAttribute("aria-pressed", "true");
+  await toggle(page).click();
+  await expect(roll(page)).toHaveAttribute("data-perform", "true");
+  await expect(page.locator(".mark-toggle").first()).toHaveAttribute("aria-pressed", "false");
+  // no cut tools are on the page to cover the pads
+  await expect(page.getByRole("button", { name: /flip this part/i })).toHaveCount(0);
 });
 
 test("entering perform pauses the roll where it was, and leaving does not start it again", async ({

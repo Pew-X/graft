@@ -181,3 +181,70 @@ test("a hidden page stops a looping phrase", async ({ page }) => {
   await page.waitForTimeout(1500);
   expect((await started(page)).length).toBe(n);
 });
+
+test("a phrase link pasted into a page that is already open is offered without a reload", async ({
+  page,
+}) => {
+  await arrive(page);
+  await expect(page.locator(".phrase-invite")).toHaveCount(0);
+  // a pasted link to the same page changes only the address fragment: the page does not reload
+  await page.evaluate(() => {
+    window.location.hash = "#phrase=1:0,3:30,2:70";
+  });
+  await expect(page.locator(".phrase-invite")).toBeVisible();
+  expect(await started(page)).toEqual([]);
+  // a fragment that is not a phrase takes nothing away
+  await page.getByRole("button", { name: "play the phrase" }).click();
+  await page.evaluate(() => {
+    window.location.hash = "#how";
+  });
+  await expect(page.getByRole("button", { name: "play phrase" })).toBeVisible();
+});
+
+test("on a small phone the pad bank with a phrase row does not cover the stage title", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await arrive(page);
+  await enter(page);
+  await rec(page).click();
+  await page.keyboard.press("Digit1");
+  await page.keyboard.press("Digit2");
+  await rec(page).click();
+  await expect(page.getByRole("button", { name: "play phrase" })).toBeVisible();
+  // the roll slides to the stage played: measure once it has settled
+  await page.waitForTimeout(900);
+  const covered = await page.evaluate(() => {
+    const bank = document.querySelector(".bank")!.getBoundingClientRect();
+    let best: DOMRect | null = null;
+    let seen = 0;
+    for (const slab of document.querySelectorAll(".slab")) {
+      const r = slab.getBoundingClientRect();
+      const visible = Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0));
+      if (visible > seen) {
+        seen = visible;
+        best = r;
+      }
+    }
+    if (!best) return -1;
+    const w = Math.max(0, Math.min(best.right, bank.right) - Math.max(best.left, bank.left));
+    const h = Math.max(0, Math.min(best.bottom, bank.bottom) - Math.max(best.top, bank.top));
+    return (w * h) / (best.width * best.height);
+  });
+  expect(covered).toBe(0);
+  // every button of the bank stays at least 43 px tall, and the page does not scroll sideways
+  const smallest = await page.evaluate(() =>
+    Math.min(
+      ...[...document.querySelectorAll(".bank button")].map(
+        (b) => b.getBoundingClientRect().height,
+      ),
+    ),
+  );
+  expect(smallest).toBeGreaterThanOrEqual(43);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
+  // the short words show on a narrow screen and the buttons keep their full names
+  const play = page.getByRole("button", { name: "play phrase" });
+  await expect(play.locator(".short")).toBeVisible();
+  await expect(play.locator(".short")).toHaveText("play");
+  await expect(play.locator(".long")).toBeHidden();
+});

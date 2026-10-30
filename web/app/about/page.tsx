@@ -63,6 +63,10 @@ export default function About() {
           </section>
         ) : null}
         <section>
+          <h2 className="kicker">{a.own.heading}</h2>
+          <p>{a.own.body}</p>
+        </section>
+        <section>
           <h2 className="kicker">{a.isNot.heading}</h2>
           <p>{PERFORM_ON ? a.isNot.body : a.isNot.bodyWithoutPerform}</p>
         </section>

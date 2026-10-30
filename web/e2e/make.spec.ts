@@ -345,3 +345,10 @@ test.describe("arriving from the header's make a flip", () => {
     ]);
   });
 });
+
+test("the make page has one top heading", async ({ page }) => {
+  await page.goto("/make?from=es1418qka9yt&cut=0-43200&speed=3/2");
+  await ready(page);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(/make a flip/i);
+});

@@ -23,7 +23,7 @@ export default function FlipsPage() {
           <Link href="/" className="back">
             {copy.make.home}
           </Link>
-          <p className="kicker">{copy.flips.title}</p>
+          <h1 className="kicker">{copy.flips.title}</h1>
         </div>
         <YourFlips apiUrl={apiUrls().browser} />
       </main>

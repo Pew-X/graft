@@ -1089,6 +1089,28 @@ button:disabled {
 .bank-phrase button:disabled {
   opacity: 0.45;
 }
+.bank-phrase .short {
+  display: none;
+}
+/* a narrow screen: the five buttons share one row (short words show, the full names stay on the buttons),
+   so the bank keeps the height it has without a phrase and does not cover the stage's title */
+@media (max-width: 420px) {
+  .bank-phrase {
+    gap: 4px;
+    flex-wrap: nowrap;
+  }
+  .bank-phrase button {
+    min-width: 0;
+    padding: 0 9px;
+    gap: 5px;
+  }
+  .bank-phrase .long {
+    display: none;
+  }
+  .bank-phrase .short {
+    display: inline;
+  }
+}
 /* the recording light: a hot red dot, pulsing while a phrase is being kept */
 .bank-phrase .rec-dot {
   width: 9px;
