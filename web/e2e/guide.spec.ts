@@ -639,3 +639,36 @@ test("replay ends with the perform hint, and nothing is sent back in the stored 
   await expect(hint(page)).toContainText("press perform", { timeout: 15_000 });
   expect(await stored(page)).toBe("keys");
 });
+
+test("the perform hint never covers the line that says tap play, because that line gives way while the hint is up", async ({
+  page,
+}) => {
+  await arriveWith(page, "done+made");
+  await expect(hint(page)).toContainText("press perform");
+  const note = await box(page, "[data-testid=hint] .hint-note");
+  expect(note).not.toBeNull();
+  // the idle line is not drawn under the hint; where it is drawn, they do not meet
+  const status = await box(page, ".notes .status");
+  if (status) expect(overlap(note!, status), "the hint sits on the status line").toBe(0);
+  await expect(hint(page)).toHaveCount(0, { timeout: 15_000 });
+  // and the line is back once the hint has gone
+  await expect(page.locator(".notes .status")).toContainText("tap play to hear it");
+});
+
+test("the same at the sizes of a phone and a small laptop", async ({ page }) => {
+  let measured = 0;
+  for (const size of SIZES) {
+    // a fresh page each time: the stored word is seeded once per tab, so each size gets its own tab
+    const tab = await page.context().newPage();
+    await tab.setViewportSize({ width: size.width, height: size.height });
+    await arriveWith(tab, "done+made");
+    await expect(hint(tab)).toContainText("press perform");
+    const note = await box(tab, "[data-testid=hint] .hint-note");
+    const status = await box(tab, ".notes .status");
+    expect(note, `${size.name}: the hint is drawn`).not.toBeNull();
+    if (status) expect(overlap(note!, status), `${size.name}`).toBe(0);
+    measured += 1;
+    await tab.close();
+  }
+  expect(measured).toBe(SIZES.length);
+});
