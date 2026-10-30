@@ -57,6 +57,7 @@ import { Disc, type Live } from "./Disc.tsx";
 import { EditPart } from "./EditPart.tsx";
 import { Footer } from "./Footer.tsx";
 import { Hint } from "./Hint.tsx";
+import { PadBank } from "./PadBank.tsx";
 import { Thread } from "./Thread.tsx";
 import { useHeld } from "./useHeld.ts";
 import { MOST_PADS_BY_KEY } from "../lib/perform/keys.ts";
@@ -813,6 +814,17 @@ export function RollPlayer({
             : undefined
         }
       >
+        {performing ? (
+          <PadBank
+            blocks={blocks}
+            playable={playable}
+            shown={performShown}
+            mode={perform.mode}
+            onMode={perform.setMode}
+            onPress={perform.press}
+            onStop={perform.silence}
+          />
+        ) : null}
         {moment && captionText !== null ? (
           <Caption
             text={captionText}

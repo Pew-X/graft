@@ -46,6 +46,22 @@ export const copy = {
     failed: "the sound could not start. press perform to try again.",
     /** Read out when a stage is played, with its number and title. */
     played: "stage {n} of {total}: {title}",
+    /** The bank of pads. */
+    bank: "the stages, as pads",
+    /** A pad's name for a reader of the screen: the number first, as on the record. */
+    pad: "stage {n}, {title}",
+    /** Why a pad cannot play, in words (a pad never goes quiet without saying). */
+    why: {
+      no_longer_here: "no longer here",
+      held: "held",
+      unavailable: "not read",
+      silent: "no sound",
+    },
+    /** The rule for a new press while something sounds. */
+    rule: "a new press",
+    cut: "cut",
+    layer: "layer",
+    stop: "stop",
   },
   roll: {
     meta: "stage {n} of {total} · {meta}",
