@@ -368,3 +368,25 @@ test("the disc keeps turning when the pointer leaves it while a stage plays", as
   await page.waitForTimeout(500);
   expect(await sample(), "the disc is still being redrawn").not.toBe(first);
 });
+
+test("an arrow pressed while paused starts the stage it moves to: the page never changes stage in silence", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await ready(page);
+  await page.getByRole("button", { name: "play", exact: true }).tap();
+  await expect(roll(page)).toHaveAttribute("data-sounding", "true");
+  await page.getByRole("button", { name: "pause" }).tap();
+  await expect(roll(page)).toHaveAttribute("data-playback", "paused");
+  const step = Number(await roll(page).getAttribute("data-step"));
+  await page.getByRole("button", { name: "next stage" }).tap();
+  await expect(roll(page)).toHaveAttribute("data-playback", "rolling");
+  await expect(roll(page)).toHaveAttribute("data-sounding", "true");
+  await expect(roll(page)).toHaveAttribute("data-step", String(step + 1));
+  // and back the other way, from a pause again
+  await page.getByRole("button", { name: "pause" }).tap();
+  await expect(roll(page)).toHaveAttribute("data-playback", "paused");
+  await page.getByRole("button", { name: "previous stage" }).tap();
+  await expect(roll(page)).toHaveAttribute("data-playback", "rolling");
+  await expect(roll(page)).toHaveAttribute("data-step", String(step));
+});

@@ -281,7 +281,9 @@ export function transition(state: State, event: Event, stages: number): Result {
             from.kind === "rolling"
               ? { kind: "rolling", step: clamp(from.step + delta, 0, rest), elapsed: 0 }
               : audition(clamp(from.stage + delta, 0, last), 0);
-          return go(state, { kind: "paused", from: moved }, stages);
+          // An arrow from a pause starts the stage it moves to, as it does from idle: the stage on the
+          // screen never changes in silence.
+          return go(state, moved, stages, true);
         }
         default:
           return nothing; // pause, tabHidden and the timers' events: nothing is sounding

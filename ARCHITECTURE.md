@@ -482,7 +482,7 @@ Written by ticket 21. The code is in `web/lib/playback/`: a pure state machine (
 
 **The rules** (each is a cell of a table of every state against every event, written by hand from the spec and not from the code):
 
-- The first tap from idle starts the teaser: audio and roll begin as one event. Next and previous from idle do the same (an arrow that did nothing on a fresh page read as broken).
+- The first tap from idle starts the teaser: audio and roll begin as one event. Next and previous from idle do the same (an arrow that did nothing on a fresh page read as broken), and so do next and previous from a pause: the stage they move to starts sounding, so the stage on the screen never changes in silence (changed 2026-10-30; a pause used to move the stage and stay paused).
 - Scrubbing is always an audition, and the audio follows the stylus: scrub events move an audition to the stage and offset under it, and releasing simply lets it continue. The roll's own progress is automatic.
 - A tap on a stage auditions it from the start. A second tap on the stage that is playing pauses it; a tap after it ended replays it. A tap on another stage moves the audition there.
 - The main control after an audition continues roll mode from the start of the audited stage's step (not the teaser), then forward to rest; after the finished flip it starts the story over at the source, because nothing follows it (a roll that is left to finish still rests on the finished flip, and a pause there resumes the rest loop exactly).
