@@ -182,10 +182,9 @@ export function usePerform({
     }
     setPhrase(kept);
     setInvited(false);
-    const hash = encodePhrase(kept);
-    setLinkable(hash !== null);
-    writePhrase(hash);
-    say(fill(hash ? copy.phrase.kept : copy.phrase.keptNoLink, { n: kept.length }));
+    const wrote = writePhrase(encodePhrase(kept));
+    setLinkable(wrote);
+    say(fill(wrote ? copy.phrase.kept : copy.phrase.keptNoLink, { n: kept.length }));
   }, [recorder, say]);
 
   /** A key or a pad: sounds the stage, and keeps the press when a phrase is being recorded. */
@@ -497,19 +496,21 @@ const clock: Timers = {
 };
 
 /** Put the phrase into this page's own address (keeping the router's history state), or remove it. */
-function writePhrase(fragment: string | null): void {
+function writePhrase(fragment: string | null): boolean {
   try {
     const here = window.location;
     // another fragment (the guide's #how, a marked part's #cut=) is not this function's to replace
-    if (here.hash !== "" && !here.hash.startsWith("#phrase=")) return;
-    if (fragment === null && here.hash === "") return;
+    if (here.hash !== "" && !here.hash.startsWith("#phrase=")) return false;
+    if (fragment === null && here.hash === "") return true;
     window.history.replaceState(
       window.history.state,
       "",
       `${here.pathname}${here.search}${fragment ?? ""}`,
     );
+    return fragment !== null;
   } catch {
     /* an address that cannot be written only means the link does not carry the phrase */
+    return false;
   }
 }
 

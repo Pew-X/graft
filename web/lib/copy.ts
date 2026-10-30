@@ -80,7 +80,7 @@ export const copy = {
     kept: "phrase kept: {n} presses. the address of this page carries it.",
     removed: "phrase removed.",
     keptNoLink:
-      "phrase kept: {n} presses, for this visit. a pad past the twelfth cannot go in a link.",
+      "phrase kept: {n} presses, for this visit. this page's link cannot carry it (a pad past the twelfth, or another address part in use).",
     noLink: "there is no link for this phrase to copy.",
     copied: "link copied. it carries the presses and no sound.",
     copyFailed: "the link could not be copied. the address bar has it.",
