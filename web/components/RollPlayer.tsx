@@ -871,8 +871,25 @@ export function RollPlayer({
             mode={perform.mode}
             onMode={perform.setMode}
             onPress={perform.press}
-            onStop={perform.silence}
+            onStop={perform.phrase.stop}
+            phrase={perform.phrase}
           />
+        ) : null}
+        {PERFORM_ON &&
+        perform.phrase.invited &&
+        !performing &&
+        toolsShown(phase) &&
+        stages > 1 &&
+        load === "ready" ? (
+          <div className="phrase-invite" role="group" aria-label={copy.phrase.group}>
+            <p>{copy.phrase.invite}</p>
+            <button type="button" onClick={() => void perform.phrase.play()}>
+              {copy.phrase.inviteButton}
+            </button>
+            <button type="button" onClick={perform.phrase.dismiss}>
+              {copy.phrase.dismiss}
+            </button>
+          </div>
         ) : null}
         {moment && captionText !== null ? (
           <Caption

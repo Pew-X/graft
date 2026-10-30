@@ -58,6 +58,7 @@ export default function About() {
           <section>
             <h2 className="kicker">{a.perform.heading}</h2>
             <p>{a.perform.body}</p>
+            <p>{a.perform.phrase}</p>
             <p>{a.perform.keys}</p>
           </section>
         ) : null}
