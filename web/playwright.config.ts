@@ -43,7 +43,12 @@ export default defineConfig({
     {
       name: "webkit",
       // perform plays real Web Audio, which is where the engines differ most: it runs here too
-      testMatch: ["**/flush.spec.ts", "**/core-loop.spec.ts", "**/perform.spec.ts"],
+      testMatch: [
+        "**/flush.spec.ts",
+        "**/core-loop.spec.ts",
+        "**/perform.spec.ts",
+        "**/phrase.spec.ts",
+      ],
       use: { browserName: "webkit", baseURL: "http://127.0.0.1:3100" },
     },
   ],
