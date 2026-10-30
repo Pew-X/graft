@@ -279,6 +279,7 @@
 }
 .handle:focus-visible {
   outline: 3px solid var(--focus);
+  outline-offset: 2px;
 }
 .cut-editor .help {
   /* said to the eye as well as to a screen reader: the keyboard moves the brackets, and nothing else says so */
@@ -445,10 +446,6 @@
   overflow-wrap: anywhere;
   font-family: var(--f-mono), monospace;
   font-size: 12px;
-}
-.make :focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 2px;
 }
 
 /* the publish step */
