@@ -22,3 +22,8 @@ test("a sheet that holds perform back never says the word in what it lists", () 
 test("the make sheet is the same either way", () => {
   assert.deepEqual(sheetFor("make", true), sheetFor("make", false));
 });
+
+test("the phrase controls are listed with perform and go with it", () => {
+  assert.match(JSON.stringify(sheetFor("roll", true)), /play phrase/);
+  assert.equal(/phrase|rec\b/i.test(JSON.stringify(sheetFor("roll", false))), false);
+});

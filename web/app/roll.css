@@ -1054,6 +1054,119 @@ button:disabled {
   color: #0a0b0a;
 }
 
+/* a phrase: rec, play, loop, copy link and clear sit on a second row of the panel */
+.bank-phrase {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid rgb(236 230 216 / 0.12);
+}
+.bank-phrase button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 56px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid rgb(236 230 216 / 0.4);
+  border-radius: 999px;
+  background: transparent;
+  color: #ece6d8;
+  font:
+    500 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.06em;
+}
+.bank-phrase button[aria-pressed="true"] {
+  background: #ece6d8;
+  color: #0a0b0a;
+}
+.bank-phrase button:disabled {
+  opacity: 0.45;
+}
+/* the recording light: a hot red dot, pulsing while a phrase is being kept */
+.bank-phrase .rec-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ff5a4a;
+  box-shadow: 0 0 8px #ff5a4a;
+}
+.bank-phrase .rec[aria-pressed="true"] {
+  background: #ff5a4a;
+  border-color: #ff5a4a;
+  color: #1a0503;
+}
+.bank-phrase .rec[aria-pressed="true"] .rec-dot {
+  background: #1a0503;
+  box-shadow: none;
+  animation: rec-pulse 1s steps(2, jump-none) infinite;
+}
+@keyframes rec-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+.roll[data-reduced="true"] .bank-phrase .rec-dot {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bank-phrase .rec-dot {
+    animation: none !important;
+  }
+}
+/* the quiet invitation of a link that carries a phrase: a line and two small buttons under the transport */
+.phrase-invite {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2px 8px;
+  margin: 0 auto 0.5rem;
+  width: max-content;
+  max-width: min(26rem, 100%);
+  padding: 6px 14px 8px;
+  /* the page's ground and a hairline, as the status line has, so the words hold over a ring that passes */
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: var(--bg);
+  text-align: center;
+  pointer-events: auto;
+}
+.phrase-invite p {
+  margin: 0;
+  flex-basis: 100%;
+  color: var(--ink);
+  font:
+    italic 400 15px / 1.25 var(--f-serif),
+    ui-serif,
+    Georgia,
+    serif;
+}
+.phrase-invite button {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.06em;
+}
+.phrase-invite button:first-of-type {
+  border-color: transparent;
+  background: var(--live, #5dff9c);
+  color: #04110a;
+}
+
 /* perform: a mode, so it is a pressed button; lit in the phosphor green (or the live stage's colour) */
 .controls .perform-toggle {
   margin-left: 6px;

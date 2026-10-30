@@ -66,6 +66,29 @@ export const copy = {
     layer: "layer",
     stop: "stop",
   },
+  /** A phrase: the presses made in perform, kept in the page's address. */
+  phrase: {
+    group: "a phrase",
+    record: "rec",
+    recordStop: "stop rec",
+    play: "play phrase",
+    loop: "loop",
+    clear: "clear",
+    copy: "copy link",
+    recording: "recording: press the pads. sixteen seconds or sixty-four presses at most.",
+    empty: "nothing was pressed, so there is no phrase.",
+    kept: "phrase kept: {n} presses. the address of this page carries it.",
+    removed: "phrase removed.",
+    keptNoLink:
+      "phrase kept: {n} presses, for this visit. this page's link cannot carry it (a pad past the twelfth, or another address part in use).",
+    noLink: "there is no link for this phrase to copy.",
+    copied: "link copied. it carries the presses and no sound.",
+    copyFailed: "the link could not be copied. the address bar has it.",
+    /** The quiet invitation on a page opened from a link that carries a phrase. */
+    invite: "a run of pads came with this link. no sound with it.",
+    inviteButton: "play the phrase",
+    dismiss: "not now",
+  },
   roll: {
     meta: "stage {n} of {total} · {meta}",
     metaShort: "stage {n} of {total}",
@@ -382,12 +405,14 @@ export const copy = {
     /** The keys and the pads: what perform is, and the page that lists every key. */
     perform: {
       heading: "playing it",
-      body: "turn on perform and the number keys play the stages of a chain: 1 to 9, 0, minus and equal are stages 1 to 12, by where the key is, so any keyboard works. every stage is also a pad you can touch. a press plays that stage whole, and nothing is cut, looped or changed.",
+      body: "turn on perform and the number keys play the stages of a chain: 1 to 9, 0, minus and equal are stages 1 to 12, by where the key is, so any keyboard works. every stage is also a pad you can touch. a press plays that stage whole, and nothing is cut or changed.",
+      phrase:
+        "rec keeps your presses as a phrase: which pad, and when, up to sixteen seconds. play runs it again, once or round and round. the phrase lives in the address of the page, so copying the link sends it. it holds no sound and no name; a link you open only offers it, and it plays when you press play.",
       keys: "the keys button lists every keyboard control of the page you are on. a screen reader keeps the digit keys for itself, so the pads are plain buttons.",
     },
     isNot: {
       heading: "what it is not",
-      body: "not a sampler: perform plays whole stages, with no slicing, no sequencer, no effects and no export. an independent experiment, not affiliated with or endorsed by any product named.",
+      body: "not a sampler: perform plays whole stages, with no slicing, no grid, no tempo, no effects and no export of sound. an independent experiment, not affiliated with or endorsed by any product named.",
       /** The same, for a build that holds perform back. */
       bodyWithoutPerform:
         "not a sampler: one cut and one speed, with no pads, layers, effects or export. an independent experiment, not affiliated with or endorsed by any product named.",
@@ -676,7 +701,14 @@ export const copy = {
             "cut, layer",
             "cut: a new press ends what sounds. layer: pads sound together, six at most.",
           ],
-          ["escape", "the first press silences the sound. the next leaves perform."],
+          [
+            "rec, play phrase, loop",
+            "rec keeps the pads you press (sixteen seconds, sixty-four presses at most) as a phrase. play phrase runs them again; loop starts it over. copy link sends it: the link holds the presses and no sound.",
+          ],
+          [
+            "escape",
+            "the first press ends a recording, or silences the sound and a phrase playing. the next leaves perform.",
+          ],
           [
             "screen readers",
             "a screen reader keeps the digit keys for itself, so use the pads: they are plain buttons.",

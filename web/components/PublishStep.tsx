@@ -233,7 +233,11 @@ export function PublishStep({
         ) : null}
         <p className="fixed-note">{copy.publish.done.fixed}</p>
         {outcome.manageKey ? (
-          <div className="manage-key stub" data-testid="key-stub">
+          <div
+            className="manage-key stub"
+            data-testid="key-stub"
+            data-torn={keyCopied === "yes" ? "yes" : "no"}
+          >
             <div className="stub-screen">
               <Trace id={outcome.id} label={copy.publish.done.traceLabel} />
               <p className="stub-caption">{copy.publish.done.traceCaption}</p>
@@ -292,7 +296,8 @@ export function PublishStep({
                   <span className="gloss">{copy.publish.done.keepGloss}</span>
                 </span>
               </label>
-              <p role="status" className="refusal">
+              <p role="status" className="refusal stub-punch">
+                <span className="hole" data-punched={kept === "yes"} aria-hidden="true" />
                 {kept === "yes"
                   ? copy.publish.done.kept
                   : kept === "failed"

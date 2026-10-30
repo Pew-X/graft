@@ -6,6 +6,7 @@ import { keyOfPad } from "../lib/perform/keys.ts";
 import { positionHint } from "../lib/perform/layout.ts";
 import type { Rule } from "../lib/perform/performer.ts";
 import type { Block } from "../lib/roll/view.ts";
+import type { PhraseControls } from "./usePerform.ts";
 
 interface Props {
   blocks: readonly Block[];
@@ -21,6 +22,7 @@ interface Props {
   onMode: (rule: Rule) => void;
   onPress: (stage: number) => void;
   onStop: () => void;
+  phrase: PhraseControls;
 }
 
 /**
@@ -40,6 +42,7 @@ export const PadBank = memo(function PadBank({
   onMode,
   onPress,
   onStop,
+  phrase,
 }: Props) {
   return (
     <div className="bank" data-count={blocks.length}>
@@ -105,6 +108,42 @@ export const PadBank = memo(function PadBank({
         <button type="button" className="stop" onClick={onStop}>
           {copy.perform.stop}
         </button>
+      </div>
+      <div className="bank-phrase" role="group" aria-label={copy.phrase.group}>
+        <button
+          type="button"
+          className="rec"
+          aria-pressed={phrase.recording}
+          onClick={phrase.record}
+        >
+          <span className="rec-dot" aria-hidden="true" />
+          {phrase.recording ? copy.phrase.recordStop : copy.phrase.record}
+        </button>
+        {phrase.has ? (
+          <>
+            <button
+              type="button"
+              aria-pressed={phrase.playing}
+              disabled={phrase.recording}
+              onClick={phrase.playing ? phrase.stop : () => void phrase.play()}
+            >
+              {phrase.playing ? copy.perform.stop : copy.phrase.play}
+            </button>
+            <button
+              type="button"
+              aria-pressed={phrase.loop}
+              onClick={() => phrase.setLoop(!phrase.loop)}
+            >
+              {copy.phrase.loop}
+            </button>
+            <button type="button" disabled={phrase.recording} onClick={phrase.copyLink}>
+              {copy.phrase.copy}
+            </button>
+            <button type="button" onClick={phrase.clear}>
+              {copy.phrase.clear}
+            </button>
+          </>
+        ) : null}
       </div>
     </div>
   );

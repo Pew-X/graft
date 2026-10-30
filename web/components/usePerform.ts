@@ -1,11 +1,22 @@
 "use client";
 
-import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
+import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { copy, fill } from "../lib/copy.ts";
 import { padForKey } from "../lib/perform/keys.ts";
 import { performAudio, type PerformAudio } from "../lib/perform/graph.ts";
 import { printedMarks, type KeyboardLike } from "../lib/perform/layout.ts";
+import { PERFORM_ON } from "../lib/perform/enabled.ts";
 import { Performer, type Rule } from "../lib/perform/performer.ts";
+import {
+  encodePhrase,
+  parsePhraseHash,
+  PhrasePlayer,
+  PhraseRecorder,
+  MOST_PRESSES,
+  MOST_UNITS,
+  type Phrase,
+  type Timers,
+} from "../lib/perform/phrase.ts";
 import type { LazyAudio } from "../lib/playback/index.ts";
 import type { Live } from "./Disc.tsx";
 
@@ -61,6 +72,8 @@ export function usePerform({
   const onRef = useRef(false);
   /** The performer is being made (two quick presses of perform must not make two). */
   const making = useRef(false);
+  /** Settles when the voices are ready after perform was turned on. */
+  const ready = useRef<Promise<boolean> | null>(null);
   /** The audio session type before perform set it to playback, to put back on leaving. */
   const savedSession = useRef<string | null>(null);
   const modeRef = useRef<Rule>("cut");
@@ -81,18 +94,19 @@ export function usePerform({
   /** Release whatever sounds. True when something did. */
   const silence = useCallback((): boolean => performer.current?.silence() ?? false, []);
 
-  const press = useCallback(
-    (stage: number): void => {
+  /** Sound a stage, by a key, a pad or a phrase playing back. True when it sounded. */
+  const sound = useCallback(
+    (stage: number): boolean => {
       const { playable: ok, reasons: why, stages: count } = latest.current;
-      if (stage < 0 || stage >= count) return;
+      if (stage < 0 || stage >= count) return false;
       const p = performer.current;
       if (!p) {
         say(copy.perform.preparing);
-        return;
+        return false;
       }
       if (!ok[stage]) {
         say(fill(copy.perform.unplayable, { n: stage + 1, why: why[stage] ?? "" }));
-        return;
+        return false;
       }
       // the sound is started here, in the same task as the key, before anything is drawn
       const context = audio.current?.context;
@@ -102,15 +116,150 @@ export function usePerform({
       } else {
         say("");
       }
-      if (p.press(stage)) {
-        setShown(stage);
-        flash(stage);
-      }
+      if (!p.press(stage)) return false;
+      setShown(stage);
+      flash(stage);
+      return true;
     },
     [audio, say, setShown],
   );
 
+  // --- A phrase: the presses made while performing, kept in the page's own address (lib/perform/phrase.ts)
+  const [phrase, setPhrase] = useState<Phrase | null>(null);
+  /** The phrase came with the link and has not been played or dismissed: the quiet invitation shows. */
+  const [invited, setInvited] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [phraseSounding, setPhraseSounding] = useState(false);
+  const [loop, setLoopState] = useState(false);
+  const loopRef = useRef(false);
+  const limit = useRef<number | null>(null);
+  const [recorder] = useState(() => new PhraseRecorder(clock.now));
+  /** The phrase can go in a link (a pad past the twelfth has no place in one). */
+  const [linkable, setLinkable] = useState(true);
+  const soundRef = useRef(sound);
+  const playerRef = useRef<PhrasePlayer | null>(null);
+  useEffect(() => {
+    soundRef.current = sound;
+  });
+  // the player calls back into the latest `sound`, so it is made once, after the first render
+  useEffect(() => {
+    const made = new PhrasePlayer({
+      press: (stage) => void soundRef.current(stage),
+      timers: clock,
+      onEnd: () => setPhraseSounding(false),
+    });
+    playerRef.current = made;
+    return () => {
+      made.stop();
+      playerRef.current = null;
+      // a recording left behind by leaving the page must not write its address later
+      if (limit.current !== null) window.clearTimeout(limit.current);
+      limit.current = null;
+      recorder.stop();
+    };
+  }, [recorder]);
+
+  // A phrase in the address (a link that was sent) is offered, never played by itself.
+  useEffect(() => {
+    if (!PERFORM_ON || stages < 2) return;
+    queueMicrotask(() => {
+      const found = parsePhraseHash(window.location.hash, stages);
+      if (!found) return;
+      setPhrase(found);
+      setInvited(true);
+    });
+  }, [stages]);
+
+  const finishRecording = useCallback((): void => {
+    if (!recorder.active) return;
+    if (limit.current !== null) window.clearTimeout(limit.current);
+    limit.current = null;
+    const kept = recorder.stop();
+    setRecording(false);
+    if (kept.length === 0) {
+      say(copy.phrase.empty);
+      return;
+    }
+    setPhrase(kept);
+    setInvited(false);
+    const wrote = writePhrase(encodePhrase(kept));
+    setLinkable(wrote);
+    say(fill(wrote ? copy.phrase.kept : copy.phrase.keptNoLink, { n: kept.length }));
+  }, [recorder, say]);
+
+  /** A key or a pad: sounds the stage, and keeps the press when a phrase is being recorded. */
+  const press = useCallback(
+    (stage: number): void => {
+      if (!sound(stage) || !recorder.active) return;
+      if (!recorder.note(stage)) {
+        finishRecording();
+        return;
+      }
+      // sixteen seconds from the first press, or sixty-four presses, whichever comes first
+      if (recorder.count === 1) {
+        limit.current = window.setTimeout(finishRecording, MOST_UNITS * 10);
+      }
+      if (recorder.count >= MOST_PRESSES) finishRecording();
+    },
+    [finishRecording, recorder, sound],
+  );
+
+  const record = useCallback((): void => {
+    if (recorder.active) {
+      finishRecording();
+      return;
+    }
+    playerRef.current?.stop();
+    setPhraseSounding(false);
+    recorder.start();
+    setRecording(true);
+    setInvited(false);
+    say(copy.phrase.recording);
+  }, [finishRecording, recorder, say]);
+
+  /** Stop a phrase that is playing (its sound is released by the caller). True when one was. */
+  const stopPhrase = useCallback((): boolean => {
+    const was = playerRef.current?.playing ?? false;
+    playerRef.current?.stop();
+    setPhraseSounding(false);
+    return was;
+  }, []);
+
+  const setLoop = useCallback((on: boolean): void => {
+    loopRef.current = on;
+    playerRef.current?.setLoop(on);
+    setLoopState(on);
+  }, []);
+
+  const clearPhrase = useCallback((): void => {
+    stopPhrase();
+    if (recorder.active) {
+      recorder.stop();
+      setRecording(false);
+    }
+    setPhrase(null);
+    setInvited(false);
+    writePhrase(null);
+    say(copy.phrase.removed);
+  }, [recorder, say, stopPhrase]);
+
+  const copyLink = useCallback((): void => {
+    const done = (): void => say(copy.phrase.copied);
+    const failed = (): void => say(copy.phrase.copyFailed);
+    if (!linkable || !parsePhraseHash(window.location.hash, latest.current.stages)) {
+      say(copy.phrase.noLink);
+      return;
+    }
+    try {
+      navigator.clipboard.writeText(window.location.href).then(done, failed);
+    } catch {
+      failed();
+    }
+  }, [linkable, say]);
+
   const leave = useCallback((): void => {
+    finishRecording();
+    stopPhrase();
     silence();
     performer.current?.reset();
     // the page's audio session goes back to what it was before perform changed it
@@ -127,10 +276,11 @@ export function usePerform({
     setOn(false);
     setShown(null);
     say("");
-  }, [silence, say, setShown]);
+  }, [finishRecording, silence, say, setShown, stopPhrase]);
 
-  const enter = useCallback((): void => {
-    if (onRef.current) return;
+  /** Turn perform on; resolves true once the voices are ready (false if the sound could not start). */
+  const begin = useCallback((): Promise<boolean> => {
+    if (onRef.current) return ready.current ?? Promise.resolve(performer.current !== null);
     onRef.current = true;
     setOn(true);
     setShown(null);
@@ -150,48 +300,71 @@ export function usePerform({
     } catch {
       /* an experimental interface that is not there, or refuses: no change */
     }
+    const failed = (): boolean => {
+      // said, and perform goes off: a mode that cannot play is not left on
+      making.current = false;
+      onRef.current = false;
+      setOn(false);
+      say(copy.perform.failed);
+      return false;
+    };
     // The press that turned perform on is the gesture that unlocks the audio.
-    prepare()
-      .then(() => {
+    const chain = prepare()
+      .then(async (): Promise<boolean> => {
         const lazy = audio.current;
         const context = lazy?.context;
-        if (!lazy || !context || !onRef.current) return;
-        if (!performer.current && !making.current) {
-          making.current = true;
+        if (!lazy || !context || !onRef.current) return false;
+        if (performer.current) return true;
+        if (making.current) return false;
+        making.current = true;
+        try {
           // the roll's own graph holds the decoded stages; the performer's voices share them
-          lazy
-            .unlock()
-            .then((roll) => {
-              made.current = performAudio(roll, context);
-              performer.current = new Performer({
-                graph: made.current.graph,
-                stages: latest.current.stages,
-                onChange: light,
-              });
-              performer.current.mode = modeRef.current;
-              const timing = context as unknown as { baseLatency?: number; outputLatency?: number };
-              document
-                .querySelector(".roll")
-                ?.setAttribute(
-                  "data-latency",
-                  `${Math.round((timing.baseLatency ?? 0) * 1000)}+${Math.round((timing.outputLatency ?? 0) * 1000)}`,
-                );
-            })
-            .catch(() => {
-              // said, and perform goes off: a mode that cannot play is not left on
-              making.current = false;
-              onRef.current = false;
-              setOn(false);
-              say(copy.perform.failed);
-            });
+          const roll = await lazy.unlock();
+          made.current = performAudio(roll, context);
+          performer.current = new Performer({
+            graph: made.current.graph,
+            stages: latest.current.stages,
+            onChange: light,
+          });
+          performer.current.mode = modeRef.current;
+          const timing = context as unknown as { baseLatency?: number; outputLatency?: number };
+          document
+            .querySelector(".roll")
+            ?.setAttribute(
+              "data-latency",
+              `${Math.round((timing.baseLatency ?? 0) * 1000)}+${Math.round((timing.outputLatency ?? 0) * 1000)}`,
+            );
+          return onRef.current;
+        } catch {
+          return failed();
         }
       })
-      .catch(() => {
-        onRef.current = false;
-        setOn(false);
-        say(copy.perform.failed);
-      });
+      .catch(failed);
+    ready.current = chain;
+    return chain;
   }, [audio, endNarration, light, pauseRoll, prepare, say, setShown]);
+
+  const enter = useCallback((): void => {
+    void begin();
+  }, [begin]);
+
+  /** Play the phrase: turns perform on first if it is off (the press is the gesture that lets sound start). */
+  const playPhrase = useCallback(async (): Promise<void> => {
+    if (!phrase) return;
+    finishRecording();
+    setInvited(false);
+    if (!(await begin())) return;
+    silence();
+    setPhraseSounding(true);
+    playerRef.current?.play(phrase, loopRef.current);
+  }, [begin, finishRecording, phrase, silence]);
+
+  /** The stop button: silence the sound, and end a phrase that is playing. */
+  const stopAll = useCallback((): void => {
+    stopPhrase();
+    finishRecording();
+    silence();
+  }, [finishRecording, silence, stopPhrase]);
 
   const setMode = useCallback((rule: Rule): void => {
     modeRef.current = rule;
@@ -207,7 +380,13 @@ export function usePerform({
       if (event.key === "Escape") {
         // a dialog, then a part being marked, own Escape before perform does
         if (document.querySelector("dialog[open]") || marking.current) return;
-        if (!silence()) leave();
+        // recording ends first (and keeps the phrase), then a playing phrase, then the sound, then perform
+        if (recorder.active) {
+          finishRecording();
+          return;
+        }
+        const wasPlaying = stopPhrase();
+        if (!silence() && !wasPlaying) leave();
         return;
       }
       if (document.querySelector("dialog[open]")) return;
@@ -234,12 +413,17 @@ export function usePerform({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [on, press, leave, silence, marking]);
+  }, [on, press, leave, silence, marking, recorder, finishRecording, stopPhrase]);
 
   // A page that is hidden, or left, goes quiet.
   useEffect(() => {
     const hidden = (): void => {
-      if (document.visibilityState === "hidden") silence();
+      if (document.visibilityState === "hidden") {
+        // a phrase that plays on behind a hidden page would sound with nobody there
+        finishRecording();
+        stopPhrase();
+        silence();
+      }
     };
     document.addEventListener("visibilitychange", hidden);
     return () => {
@@ -247,7 +431,7 @@ export function usePerform({
       performer.current?.silence();
       made.current?.bus.disconnect();
     };
-  }, [silence]);
+  }, [finishRecording, silence, stopPhrase]);
 
   /** Where the stylus is while performing: the last stage played, seconds into its sound. */
   const live = useCallback((): Live | null => {
@@ -257,8 +441,81 @@ export function usePerform({
     return { stage: last.stage, position: Math.min(length, performance.now() / 1000 - last.at) };
   }, []);
 
-  return { on, sounding, mode, marks, setMode, enter, leave, press, silence, live };
+  const dismiss = useCallback((): void => setInvited(false), []);
+  const controls = useMemo(
+    () => ({
+      has: phrase !== null,
+      length: phrase?.length ?? 0,
+      invited,
+      recording,
+      playing: phraseSounding,
+      loop,
+      record,
+      play: playPhrase,
+      stop: stopAll,
+      setLoop,
+      clear: clearPhrase,
+      copyLink,
+      dismiss,
+    }),
+    [
+      phrase,
+      invited,
+      recording,
+      phraseSounding,
+      loop,
+      record,
+      playPhrase,
+      stopAll,
+      setLoop,
+      clearPhrase,
+      copyLink,
+      dismiss,
+    ],
+  );
+
+  return {
+    on,
+    sounding,
+    mode,
+    marks,
+    setMode,
+    enter,
+    leave,
+    press,
+    silence,
+    live,
+    phrase: controls,
+  };
 }
+
+const clock: Timers = {
+  now: () => performance.now() / 1000,
+  setTimeout: (fn, seconds) => window.setTimeout(fn, seconds * 1000),
+  clearTimeout: (id) => window.clearTimeout(id as number),
+};
+
+/** Put the phrase into this page's own address (keeping the router's history state), or remove it. */
+function writePhrase(fragment: string | null): boolean {
+  try {
+    const here = window.location;
+    // another fragment (the guide's #how, a marked part's #cut=) is not this function's to replace
+    if (here.hash !== "" && !here.hash.startsWith("#phrase=")) return false;
+    if (fragment === null && here.hash === "") return true;
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${here.pathname}${here.search}${fragment ?? ""}`,
+    );
+    return fragment !== null;
+  } catch {
+    /* an address that cannot be written only means the link does not carry the phrase */
+    return false;
+  }
+}
+
+/** What the pad bank and the invitation need of the phrase. */
+export type PhraseControls = ReturnType<typeof usePerform>["phrase"];
 
 /** The ring's matching pad, if it is drawn, shows that it was pressed (a short light from within). */
 function flash(stage: number): void {
