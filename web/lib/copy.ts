@@ -718,6 +718,10 @@ export const copy = {
             "the first press ends a recording, or silences the sound and a phrase playing. the next leaves perform.",
           ],
           [
+            "cutting a part",
+            "marking a part on the record ends perform, and turning perform on ends the marking: the cut tools and the pads share the bottom of the page.",
+          ],
+          [
             "screen readers",
             "a screen reader keeps the digit keys for itself, so use the pads: they are plain buttons.",
           ],
