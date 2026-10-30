@@ -113,6 +113,11 @@ export class Performer {
     return true;
   }
 
+  /** Forget the stage last pressed (perform was left): nothing is current any more. */
+  reset(): void {
+    this.#last = null;
+  }
+
   /** Release everything that sounds. True when something did. */
   silence(): boolean {
     if (this.#live.length === 0) return false;

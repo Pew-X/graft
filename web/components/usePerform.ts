@@ -61,6 +61,8 @@ export function usePerform({
   const onRef = useRef(false);
   /** The performer is being made (two quick presses of perform must not make two). */
   const making = useRef(false);
+  /** The audio session type before perform set it to playback, to put back on leaving. */
+  const savedSession = useRef<string | null>(null);
   const modeRef = useRef<Rule>("cut");
   const [marks, setMarks] = useState<Record<number, string> | null>(null);
   const latest = useRef({ playable, reasons, lengths, stages });
@@ -69,7 +71,7 @@ export function usePerform({
   });
 
   const light = useCallback((now: readonly number[]) => {
-    setSounding((was) => (was === now.length > 0 ? was : now.length > 0));
+    setSounding(now.length > 0);
     // the pads read their lit state straight from here, so a press does not re-render the page
     for (const pad of document.querySelectorAll<HTMLElement>(".pad[data-pad]")) {
       pad.dataset["sounding"] = String(now.includes(Number(pad.dataset["pad"])));
@@ -110,6 +112,17 @@ export function usePerform({
 
   const leave = useCallback((): void => {
     silence();
+    performer.current?.reset();
+    // the page's audio session goes back to what it was before perform changed it
+    if (savedSession.current !== null) {
+      try {
+        const session = (navigator as unknown as { audioSession?: { type: string } }).audioSession;
+        if (session) session.type = savedSession.current;
+      } catch {
+        /* an experimental interface that refuses: no change */
+      }
+      savedSession.current = null;
+    }
     onRef.current = false;
     setOn(false);
     setShown(null);
@@ -130,7 +143,10 @@ export function usePerform({
     try {
       // where the browser has it: sound keeps playing with the phone's ring switch set to silent
       const session = (navigator as unknown as { audioSession?: { type: string } }).audioSession;
-      if (session) session.type = "playback";
+      if (session) {
+        savedSession.current = session.type;
+        session.type = "playback";
+      }
     } catch {
       /* an experimental interface that is not there, or refuses: no change */
     }
@@ -162,7 +178,11 @@ export function usePerform({
                 );
             })
             .catch(() => {
+              // said, and perform goes off: a mode that cannot play is not left on
               making.current = false;
+              onRef.current = false;
+              setOn(false);
+              say(copy.perform.failed);
             });
         }
       })

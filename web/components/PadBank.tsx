@@ -65,6 +65,11 @@ export const PadBank = memo(function PadBank({
                 if (e.pointerType === "mouse" && e.button !== 0) return;
                 onPress(i);
               }}
+              // a held Enter repeats keydown, and each repeat would be a click that restarts the stage: only
+              // the first press of a key plays (the number keys ignore repeats the same way)
+              onKeyDown={(e) => {
+                if (e.repeat && (e.key === "Enter" || e.key === " ")) e.preventDefault();
+              }}
               onClick={(e) => {
                 if (e.detail === 0) onPress(i);
               }}

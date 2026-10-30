@@ -45,7 +45,7 @@ function browserStore(): Store | null {
 const RANK: Record<string, number> = { narrated: 1, needle: 2, done: 3, keys: 4 };
 const ROLL = ["", "narrated", "needle", "done", "keys"] as const;
 
-/** What a stored word says: how far the roll's guide got (0 to 3) and whether the make flow's was shown. */
+/** What a stored word says: how far the roll's guide got (0 to 4) and whether the make flow's was shown. */
 function parse(word: string | null | undefined): { roll: number; made: boolean } {
   const [first = "", second = ""] = (word ?? "").split("+");
   const made = first === "made" || second === "made";

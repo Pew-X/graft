@@ -409,3 +409,14 @@ test("while the sounds are still loading there is nothing to perform with, and t
   await expect(roll(page)).toHaveAttribute("data-audio", "ready", { timeout: 15_000 });
   await expect(toggle(page)).toBeVisible();
 });
+
+test("a held Enter on a focused pad plays it once, not thirty times a second", async ({ page }) => {
+  await home(page);
+  await pad(page, 1).focus();
+  // the browser repeats keydown while a key is held: the second down is a repeat
+  await page.keyboard.down("Enter");
+  await page.keyboard.down("Enter");
+  await page.keyboard.down("Enter");
+  await page.keyboard.up("Enter");
+  expect(await started(page)).toEqual([FRAMES[1]]);
+});

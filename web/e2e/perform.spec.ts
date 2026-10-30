@@ -234,3 +234,34 @@ test("a polite line names the stage that was played", async ({ page }) => {
   await page.keyboard.press("Digit2");
   await expect(page.locator('[aria-live="polite"]')).toContainText("stage 2 of 4");
 });
+
+test("tapping a stage's own play button while performing hands over to the roll: one sound, and the page follows it", async ({
+  page,
+}) => {
+  await arrive(page);
+  await enter(page);
+  await page.keyboard.press("Digit2");
+  await expect(roll(page)).toHaveAttribute("data-perform", "true");
+  await page.locator('.block[data-hero="true"] .slab button').click();
+  // perform is over, the roll's audition is what sounds, and the stage lit is the roll's
+  await expect(roll(page)).toHaveAttribute("data-perform", "false");
+  await expect(roll(page)).toHaveAttribute("data-playback", "auditioning");
+  await expect(roll(page)).toHaveAttribute("data-sounding", "true");
+  await expect(page.locator(".bank")).toHaveCount(0);
+});
+
+test("leaving perform and coming back finds nothing current: no stylus parked on the stage played before", async ({
+  page,
+}) => {
+  await arrive(page);
+  await enter(page);
+  await page.keyboard.press("Digit3");
+  await expect(roll(page)).toHaveAttribute("data-hero", "2");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await expect(roll(page)).toHaveAttribute("data-perform", "false");
+  await toggle(page).click();
+  await expect(roll(page)).toHaveAttribute("data-perform", "true");
+  // the large stage is no longer the one played before, because nothing has been played in this visit
+  await expect(page.locator(".pad[aria-current='true']")).toHaveCount(0);
+});

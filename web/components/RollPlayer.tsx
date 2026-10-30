@@ -574,13 +574,13 @@ export function RollPlayer({
         });
   const disabled = load !== "ready";
 
-  const silencePerform = perform.silence;
+  const leavePerform = perform.leave;
   const onPlay = useCallback(
     (index: number) => {
-      silencePerform();
+      leavePerform();
       act((e) => e.tapStage(index));
     },
-    [act, silencePerform],
+    [act, leavePerform],
   );
   const onFlip = useCallback(
     (index: number) => {
@@ -722,7 +722,9 @@ export function RollPlayer({
           accent={dyeShown === null ? undefined : dyes[dyeShown]?.fill}
           focus={hero}
           onScrubStart={(stage, offset) => {
-            perform.silence();
+            // the roll's own audition plays instead: perform ends, so the record, the thread and the
+            // tile all follow the one sound that is playing
+            perform.leave();
             act((e) => e.scrubStart(stage, offset));
           }}
           // The first touch may arrive before the audio engine exists; the move and the release wait

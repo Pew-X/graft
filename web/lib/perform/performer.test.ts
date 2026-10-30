@@ -152,6 +152,19 @@ test("the last stage pressed is remembered, with when, for the stylus to ride", 
   assert.equal(lastStage(), 2);
 });
 
+test("leaving perform forgets the stage last pressed, so a later visit starts with nothing current", () => {
+  const { performer } = setup();
+  performer.press(3);
+  performer.silence();
+  assert.equal(
+    performer.last?.stage,
+    3,
+    "after the sound ends the stage stays current, as on the roll",
+  );
+  performer.reset();
+  assert.equal(performer.last, null);
+});
+
 test("a graph that throws makes no sound and leaves nothing half-started", () => {
   const graph: PerformGraph = {
     voice() {

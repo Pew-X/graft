@@ -100,11 +100,6 @@ export class WebAudioGraph implements AudioGraph {
     });
   }
 
-  /** Whether a stage has audio to play. */
-  has(stage: number): boolean {
-    return (this.#buffers[stage] ?? null) !== null;
-  }
-
   /**
    * A voice for a stage. It goes to the speakers unless `into` is given: a node to connect to instead (the
    * performance's mix bus).

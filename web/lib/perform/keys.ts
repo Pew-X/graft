@@ -7,7 +7,7 @@
  */
 
 /** The positions that play a stage, in stage order. */
-const ROW = [
+export const ROW = [
   "Digit1",
   "Digit2",
   "Digit3",

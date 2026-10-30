@@ -3,22 +3,7 @@
  * and a plain position hint where it cannot. The keys themselves are named by position, so what is printed
  * only labels a pad's corner: it can never change which stage a key plays.
  */
-import { MOST_PADS_BY_KEY } from "./keys.ts";
-
-const CODES = [
-  "Digit1",
-  "Digit2",
-  "Digit3",
-  "Digit4",
-  "Digit5",
-  "Digit6",
-  "Digit7",
-  "Digit8",
-  "Digit9",
-  "Digit0",
-  "Minus",
-  "Equal",
-] as const;
+import { MOST_PADS_BY_KEY, ROW as CODES } from "./keys.ts";
 
 /** The part of `navigator.keyboard` this reads. */
 export interface KeyboardLike {
