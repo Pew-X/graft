@@ -22,7 +22,7 @@ Perform plays the stages as an instrument: the number row plays stages 1 to 12 b
 
 ## Try it
 
-The dev site is at https://graft-fawn-six.vercel.app. Press play: the first visit is narrated, one short caption for each step of how the sound was made, and then three small hints show what you can do next (drag the needle to hear any moment; mark a part of a stage, change its speed, flip it; press "perform" and then 1 2 3 to play the stages). "keys" lists every keyboard control of the page you are on. "make a flip" in the header opens a ready-made flip of the stage in view, so one tap on "hear it" gives sound. "? how it works" (on the roll, the make page and the about page) plays the guide again whenever you want it. Publishing a flip gives a link anyone can open and flip again. Where the service has own sounds switched on (it does on the demo, with the risk said on the page), the make page can also start from a recording made with the microphone or an audio file: the sound stays on the device until it is published.
+The dev site is at https://graft-fawn-six.vercel.app. Press the main button (on a first visit it reads "hear how it was made"; later it reads "play"): the first visit is narrated, one short caption for each step of how the sound was made, and then three small hints show what you can do next (drag the needle to hear any moment; mark a part of a stage, change its speed, flip it; press "perform" and then 1 2 3 to play the stages). "keys" lists every keyboard control of the page you are on. "make a flip" in the header opens a ready-made flip of the stage in view, so one tap on "hear it" gives sound. "? how it works" (on the roll, the make page and the about page) plays the guide again whenever you want it. Publishing a flip gives a link anyone can open and flip again. Where the service has own sounds switched on (it does on the demo, with the risk said on the page), the make page can also start from a recording made with the microphone or an audio file: the sound stays on the device until it is published.
 
 The home page plays from a snapshot that ships with the site, so it works even while the service is asleep. The service sleeps when nobody is using it (to keep the cloud bill small): opening any page asks it to wake, a chain page opened in the meantime says so and opens by itself, and a cold start was measured at about a minute, never instant. See "Deployment".
 
@@ -103,7 +103,7 @@ GRAFT_TEST_SQS_ENDPOINT=http://127.0.0.1:59324 sh scripts/queue-e2e.sh   # the r
 
 The other queue tests (the envelope, the consumer, the equivalence with the Postgres-only path) need no emulator and run in a plain `cargo test`.
 
-With both containers running, `sh scripts/dev-local.sh` starts the whole thing on this machine: the service (visitor uploads on; `--no-uploads` leaves them off, as every environment ships), the seeded chain, and the built site at `http://127.0.0.1:3100`. Stop it with Ctrl-C. It keeps its own database and bucket prefix between runs and touches nothing else.
+With both containers running, `sh scripts/dev-local.sh` starts the whole thing on this machine: the service (visitor uploads on; `--no-uploads` leaves them off, which is how the service starts when `GRAFT_UPLOADS` is not set; the demo deployment has them on), the seeded chain, and the built site at `http://127.0.0.1:3100`. Stop it with Ctrl-C. It keeps its own database and bucket prefix between runs and touches nothing else.
 
 To run the service alone against that container:
 
