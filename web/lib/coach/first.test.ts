@@ -1,7 +1,7 @@
 // The guide's order and its "once": each guarantee is a sequence of events and where it must end up.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { follow, next, type Doing, type Event, type Phase } from "./first.ts";
+import { follow, next, toolsShown, type Doing, type Event, type Phase } from "./first.ts";
 import { COACH_KEY, COACH_VALUES, readPhase, writePhase } from "./seen.ts";
 
 const run = (start: Phase, events: Event[]): Phase => events.reduce(next, start);
@@ -143,4 +143,15 @@ test("following the visitor always comes to rest: nothing they do loops the guid
       assert.ok(settled, `${sounding}/${marking} never settles`);
     }
   }
+});
+
+test("the extra tools wait for a first visit's narration, and are there at once for a browser that has met the roll", () => {
+  const shown: Phase[] = ["hintNeedle", "hintMark", "done"];
+  for (const phase of shown) assert.equal(toolsShown(phase), true, phase);
+  assert.equal(toolsShown("armed"), false);
+  assert.equal(toolsShown("narrating"), false);
+  // skipping or finishing the narration brings them in; a replay takes them away for its length
+  assert.equal(toolsShown(next("narrating", "skipped")), true);
+  assert.equal(toolsShown(next("narrating", "narrationEnded")), true);
+  assert.equal(toolsShown(next("done", "replay")), false);
 });

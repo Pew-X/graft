@@ -73,3 +73,12 @@ export function follow(phase: Phase, doing: Doing): Event | null {
   if (phase === "hintMark") return doing.marking ? "marked" : null;
   return null;
 }
+
+/**
+ * Whether the roll's extra tools (perform, the keys sheet) are shown. A first visit has one thing to do,
+ * which is to hear how the sound was made, so they wait until the narration is over or skipped; a
+ * browser that has met the roll sees them at once.
+ */
+export function toolsShown(phase: Phase): boolean {
+  return phase !== "armed" && phase !== "narrating";
+}

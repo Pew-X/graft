@@ -860,6 +860,8 @@ button:disabled {
 }
 .controls .primary {
   min-width: 88px;
+  /* the first visit's label is a short sentence: it stays on one line, and the pill grows to hold it */
+  white-space: nowrap;
   background: var(--ink);
   color: var(--bg);
 }

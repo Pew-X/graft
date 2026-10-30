@@ -196,6 +196,8 @@ export function RollPlayer({
     if (phaseKnown) writePhase(phase);
   }, [phase, phaseKnown]);
   const narrating = phase === "narrating";
+  // a first visit has one thing to do: the main button says what it does until the narration has begun
+  const firstPlay = phaseKnown && phase === "armed";
   // where the caption sits so that it keeps clear of the record
   const [caption, setCaption] = useState(() => captionBox(1280, 720, blocks.length));
   const place = useCallback((): void => {
@@ -818,7 +820,13 @@ export function RollPlayer({
           disabled={disabled}
           onClick={() => act((e) => (playing ? e.pause() : e.play()))}
         >
-          {playing ? copy.controls.pause : reduced ? copy.controls.playAll : copy.controls.play}
+          {playing
+            ? copy.controls.pause
+            : firstPlay
+              ? copy.controls.playFirst
+              : reduced
+                ? copy.controls.playAll
+                : copy.controls.play}
         </button>
         <button
           type="button"

@@ -15,7 +15,7 @@ export const copy = {
   hint: {
     locked: "tap play to hear it. nothing sounds until you do.",
     /** The same, for a first visit: it says what the first play is, in the words of the sentence above it. */
-    lockedFirst: "tap play to hear how this was made. nothing sounds until you do.",
+    lockedFirst: "tap to hear how this was made. nothing sounds until you do.",
     loading: "loading the sounds.",
     loadFailed: "the sounds could not be loaded. reload to try again.",
     soundFailed: "the sound could not start. tap play to try again.",
@@ -23,6 +23,8 @@ export const copy = {
   controls: {
     label: "playback",
     play: "play",
+    /** The main button on a first visit: what pressing it does, in the words of the sentence above it. */
+    playFirst: "hear how it was made",
     pause: "pause",
     next: "next stage",
     previous: "previous stage",
