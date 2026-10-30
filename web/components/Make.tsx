@@ -143,7 +143,7 @@ export function Make({
         <Link href="/" className="back">
           {copy.make.home}
         </Link>
-        <p className="kicker">{copy.make.kicker}</p>
+        <h1 className="kicker">{copy.make.kicker}</h1>
         <button
           type="button"
           className="back how"

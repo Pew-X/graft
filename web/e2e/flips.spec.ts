@@ -253,3 +253,9 @@ for (const scheme of ["light", "dark"] as const) {
     expect(await smallTargets(page), "controls under 44 px").toEqual([]);
   });
 }
+
+test("the flips page has one top heading", async ({ page }) => {
+  await page.goto("/flips");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(/your flips/i);
+});

@@ -480,6 +480,13 @@ export function RollPlayer({
     pauseRoll: () => later((e) => e.pause()),
     // a narration that is running ends as if skipped; any other phase ignores this event
     endNarration: () => guide("skipped"),
+    // the cut tools and the pad bank both sit at the bottom of the page: one at a time
+    endMarking: () => {
+      setMarking(false);
+      setMark(null);
+      setRestoredSpeed(null);
+      writeCut(null);
+    },
     say: setNotice,
     marking: markingNow,
     setShown: setPerformShown,
@@ -601,11 +608,13 @@ export function RollPlayer({
     [blocks, lastId, openMake],
   );
   const toggleMarking = useCallback(() => {
+    // marking a part and performing share the bottom of the page: starting to mark leaves perform
+    if (!marking) leavePerform();
     setMarking((on) => !on);
     setMark(null);
     setRestoredSpeed(null);
     writeCut(null);
-  }, []);
+  }, [leavePerform, marking]);
   // The visitor left for the make page with a part marked and came back with Back: the address still
   // says which part (and its speed), so the page opens with it marked again.
   const cutHere = openMake !== undefined && stages > 0;

@@ -124,10 +124,22 @@ export const PadBank = memo(function PadBank({
             <button
               type="button"
               aria-pressed={phrase.playing}
+              aria-label={phrase.playing ? undefined : copy.phrase.play}
               disabled={phrase.recording}
               onClick={phrase.playing ? phrase.stop : () => void phrase.play()}
             >
-              {phrase.playing ? copy.perform.stop : copy.phrase.play}
+              {phrase.playing ? (
+                copy.perform.stop
+              ) : (
+                <>
+                  <span className="long" aria-hidden="true">
+                    {copy.phrase.play}
+                  </span>
+                  <span className="short" aria-hidden="true">
+                    {copy.phrase.playShort}
+                  </span>
+                </>
+              )}
             </button>
             <button
               type="button"
@@ -136,8 +148,18 @@ export const PadBank = memo(function PadBank({
             >
               {copy.phrase.loop}
             </button>
-            <button type="button" disabled={phrase.recording} onClick={phrase.copyLink}>
-              {copy.phrase.copy}
+            <button
+              type="button"
+              aria-label={copy.phrase.copy}
+              disabled={phrase.recording}
+              onClick={phrase.copyLink}
+            >
+              <span className="long" aria-hidden="true">
+                {copy.phrase.copy}
+              </span>
+              <span className="short" aria-hidden="true">
+                {copy.phrase.copyShort}
+              </span>
             </button>
             <button type="button" onClick={phrase.clear}>
               {copy.phrase.clear}

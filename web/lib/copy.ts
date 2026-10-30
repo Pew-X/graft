@@ -72,6 +72,9 @@ export const copy = {
     record: "rec",
     recordStop: "stop rec",
     play: "play phrase",
+    /** The visible words on a narrow screen, where one row has to hold five buttons; the buttons keep their full names. */
+    playShort: "play",
+    copyShort: "link",
     loop: "loop",
     clear: "clear",
     copy: "copy link",
@@ -410,6 +413,11 @@ export const copy = {
         "rec keeps your presses as a phrase: which pad, and when, up to sixteen seconds. play runs it again, once or round and round. the phrase lives in the address of the page, so copying the link sends it. it holds no sound and no name; a link you open only offers it, and it plays when you press play.",
       keys: "the keys button lists every keyboard control of the page you are on. a screen reader keeps the digit keys for itself, so the pads are plain buttons.",
     },
+    /** Own sounds are switched on or off by the service, so the page says it with a condition. */
+    own: {
+      heading: "your own sound",
+      body: "when own sounds are switched on, the make page can start from your own recording or an audio file. the microphone asks your browser for permission first. the sound stays on your device until you publish it, and what is published is the sound as your browser read it. publish only sounds you made or may share: graft cannot check that for you.",
+    },
     isNot: {
       heading: "what it is not",
       body: "not a sampler: perform plays whole stages, with no slicing, no grid, no tempo, no effects and no export of sound. an independent experiment, not affiliated with or endorsed by any product named.",
@@ -708,6 +716,10 @@ export const copy = {
           [
             "escape",
             "the first press ends a recording, or silences the sound and a phrase playing. the next leaves perform.",
+          ],
+          [
+            "cutting a part",
+            "marking a part on the record ends perform, and turning perform on ends the marking: the cut tools and the pads share the bottom of the page.",
           ],
           [
             "screen readers",
