@@ -163,7 +163,7 @@ test("taking over ends it: pressing next, or tapping a ring, leaves the narratio
 });
 
 test("a second visit sees no narration and no hint", async ({ page }) => {
-  await arriveWith(page, "done");
+  await arriveWith(page, "keys");
   await play(page).click();
   await expect(page.locator(".roll")).toHaveAttribute("data-sounding", "true");
   await page.waitForTimeout(1500);
@@ -182,13 +182,13 @@ test("a browser that kept the earlier coach's word is shown the new narration on
 test("how it works in the footer plays the narration again from the start, and the hints again", async ({
   page,
 }) => {
-  await arriveWith(page, "done");
+  await arriveWith(page, "keys");
   await page.getByRole("button", { name: "how it works" }).click();
   await expect(page.locator(".roll")).toHaveAttribute("data-sounding", "true");
   await expect(caption(page)).toHaveAttribute("data-moment", "teaser:3");
   await caption(page).getByRole("button", { name: "skip" }).click();
   await expect(hint(page)).toContainText("drag the needle");
-  expect(await stored(page), "a replay never sends a browser back").toBe("done");
+  expect(await stored(page), "a replay never sends a browser back").toBe("keys");
 });
 
 test("the hints come one at a time: the first goes when the needle is used, then the second, then none", async ({
@@ -206,8 +206,13 @@ test("the hints come one at a time: the first goes when the needle is used, then
   await expect(hint(page)).toContainText("like a part? mark it, change its speed, flip it.");
   expect(await stored(page)).toBe("needle");
   await page.getByRole("button", { name: "cut on the record" }).click();
-  await expect(hint(page)).toHaveCount(0);
+  // the third hint points at perform; pressing it is the thing it asks for
+  await expect(hint(page)).toContainText("press perform, then 1 2 3 to play the stages.");
   await expect.poll(() => stored(page)).toBe("done");
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "perform", exact: true }).click();
+  await expect(hint(page)).toHaveCount(0);
+  await expect.poll(() => stored(page)).toBe("keys");
   await page.reload();
   await expect(page.locator(".roll")).toHaveAttribute("data-audio", "ready");
   await page.waitForTimeout(1500);
@@ -221,8 +226,9 @@ test("a hint that is not acted on fades by itself and the next follows; neither 
   await arriveWith(page, "narrated");
   await expect(hint(page)).toContainText("drag the needle");
   await expect(hint(page)).toContainText("like a part?", { timeout: 15_000 });
+  await expect(hint(page)).toContainText("press perform", { timeout: 15_000 });
   await expect(hint(page)).toHaveCount(0, { timeout: 15_000 });
-  expect(await stored(page)).toBe("done");
+  expect(await stored(page)).toBe("keys");
   await page.reload();
   await expect(page.locator(".roll")).toHaveAttribute("data-audio", "ready");
   await page.waitForTimeout(1500);
@@ -427,7 +433,7 @@ test("while the guide speaks the plain 'drag the needle.' caption stays out of t
   await expect(hint(page)).toContainText("drag the needle");
   await expect(page.locator(".record-caption")).toBeHidden();
   // the hint goes by itself, then the second, then nothing: the caption is back
-  await expect(hint(page)).toHaveCount(0, { timeout: 25_000 });
+  await expect(hint(page)).toHaveCount(0, { timeout: 40_000 });
   await expect(page.locator(".record-caption")).toBeVisible();
 });
 
@@ -441,7 +447,7 @@ for (const size of SIZES) {
     test("the replay button is on the first screen, labelled, and a full-size target", async ({
       page,
     }) => {
-      await arriveWith(page, "done+made");
+      await arriveWith(page, "keys+made");
       const b = await box(page, ".how-link");
       expect(b, "the button is drawn").not.toBeNull();
       expect(b!.h).toBeGreaterThanOrEqual(44);
@@ -479,7 +485,7 @@ test("replay while a hint is up ends the hint and narrates again", async ({ page
 test("replay while marking a part narrates again and nothing throws", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await arriveWith(page, "done+made");
+  await arriveWith(page, "keys+made");
   await page.getByRole("button", { name: "cut on the record" }).click();
   await how(page).click();
   await expect(caption(page)).toHaveAttribute("data-moment", "teaser:3");
@@ -489,7 +495,7 @@ test("replay while marking a part narrates again and nothing throws", async ({ p
 test("replay with a part marked closes the cut, so its menu is not left over the captions", async ({
   page,
 }) => {
-  await arriveWith(page, "done+made");
+  await arriveWith(page, "keys+made");
   await page.getByRole("button", { name: "cut on the record" }).click();
   const a = await pointOn(page, STAGES, 3, 0.25);
   const b = await pointOn(page, STAGES, 3, 0.75);
@@ -511,16 +517,16 @@ test("replay with a part marked closes the cut, so its menu is not left over the
 test("a link ending in #how plays the guide from the start, even for a browser that finished it", async ({
   page,
 }) => {
-  await page.addInitScript(() => localStorage.setItem("graft.coach", "done+made"));
+  await page.addInitScript(() => localStorage.setItem("graft.coach", "keys+made"));
   await page.goto("/#how");
   await expect(page.locator(".roll")).toHaveAttribute("data-audio", "ready");
   await play(page).click();
   await expect(caption(page)).toHaveAttribute("data-moment", "teaser:3");
-  expect(await stored(page), "a replay never sends a browser back").toBe("done+made");
+  expect(await stored(page), "a replay never sends a browser back").toBe("keys+made");
 });
 
 test("the about page has a link that plays the guide again", async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem("graft.coach", "done+made"));
+  await page.addInitScript(() => localStorage.setItem("graft.coach", "keys+made"));
   await page.goto("/about");
   await page.getByRole("link", { name: "play the guide again" }).click();
   await expect(page).toHaveURL(/\/#how$/);
@@ -532,7 +538,7 @@ test("the about page has a link that plays the guide again", async ({ page }) =>
 test("with the replay button in view the page has no serious accessibility violation", async ({
   page,
 }, info) => {
-  await arriveWith(page, "done+made");
+  await arriveWith(page, "keys+made");
   await scan(page, "roll with the replay button", info);
 });
 
@@ -572,4 +578,64 @@ test("the main button's longer first-visit label stays on one line and clear of 
     expect(button!.x + button!.w, size.name).toBeLessThanOrEqual(size.width);
     if (status) expect(overlap(button!, status), `${size.name}: over the status line`).toBe(0);
   }
+});
+
+test("a browser holding the old final word sees the perform hint once, and then never again", async ({
+  page,
+}) => {
+  await arriveWith(page, "done+made");
+  await expect(hint(page)).toContainText("press perform, then 1 2 3 to play the stages.");
+  // it points at the perform button and catches no press
+  const target = await box(page, ".controls .perform-toggle");
+  expect(target).not.toBeNull();
+  await expect(hint(page)).toHaveCount(0, { timeout: 15_000 });
+  await expect.poll(() => stored(page)).toBe("keys+made");
+  await page.reload();
+  await expect(page.locator(".roll")).toHaveAttribute("data-audio", "ready");
+  await page.waitForTimeout(1500);
+  await expect(hint(page)).toHaveCount(0);
+});
+
+test("a perform press is not the needle: the first hint stays until the needle is used or it fades", async ({
+  page,
+}) => {
+  await arriveWith(page, "narrated");
+  await expect(hint(page)).toContainText("drag the needle");
+  await page.getByRole("button", { name: "perform", exact: true }).click();
+  await page.keyboard.press("Digit2");
+  await expect(hint(page)).toContainText("drag the needle");
+  expect(await stored(page)).toBe("narrated");
+});
+
+test("on a first visit perform and the keys button are not shown until the narration is over, and a returning browser has them at once", async ({
+  page,
+}) => {
+  await arrive(page);
+  await expect(page.getByRole("button", { name: "perform", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "keys", exact: true })).toHaveCount(0);
+  await play(page).click();
+  await expect(caption(page)).toBeVisible();
+  await expect(page.getByRole("button", { name: "perform", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "keys", exact: true })).toHaveCount(0);
+  await caption(page).getByRole("button", { name: "skip" }).click();
+  await expect(page.getByRole("button", { name: "perform", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "keys", exact: true })).toBeVisible();
+});
+
+test("a returning browser has perform and keys from the first screen", async ({ page }) => {
+  await arriveWith(page, "keys");
+  await expect(page.getByRole("button", { name: "perform", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "keys", exact: true })).toBeVisible();
+});
+
+test("replay ends with the perform hint, and nothing is sent back in the stored word", async ({
+  page,
+}) => {
+  await arriveWith(page, "keys");
+  await page.getByRole("button", { name: "how it works" }).click();
+  await caption(page).getByRole("button", { name: "skip" }).click();
+  await expect(hint(page)).toContainText("drag the needle");
+  await expect(hint(page)).toContainText("like a part?", { timeout: 15_000 });
+  await expect(hint(page)).toContainText("press perform", { timeout: 15_000 });
+  expect(await stored(page)).toBe("keys");
 });

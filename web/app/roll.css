@@ -52,7 +52,8 @@ button:disabled {
 }
 /* the footer's panel is dark in both themes, and the light theme's ring is a dark green: on that panel the
    ring is the bright green of the dark theme */
-.roll .footer :focus-visible {
+.roll .footer :focus-visible,
+.bank :focus-visible {
   outline-color: #5dff9c;
 }
 /* the title slab is cut to a torn shape, which would cut a ring drawn outside it: the ring is drawn inside,
@@ -875,6 +876,195 @@ button:disabled {
     ui-monospace,
     monospace;
 }
+/* The pads: matte, backlit squares in each stage's dye, numbered like its ring. They sit in the status
+   stack above the transport, so the stage in view makes room for them as it does for a caption. */
+.bank {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 0 auto 0.5rem;
+  padding: 8px;
+  width: max-content;
+  max-width: 100%;
+  /* a backlit panel, dark in both themes, so the pads and their switches read over the paper and the record */
+  border: 1px solid rgb(236 230 216 / 0.16);
+  border-radius: 16px;
+  background: #0a0b0a;
+  color: #ece6d8;
+  pointer-events: auto;
+  /* fingers play pads: no browser pan, zoom or text selection on the bank (the rest of the page keeps them) */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.pads {
+  display: grid;
+  grid-template-columns: repeat(4, var(--pad));
+  gap: 6px;
+  --pad: clamp(46px, 4.4vw, 58px);
+}
+.pad {
+  --d: var(--dye-0);
+  position: relative;
+  display: block;
+  width: var(--pad);
+  height: var(--pad);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--d) 50%, #0c0b0a);
+  border-radius: 10px;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--d) 36%, #151311), #121110 78%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.12),
+    inset 0 0 14px color-mix(in srgb, var(--d) 16%, transparent);
+  color: #ece6d8;
+  text-align: left;
+  cursor: pointer;
+  touch-action: none;
+}
+.pad[data-dye="1"] {
+  --d: var(--dye-1);
+}
+.pad[data-dye="2"] {
+  --d: var(--dye-2);
+}
+.pad[data-dye="3"] {
+  --d: var(--dye-3);
+}
+.pad-n {
+  position: absolute;
+  left: 7px;
+  top: 3px;
+  font:
+    700 17px/1.1 var(--f-mono),
+    ui-monospace,
+    monospace;
+}
+/* from the tenth on the numeral has two digits, and the key's own mark sits beside it: both are smaller */
+.pad[data-pad="9"] .pad-n,
+.pad[data-pad="10"] .pad-n,
+.pad[data-pad="11"] .pad-n {
+  left: 6px;
+  top: 5px;
+  font-size: 14px;
+}
+.pad-key {
+  position: absolute;
+  right: 4px;
+  top: 5px;
+  padding: 0 3px;
+  border-radius: 4px;
+  background: rgb(255 255 255 / 0.14);
+  font:
+    600 8px/1.4 var(--f-mono),
+    ui-monospace,
+    monospace;
+}
+.pad-t {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 4px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font:
+    500 9px/1.2 var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.02em;
+  color: rgb(236 230 216 / 0.78);
+}
+/* the stage the page is showing */
+.pad[aria-current="true"] {
+  border-color: var(--d);
+}
+/* a pad that cannot play says why on its face, and is dimmer; it is still there, in its place */
+.pad[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+/* while its voice sounds the pad keeps a quiet glow from within */
+.pad[data-sounding="true"] {
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--d) 70%, #151311),
+    color-mix(in srgb, var(--d) 34%, #121110)
+  );
+  box-shadow:
+    inset 0 0 0 1px var(--d),
+    inset 0 0 18px color-mix(in srgb, var(--d) 55%, transparent),
+    0 0 14px color-mix(in srgb, var(--d) 50%, transparent);
+}
+/* pressed: the dye floods to full with a phosphor-green core that decays, light from within */
+.pad.hit {
+  animation: pad-hit 0.3s ease-out;
+}
+@keyframes pad-hit {
+  0% {
+    background: radial-gradient(circle at 50% 50%, #cffff0 0%, #5dff9c 18%, var(--d) 64%);
+    box-shadow:
+      inset 0 0 0 1px #5dff9c,
+      0 0 26px #5dff9c;
+  }
+  100% {
+    box-shadow: none;
+  }
+}
+.roll[data-reduced="true"] .pad.hit {
+  animation: none;
+}
+.bank-side {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+/* cut | layer is one pill with two halves, and stop sits under it */
+.bank-side .rule {
+  display: flex;
+  border: 1px solid rgb(236 230 216 / 0.4);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.bank-side .rule button {
+  flex: 1;
+  border: 0;
+  border-radius: 0;
+}
+.bank-side button {
+  min-width: 56px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid rgb(236 230 216 / 0.4);
+  border-radius: 999px;
+  background: transparent;
+  color: #ece6d8;
+  font:
+    500 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.06em;
+}
+.bank-side button[aria-pressed="true"] {
+  background: #ece6d8;
+  color: #0a0b0a;
+}
+
+/* perform: a mode, so it is a pressed button; lit in the phosphor green (or the live stage's colour) */
+.controls .perform-toggle {
+  margin-left: 6px;
+  border: 1px solid var(--line);
+  letter-spacing: 0.06em;
+}
+.controls .perform-toggle[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--live, #5dff9c);
+  color: #04110a;
+}
 .controls .primary {
   min-width: 88px;
   /* the first visit's label is a short sentence: it stays on one line, and the pill grows to hold it */
@@ -917,7 +1107,7 @@ button:disabled {
   letter-spacing: 0.04em;
   color: #b9b2a4;
 }
-.roll .footer :is(a, .how-link) {
+.roll .footer :is(a, .how-link, .keys-link) {
   color: #ece6d8;
 }
 .roll .footer p {
@@ -996,7 +1186,7 @@ button:disabled {
     text-align: left;
     color: var(--muted);
   }
-  .roll .footer :is(a, .how-link) {
+  .roll .footer :is(a, .how-link, .keys-link) {
     color: inherit;
   }
   /* the note and its two links share a row, so the header does not crowd the stage's room */
@@ -1147,7 +1337,9 @@ button:disabled {
 /* the footer's second link is a button that looks like the first */
 .footer-links {
   display: inline-flex;
-  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px 14px;
   align-items: center;
 }
 .how-link {
@@ -1163,10 +1355,49 @@ button:disabled {
   font: inherit;
   letter-spacing: inherit;
   color: inherit;
+  white-space: nowrap;
   cursor: pointer;
 }
 .how-mark {
   font-weight: 700;
+}
+.keys-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid color-mix(in srgb, currentColor 50%, transparent);
+  border-radius: 999px;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.keys-icon {
+  display: none;
+}
+@media (max-width: 420px) {
+  /* the keys button is a round keyboard here, still named "keys": the note beside it keeps its three lines */
+  .keys-link {
+    justify-content: center;
+    width: 44px;
+    padding: 0;
+  }
+  .keys-link .keys-icon {
+    display: block;
+  }
+  .keys-link .keys-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .footer-links {
+    gap: 8px;
+  }
 }
 @media (max-width: 420px) {
   /* a narrow phone has no room for the words: a round question mark, still named "how it works" */

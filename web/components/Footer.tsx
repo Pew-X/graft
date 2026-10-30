@@ -1,10 +1,14 @@
+import type { ReactNode } from "react";
 import { copy } from "../lib/copy.ts";
 
 /** The independence line, the about page, and (on the roll) a way to see how it works again. */
 export function Footer({
   onHow,
   flipsHref,
+  children,
 }: {
+  /** More controls for the row of links (the keys sheet). */
+  children?: ReactNode;
   onHow?: (() => void) | undefined;
   /** The list of the flips this browser holds a key for, when it holds any. */
   flipsHref?: string | undefined;
@@ -23,6 +27,7 @@ export function Footer({
             <span className="how-label">{copy.footer.how}</span>
           </button>
         ) : null}
+        {children}
       </span>
     </footer>
   );

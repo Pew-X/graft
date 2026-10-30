@@ -12,7 +12,7 @@ const returning = {
   origins: [
     {
       origin: "http://127.0.0.1:3100",
-      localStorage: [{ name: "graft.coach", value: "done+made" }],
+      localStorage: [{ name: "graft.coach", value: "keys+made" }],
     },
   ],
 };
@@ -42,7 +42,8 @@ export default defineConfig({
     },
     {
       name: "webkit",
-      testMatch: ["**/flush.spec.ts", "**/core-loop.spec.ts"],
+      // perform plays real Web Audio, which is where the engines differ most: it runs here too
+      testMatch: ["**/flush.spec.ts", "**/core-loop.spec.ts", "**/perform.spec.ts"],
       use: { browserName: "webkit", baseURL: "http://127.0.0.1:3100" },
     },
   ],

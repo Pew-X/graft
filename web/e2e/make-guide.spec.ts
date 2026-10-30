@@ -11,6 +11,7 @@ test.use({ storageState: { cookies: [], origins: [] }, viewport: { width: 1280, 
 const PICK = "pick any sound. you cut a piece of it next.";
 const HEAR = "this flip is already set up. press hear it.";
 const CHANGE = "now move a bracket or the speed, and hear it change.";
+const CHANGE_KEYS = "arrow keys nudge a bracket; shift nudges it ten times more.";
 const SHARE = "like it? publish it with the button below.";
 
 const guide = (page: Page) => page.getByTestId("make-guide");
@@ -110,7 +111,7 @@ test("the line never moves the page: the stage and the controls stay where they 
 test("the replay button plays the hints again: at the picker, and with a sound in the editor", async ({
   page,
 }) => {
-  await page.addInitScript(() => localStorage.setItem("graft.coach", "done+made"));
+  await page.addInitScript(() => localStorage.setItem("graft.coach", "keys+made"));
   await page.goto("/make");
   await expect(page.getByRole("heading", { name: "pick a sound to start from" })).toBeVisible();
   await expect(guide(page)).toHaveCount(0);
@@ -121,7 +122,7 @@ test("the replay button plays the hints again: at the picker, and with a sound i
   await guide(page).getByRole("button", { name: "skip" }).click();
   await how(page).click();
   await expect(guide(page)).toContainText(HEAR);
-  expect(await stored(page), "a replay never sends a browser back").toBe("done+made");
+  expect(await stored(page), "a replay never sends a browser back").toBe("keys+made");
 });
 
 test("the replay button is a labelled full-size target on the first screen, phone and laptop", async ({
@@ -192,4 +193,21 @@ test.describe("phone", () => {
       expect(b!.x + b!.width).toBeLessThanOrEqual(390);
     }
   });
+});
+
+test("under the change hint a smaller line says what the arrow keys and shift do to a bracket, in the same slot", async ({
+  page,
+}) => {
+  await choose(page);
+  await expect(guide(page)).not.toContainText(CHANGE_KEYS);
+  const slot = () =>
+    page.evaluate(() => document.querySelector(".make-guide")!.getBoundingClientRect().height);
+  const before = await slot();
+  await hearIt(page).click();
+  await expect(guide(page)).toContainText(CHANGE);
+  await expect(guide(page)).toContainText(CHANGE_KEYS);
+  expect(await slot(), "the slot did not grow for the key line").toBe(before);
+  await page.getByRole("button", { name: "faster" }).click();
+  await expect(guide(page)).toContainText(SHARE);
+  await expect(guide(page)).not.toContainText(CHANGE_KEYS);
 });

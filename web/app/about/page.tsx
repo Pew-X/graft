@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Footer } from "../../components/Footer.tsx";
 import { copy, fill } from "../../lib/copy.ts";
+import { PERFORM_ON } from "../../lib/perform/enabled.ts";
 import sources from "../../snapshot/sources.json";
 
 export const metadata: Metadata = { title: copy.about.title, description: copy.site.description };
@@ -53,14 +54,16 @@ export default function About() {
             </Link>
           </p>
         </section>
-        <section>
-          <h2 className="kicker">{a.perform.heading}</h2>
-          <p>{a.perform.body}</p>
-          <p>{a.perform.keys}</p>
-        </section>
+        {PERFORM_ON ? (
+          <section>
+            <h2 className="kicker">{a.perform.heading}</h2>
+            <p>{a.perform.body}</p>
+            <p>{a.perform.keys}</p>
+          </section>
+        ) : null}
         <section>
           <h2 className="kicker">{a.isNot.heading}</h2>
-          <p>{a.isNot.body}</p>
+          <p>{PERFORM_ON ? a.isNot.body : a.isNot.bodyWithoutPerform}</p>
         </section>
         <section>
           <h2 className="kicker">{a.states.heading}</h2>

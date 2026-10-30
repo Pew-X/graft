@@ -100,14 +100,18 @@ export class WebAudioGraph implements AudioGraph {
     });
   }
 
-  voice(stage: number): Voice {
+  /**
+   * A voice for a stage. It goes to the speakers unless `into` is given: a node to connect to instead (the
+   * performance's mix bus).
+   */
+  voice(stage: number, into?: unknown): Voice {
     if ((this.#buffers[stage] ?? null) === null) return silentVoice();
     const context = this.#context;
     const source = context.createBufferSource();
     const gain = context.createGain();
     source.buffer = this.#buffers[stage] ?? null;
     source.connect(gain);
-    gain.connect(context.destination);
+    gain.connect(into ?? context.destination);
     const voice: Voice = {
       get onended() {
         return source.onended;

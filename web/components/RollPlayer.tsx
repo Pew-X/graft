@@ -21,7 +21,6 @@ import {
   type AudioContextConstructor,
   type State,
 } from "../lib/playback/index.ts";
-import { type Event, type Phase, follow, next as nextPhase } from "../lib/coach/first.ts";
 import { captions, momentAt } from "../lib/coach/narration.ts";
 import { readPhase, writePhase } from "../lib/coach/seen.ts";
 import { captionBox } from "../lib/coach/where.ts";
@@ -29,6 +28,14 @@ import { levelAt, liveDye } from "../lib/thread/live.ts";
 import { dyes } from "../lib/theme/tokens.ts";
 import { type Rect } from "../lib/coach/marks.ts";
 import { SAMPLE_RATE } from "../lib/playback/config.ts";
+import { usePerform } from "./usePerform.ts";
+import {
+  type Event,
+  type Phase,
+  follow,
+  next as nextPhase,
+  toolsShown,
+} from "../lib/coach/first.ts";
 import { readyCut, READY_SPEED } from "../lib/make/ready.ts";
 import { layout, needleAt, peaksOf } from "../lib/record/disc.ts";
 import {
@@ -50,8 +57,12 @@ import { Disc, type Live } from "./Disc.tsx";
 import { EditPart } from "./EditPart.tsx";
 import { Footer } from "./Footer.tsx";
 import { Hint } from "./Hint.tsx";
+import { KeysSheet } from "./KeysSheet.tsx";
+import { PadBank } from "./PadBank.tsx";
 import { Thread } from "./Thread.tsx";
 import { useHeld } from "./useHeld.ts";
+import { MOST_PADS_BY_KEY } from "../lib/perform/keys.ts";
+import { PERFORM_ON } from "../lib/perform/enabled.ts";
 import { ThemeToggle } from "./ThemeToggle.tsx";
 
 type Load = "loading" | "ready" | "failed";
@@ -60,6 +71,7 @@ type Load = "loading" | "ready" | "failed";
 const HINT_SIDES = {
   needle: ["left", "above", "below"],
   mark: ["right", "below", "above"],
+  perform: ["above", "left", "right"],
 } as const;
 
 const clock = {
@@ -161,7 +173,14 @@ export function RollPlayer({
   // The page shows one stage large: the one playing, or the one the visitor moved to by keyboard
   // (focus follows into a stage and the roll slides to it); at rest, the finished flip.
   const [moved, setMoved] = useState<{ index: number; during: number | null } | null>(null);
-  const hero = moved && moved.during === current ? moved.index : (current ?? stages - 1);
+  // while performing, the stage last played is the one shown large
+  const [performShown, setPerformShown] = useState<number | null>(null);
+  const hero =
+    performShown !== null
+      ? performShown
+      : moved && moved.during === current
+        ? moved.index
+        : (current ?? stages - 1);
   const [shift, setShift] = useState(0);
   // The first placement is instant; only the moves after it slide.
   const [placed, setPlaced] = useState(false);
@@ -174,6 +193,10 @@ export function RollPlayer({
   const [barHeight, setBarHeight] = useState(0);
   // marking a part of a stage on the record, to flip just that part
   const [marking, setMarking] = useState(false);
+  const markingNow = useRef(false);
+  useEffect(() => {
+    markingNow.current = marking;
+  }, [marking]);
   const [mark, setMark] = useState<Mark | null>(null);
   // a cut that came back with the browser's Back button: its speed, for the edit bar to start at
   const [restoredSpeed, setRestoredSpeed] = useState<{ p: number; q: number } | null>(null);
@@ -374,16 +397,6 @@ export function RollPlayer({
   // a narration that has begun and then goes quiet (the sound failed, or the visitor left it) is over: it
   // must never leave the page without its skip, and the hints must still come
   const [narrationBegan, setNarrationBegan] = useState(false);
-  if (phase === "narrating" && sounding === "rolling" && !narrationBegan) setNarrationBegan(true);
-  if (phase !== "narrating" && narrationBegan) setNarrationBegan(false);
-  if (phaseKnown) {
-    const event =
-      phase === "narrating" && narrationBegan && sounding === "idle"
-        ? "skipped"
-        : follow(phase, { sounding, marking });
-    if (event !== null) setPhase(nextPhase(phase, event));
-  }
-
   // Leaving the page stops everything.
   useEffect(() => {
     const undo = cleanup.current;
@@ -445,13 +458,61 @@ export function RollPlayer({
     [ensure],
   );
 
+  // Performing: the number keys and the pads play the stages, beside the roll and on its own sounds.
+  const reasons = useMemo(
+    () =>
+      blocks.map((b, i) =>
+        playable[i]
+          ? ""
+          : b.state === "available"
+            ? copy.perform.why.silent
+            : copy.perform.why[b.state],
+      ),
+    [blocks, playable],
+  );
+  const perform = usePerform({
+    audio,
+    stages,
+    playable,
+    reasons,
+    lengths,
+    prepare: ensure,
+    pauseRoll: () => later((e) => e.pause()),
+    // a narration that is running ends as if skipped; any other phase ignores this event
+    endNarration: () => guide("skipped"),
+    say: setNotice,
+    marking: markingNow,
+    setShown: setPerformShown,
+  });
+  const performing = perform.on;
+
+  // (the guide follows what the visitor does, worked out here because it reads whether perform is on)
+  if (phase === "narrating" && sounding === "rolling" && !narrationBegan) setNarrationBegan(true);
+  if (phase !== "narrating" && narrationBegan) setNarrationBegan(false);
+  if (phaseKnown) {
+    const event =
+      phase === "narrating" && narrationBegan && sounding === "idle"
+        ? "skipped"
+        : follow(phase, {
+            sounding,
+            marking,
+            performing,
+            performAvailable: PERFORM_ON && stages > 1,
+          });
+    if (event !== null) setPhase(nextPhase(phase, event));
+  }
+
   // Read by the record every frame, so the stylus follows the sound without re-rendering the page.
-  const live = useCallback((): Live | null => {
+  const rollLive = useCallback((): Live | null => {
     const e = engineNow.current;
     const stage = e?.currentStage ?? null;
     const position = e?.stagePosition ?? null;
     return stage === null || position === null ? null : { stage, position };
   }, []);
+  const live = performing ? perform.live : rollLive;
+  // what sounds and which stage is lit, whether the roll or a pad made the sound
+  const lit = performing ? perform.sounding : playing;
+  const litStage = performing ? performShown : current;
 
   const markCut = mark ? markFrames(mark, (lengths[mark.stage] ?? 0) * 48_000) : null;
   const markLabel =
@@ -463,6 +524,16 @@ export function RollPlayer({
   const status =
     notice ||
     (marking && !markCut ? copy.mark.drag : "") ||
+    (performing
+      ? fill(
+          stages === 1
+            ? copy.perform.hintFew
+            : stages > MOST_PADS_BY_KEY
+              ? copy.perform.hintMore
+              : copy.perform.hint,
+          { n: Math.min(stages, MOST_PADS_BY_KEY) },
+        )
+      : "") ||
     (load === "loading"
       ? copy.hint.loading
       : load === "failed"
@@ -486,8 +557,15 @@ export function RollPlayer({
       )
     : null;
   // while the captions speak they are what is announced, so the stage is not read out a second time
-  const announcement =
-    current === null || !playing || captionText !== null
+  const announcement = performing
+    ? performShown === null
+      ? ""
+      : fill(copy.perform.played, {
+          n: performShown + 1,
+          total: stages,
+          title: blocks[performShown]?.title ?? "",
+        })
+    : current === null || !playing || captionText !== null
       ? ""
       : fill(copy.roll.stage, {
           n: current + 1,
@@ -496,7 +574,14 @@ export function RollPlayer({
         });
   const disabled = load !== "ready";
 
-  const onPlay = useCallback((index: number) => act((e) => e.tapStage(index)), [act]);
+  const leavePerform = perform.leave;
+  const onPlay = useCallback(
+    (index: number) => {
+      leavePerform();
+      act((e) => e.tapStage(index));
+    },
+    [act, leavePerform],
+  );
   const onFlip = useCallback(
     (index: number) => {
       // The end label flips the stage before it; a stage that is not here has no sound to flip.
@@ -564,8 +649,8 @@ export function RollPlayer({
   // The stage on screen is live while it sounds: its colour goes to the tile, the thread and the lit
   // groove. The thread alone steps aside for a hint (which points where it ends) and for marking a part.
   const dyeNow = liveDye({
-    playing,
-    current,
+    playing: lit,
+    current: litStage,
     hero,
     state: heroBlock?.state,
     dye: heroBlock?.dye,
@@ -584,6 +669,12 @@ export function RollPlayer({
     const tip = needleAt(l, Math.min(Math.max(0, hero), Math.max(0, stages - 1)), 0);
     return { x: tip.x - 36, y: tip.y - 36, w: 72, h: 72 };
   }, [stages, hero]);
+  const findPerform = useCallback((): Rect | null => {
+    const button = document.querySelector(".controls .perform-toggle");
+    if (!button) return null;
+    const b = button.getBoundingClientRect();
+    return b.width < 1 ? null : { x: b.x, y: b.y, w: b.width, h: b.height };
+  }, []);
   const findMark = useCallback((): Rect | null => {
     const button = document.querySelector('.block[data-hero="true"] .mark-toggle');
     const region = document.querySelector('.block[data-hero="true"] > article');
@@ -612,7 +703,8 @@ export function RollPlayer({
       data-stage={current ?? ""}
       data-step={state.kind === "rolling" ? state.step : ""}
       data-hero={hero}
-      data-sounding={playing}
+      data-sounding={lit}
+      data-perform={performing}
       data-audio={load}
       data-reduced={reduced}
       data-guide={phase}
@@ -625,11 +717,16 @@ export function RollPlayer({
           playable={playable}
           peaks={peaks}
           live={live}
-          playing={playing}
+          playing={lit}
           reduced={reduced}
           accent={dyeShown === null ? undefined : dyes[dyeShown]?.fill}
           focus={hero}
-          onScrubStart={(stage, offset) => act((e) => e.scrubStart(stage, offset))}
+          onScrubStart={(stage, offset) => {
+            // the roll's own audition plays instead: perform ends, so the record, the thread and the
+            // tile all follow the one sound that is playing
+            perform.leave();
+            act((e) => e.scrubStart(stage, offset));
+          }}
           // The first touch may arrive before the audio engine exists; the move and the release wait
           // for it, in order, instead of being lost.
           onScrubMove={(stage, offset) => later((e) => e.scrubMove(stage, offset))}
@@ -698,6 +795,17 @@ export function RollPlayer({
         />
       ) : null}
 
+      {phase === "hintPerform" && load === "ready" && !performing ? (
+        <Hint
+          key="perform"
+          text={copy.hints.perform}
+          find={findPerform}
+          prefer={HINT_SIDES.perform}
+          seed={59}
+          onFaded={fadedHint}
+        />
+      ) : null}
+
       <div className="viewport" ref={viewportEl}>
         <div
           className="sheet"
@@ -750,6 +858,19 @@ export function RollPlayer({
             : undefined
         }
       >
+        {performing ? (
+          <PadBank
+            blocks={blocks}
+            playable={playable}
+            reasons={reasons}
+            marks={perform.marks}
+            shown={performShown}
+            mode={perform.mode}
+            onMode={perform.setMode}
+            onPress={perform.press}
+            onStop={perform.silence}
+          />
+        ) : null}
         {moment && captionText !== null ? (
           <Caption
             text={captionText}
@@ -812,6 +933,7 @@ export function RollPlayer({
           disabled={disabled}
           onClick={() => {
             if (phase === "narrating") guide("tookOver");
+            perform.leave();
             act((e) => e.previous());
           }}
         >
@@ -822,7 +944,10 @@ export function RollPlayer({
           type="button"
           className="primary"
           disabled={disabled}
-          onClick={() => act((e) => (playing ? e.pause() : e.play()))}
+          onClick={() => {
+            perform.leave();
+            act((e) => (playing ? e.pause() : e.play()));
+          }}
         >
           {playing
             ? copy.controls.pause
@@ -837,12 +962,23 @@ export function RollPlayer({
           disabled={disabled}
           onClick={() => {
             if (phase === "narrating") guide("tookOver");
+            perform.leave();
             act((e) => e.next());
           }}
         >
           <span aria-hidden="true">→</span>
           <span className="visually-hidden">{copy.controls.next}</span>
         </button>
+        {PERFORM_ON && toolsShown(phase) && stages > 1 && load === "ready" ? (
+          <button
+            type="button"
+            className="perform-toggle"
+            aria-pressed={performing}
+            onClick={performing ? perform.leave : perform.enter}
+          >
+            {copy.perform.label}
+          </button>
+        ) : null}
       </div>
 
       {apiUrl ? (
@@ -854,6 +990,7 @@ export function RollPlayer({
           // the guide again from the start: the roll begins at its first step, and this press allows sound.
           // A cut that is open goes first: its menu would sit over the captions, and the guide's own
           // hints are for a page that is not in the middle of cutting.
+          perform.leave();
           setMarking(false);
           setMark(null);
           setRestoredSpeed(null);
@@ -876,7 +1013,9 @@ export function RollPlayer({
             e.play();
           });
         }}
-      />
+      >
+        {toolsShown(phase) ? <KeysSheet page="roll" /> : null}
+      </Footer>
     </div>
   );
 }

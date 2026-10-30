@@ -1,14 +1,15 @@
 /**
- * The first-visit guide as a small state machine: a narrated first play, then two hints, one at a time,
+ * The first-visit guide as a small state machine: a narrated first play, then three hints, one at a time,
  * then nothing. It is pure, so the order and the "once" can be checked without a browser.
  *
  *   armed        nothing has been shown; the first play will be narrated
  *   narrating    the captions are following the roll
  *   hintNeedle   "drag the needle to hear any moment."
  *   hintMark     "like a part? mark it, change its speed, flip it."
+ *   hintPerform  "press perform, then 1 2 3 to play the stages."
  *   done         everything has been shown; nothing comes back until the footer replays it
  */
-export type Phase = "armed" | "narrating" | "hintNeedle" | "hintMark" | "done";
+export type Phase = "armed" | "narrating" | "hintNeedle" | "hintMark" | "hintPerform" | "done";
 
 export type Event =
   /** The roll began to sound. */
@@ -22,6 +23,8 @@ export type Event =
   | "needleUsed"
   /** The visitor marked a part (the second hint has been done). */
   | "marked"
+  /** The visitor turned perform on (the third hint has been done). */
+  | "performed"
   /** A hint went away by itself. */
   | "hintFaded"
   /** "how it works" in the footer. */
@@ -40,7 +43,9 @@ export function next(phase: Phase, event: Event): Phase {
     case "hintNeedle":
       return event === "needleUsed" || event === "hintFaded" ? "hintMark" : phase;
     case "hintMark":
-      return event === "marked" || event === "hintFaded" ? "done" : phase;
+      return event === "marked" || event === "hintFaded" ? "hintPerform" : phase;
+    case "hintPerform":
+      return event === "performed" || event === "hintFaded" ? "done" : phase;
     case "done":
       return phase;
   }
@@ -52,6 +57,10 @@ export interface Doing {
   sounding: "idle" | "rolling" | "auditioning" | "paused";
   /** Marking a part on the record. */
   marking: boolean;
+  /** Perform is on. */
+  performing?: boolean;
+  /** There is a perform control to point at (a chain of one stage has none, so its hint has nothing to say). */
+  performAvailable?: boolean;
 }
 
 /**
@@ -71,6 +80,10 @@ export function follow(phase: Phase, doing: Doing): Event | null {
   if (phase === "narrating") return doing.sounding === "auditioning" ? "tookOver" : null;
   if (phase === "hintNeedle") return doing.sounding === "auditioning" ? "needleUsed" : null;
   if (phase === "hintMark") return doing.marking ? "marked" : null;
+  if (phase === "hintPerform") {
+    if (doing.performing) return "performed";
+    return doing.performAvailable === false ? "hintFaded" : null;
+  }
   return null;
 }
 
