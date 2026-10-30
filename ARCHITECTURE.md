@@ -695,6 +695,9 @@ Written by ticket 22.
 
 **The snapshot cannot drift.** A Rust test, in the `rust` job that already has Postgres, seeds a fresh database and builds the snapshot from what the service holds, then compares it with the committed files byte for byte, audio included. A change to a seeded flip's cut fails it with a line naming the stage and what changed (a test makes that change and finds `stage 4 ... cut`; the stages before it are not reported). `graft-seed-chain --check-snapshot web` asks the same question of any database from the command line, and `--write-snapshot web` regenerates the files to commit.
 
+
+**Offline.** The home page needs nothing from outside the site: its chain and its audio are the site's own static files, and the only request it makes beyond them is the quiet wake call, which may fail without the page noticing (a spec cuts off everything else and plays it). A page that is already open when the network goes says "you look to be offline. the sounds will load when you are back." and loads them by itself when the network returns. A reload of the document itself with no network shows the browser's own error page: graft ships no service worker, on purpose (a cached shell would have to be kept honest about a chain that can change), so this is checked and left as it is.
+
 ## Visitor sources and the launch gate
 
 Written by ticket 12.

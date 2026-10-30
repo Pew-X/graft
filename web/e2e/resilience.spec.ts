@@ -100,3 +100,49 @@ test("the sounds that could not be fetched give a retry, not a blank page", asyn
   await page.goto("/");
   await expect(page.locator(".notes")).toContainText("could not be loaded");
 });
+
+// Audit 13.6: "turn the network to Offline and reload". A reload of the document itself cannot work without a
+// service worker (the browser shows its own error page: checked, and left as it is on purpose, graft ships no
+// service worker). What a visitor can meet is the network going while the page is open, or the service being gone
+// while the site is up. Both are met here.
+test("with everything outside the site cut off, the home page loads from its snapshot and plays", async ({
+  page,
+  context,
+}) => {
+  const outside: string[] = [];
+  // the network off for everything but the site's own files: no service, no wake call, no other origin
+  await context.route("**/*", (route) => {
+    const url = new URL(route.request().url());
+    if (url.origin === "http://127.0.0.1:3100" && url.pathname !== "/api/wake")
+      return route.continue();
+    outside.push(url.href);
+    return route.abort("internetdisconnected");
+  });
+  await page.goto("/");
+  await expect(page.locator(".roll")).toHaveAttribute("data-audio", "ready");
+  await expect(page.locator(".slab .title")).toHaveCount(4);
+  await page.getByRole("button", { name: "play", exact: true }).click();
+  await expect(page.locator(".roll")).toHaveAttribute("data-sounding", "true");
+  // nothing here needed anything from outside, and the page said nothing was wrong
+  await expect(page.locator(".notes .status")).not.toContainText(/could not|offline/);
+  expect(outside.filter((u) => !u.endsWith("/api/wake") && !u.includes("favicon"))).toEqual([]);
+});
+
+test("when the network goes the page says it looks offline, and comes back by itself when the network does", async ({
+  page,
+  context,
+}) => {
+  await page.route("**/seed/*.pcm", (route) => route.abort("connectionreset"));
+  await page.goto("/");
+  await expect(page.locator(".notes")).toContainText("could not be loaded");
+  await page.unroute("**/seed/*.pcm");
+  await context.setOffline(true);
+  await page.getByRole("button", { name: "try again" }).click();
+  await expect(page.locator(".notes")).toContainText(
+    "you look to be offline. the sounds will load when you are back.",
+  );
+  await context.setOffline(false);
+  await expect(page.locator(".roll")).toHaveAttribute("data-audio", "ready", { timeout: 15_000 });
+  await page.getByRole("button", { name: "play", exact: true }).click();
+  await expect(page.locator(".roll")).toHaveAttribute("data-sounding", "true");
+});
