@@ -26,6 +26,9 @@ export default async function globalSetup(): Promise<void> {
     entryPoints: [join(here, "long-fixture.tsx")],
     outfile: join(here, "dist", "long.js"),
     jsx: "automatic",
-    define: { "process.env.NODE_ENV": '"production"' },
+    define: {
+      "process.env.NODE_ENV": '"production"',
+      "process.env.NEXT_PUBLIC_GRAFT_PERFORM": '"on"',
+    },
   });
 }

@@ -59,6 +59,8 @@ export function usePerform({
   const performer = useRef<Performer | null>(null);
   const made = useRef<PerformAudio | null>(null);
   const onRef = useRef(false);
+  /** The performer is being made (two quick presses of perform must not make two). */
+  const making = useRef(false);
   const modeRef = useRef<Rule>("cut");
   const [marks, setMarks] = useState<Record<number, string> | null>(null);
   const latest = useRef({ playable, reasons, lengths, stages });
@@ -138,24 +140,30 @@ export function usePerform({
         const lazy = audio.current;
         const context = lazy?.context;
         if (!lazy || !context || !onRef.current) return;
-        if (!performer.current) {
+        if (!performer.current && !making.current) {
+          making.current = true;
           // the roll's own graph holds the decoded stages; the performer's voices share them
-          void lazy.unlock().then((roll) => {
-            made.current = performAudio(roll, context);
-            performer.current = new Performer({
-              graph: made.current.graph,
-              stages: latest.current.stages,
-              onChange: light,
+          lazy
+            .unlock()
+            .then((roll) => {
+              made.current = performAudio(roll, context);
+              performer.current = new Performer({
+                graph: made.current.graph,
+                stages: latest.current.stages,
+                onChange: light,
+              });
+              performer.current.mode = modeRef.current;
+              const timing = context as unknown as { baseLatency?: number; outputLatency?: number };
+              document
+                .querySelector(".roll")
+                ?.setAttribute(
+                  "data-latency",
+                  `${Math.round((timing.baseLatency ?? 0) * 1000)}+${Math.round((timing.outputLatency ?? 0) * 1000)}`,
+                );
+            })
+            .catch(() => {
+              making.current = false;
             });
-            performer.current.mode = modeRef.current;
-            const timing = context as unknown as { baseLatency?: number; outputLatency?: number };
-            document
-              .querySelector(".roll")
-              ?.setAttribute(
-                "data-latency",
-                `${Math.round((timing.baseLatency ?? 0) * 1000)}+${Math.round((timing.outputLatency ?? 0) * 1000)}`,
-              );
-          });
         }
       })
       .catch(() => {

@@ -52,7 +52,8 @@ button:disabled {
 }
 /* the footer's panel is dark in both themes, and the light theme's ring is a dark green: on that panel the
    ring is the bright green of the dark theme */
-.roll .footer :focus-visible {
+.roll .footer :focus-visible,
+.bank :focus-visible {
   outline-color: #5dff9c;
 }
 /* the title slab is cut to a torn shape, which would cut a ring drawn outside it: the ring is drawn inside,

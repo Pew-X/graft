@@ -2,6 +2,8 @@
 
 import { useRef } from "react";
 import { copy } from "../lib/copy.ts";
+import { sheetFor } from "../lib/keys-sheet.ts";
+import { PERFORM_ON } from "../lib/perform/enabled.ts";
 
 /**
  * Every keyboard control of this kind of page, in words. A visible button (not a character shortcut: a
@@ -11,7 +13,7 @@ import { copy } from "../lib/copy.ts";
 export function KeysSheet({ page, className }: { page: "roll" | "make"; className?: string }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const opener = useRef<HTMLButtonElement>(null);
-  const sections = copy.keys[page];
+  const sections = sheetFor(page, PERFORM_ON);
   const close = (): void => {
     dialog.current?.close();
     opener.current?.focus();

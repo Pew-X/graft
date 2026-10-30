@@ -62,6 +62,7 @@ import { PadBank } from "./PadBank.tsx";
 import { Thread } from "./Thread.tsx";
 import { useHeld } from "./useHeld.ts";
 import { MOST_PADS_BY_KEY } from "../lib/perform/keys.ts";
+import { PERFORM_ON } from "../lib/perform/enabled.ts";
 import { ThemeToggle } from "./ThemeToggle.tsx";
 
 type Load = "loading" | "ready" | "failed";
@@ -496,7 +497,7 @@ export function RollPlayer({
             sounding,
             marking,
             performing,
-            performAvailable: stages > 1,
+            performAvailable: PERFORM_ON && stages > 1,
           });
     if (event !== null) setPhase(nextPhase(phase, event));
   }
@@ -966,7 +967,7 @@ export function RollPlayer({
           <span aria-hidden="true">→</span>
           <span className="visually-hidden">{copy.controls.next}</span>
         </button>
-        {toolsShown(phase) && stages > 1 && load === "ready" ? (
+        {PERFORM_ON && toolsShown(phase) && stages > 1 && load === "ready" ? (
           <button
             type="button"
             className="perform-toggle"

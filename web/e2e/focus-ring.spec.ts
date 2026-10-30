@@ -64,6 +64,20 @@ for (const scheme of ["light", "dark"] as const) {
       }
     });
 
+    test("the pads sit on a dark panel in both themes and get the bright ring", async ({
+      page,
+    }) => {
+      await page.goto("/");
+      await expect(page.locator(".roll")).toHaveAttribute("data-audio", "ready");
+      await page.getByRole("button", { name: "perform", exact: true }).click();
+      await expect(page.locator(".bank")).toBeVisible();
+      for (const selector of [".pad", ".bank-side .stop"]) {
+        const r = await ring(page, selector);
+        expect(r.width, selector).toBe("3px");
+        expect(contrast(rgbToHex(r.colour), "#0a0b0a"), selector).toBeGreaterThanOrEqual(7);
+      }
+    });
+
     test("the title slab shows its ring, inside the paper, in the colour of its lettering", async ({
       page,
     }) => {

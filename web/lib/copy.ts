@@ -388,6 +388,9 @@ export const copy = {
     isNot: {
       heading: "what it is not",
       body: "not a sampler: perform plays whole stages, with no slicing, no sequencer, no effects and no export. an independent experiment, not affiliated with or endorsed by any product named.",
+      /** The same, for a build that holds perform back. */
+      bodyWithoutPerform:
+        "not a sampler: one cut and one speed, with no pads, layers, effects or export. an independent experiment, not affiliated with or endorsed by any product named.",
     },
     states: {
       heading: "declared, computed, unknown",
@@ -638,6 +641,7 @@ export const copy = {
     close: "close",
     roll: [
       {
+        id: "roll",
         heading: "the roll",
         rows: [
           [
@@ -657,6 +661,7 @@ export const copy = {
         note: "the dashed ring shows where the sound is. the needle follows your pointer. they are two things on purpose.",
       },
       {
+        id: "perform",
         heading: "perform",
         rows: [
           [
@@ -686,6 +691,7 @@ export const copy = {
     ],
     make: [
       {
+        id: "make",
         heading: "making a flip",
         rows: [
           ["← →", "on a bracket: move it one millisecond. with shift, ten."],
