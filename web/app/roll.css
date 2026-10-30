@@ -568,8 +568,12 @@ button:disabled {
   overflow-wrap: anywhere;
   unicode-bidi: isolate;
 }
-/* the plain way to play a stage, kept small */
+/* the plain way to play a stage, kept small. It sits on a band of the slab's own paper, above the title:
+   a title typed with stacked combining marks (they spill above and below their letters) can then never
+   write over this label, and what spills past the slab is cut by the torn edge */
 .slab .play-word {
+  position: relative;
+  background: var(--dye);
   display: block;
   margin-top: calc(var(--size, 48px) * var(--gap, 0.1));
   font:
@@ -623,6 +627,9 @@ button:disabled {
 .line {
   padding: 10px 0;
   border-top: 1px solid var(--hair);
+  /* a name typed with stacked combining marks cannot spill into the credit line above or below it:
+     the line's own padding is all the room ink may use */
+  overflow: clip;
 }
 .line dt {
   margin: 0;

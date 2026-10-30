@@ -99,6 +99,64 @@ for (const size of SIZES) {
       });
     }
 
+    test("the slab's own label sits on a band of its paper above the title, so stacked marks cannot write over it", async ({
+      page,
+    }) => {
+      await ready(page, "/");
+      await expect(page.locator(".roll")).toHaveAttribute("data-audio", "ready");
+      const marks = "\u0300\u0301\u0302\u0303\u0304\u0305\u0306\u0307\u0308\u030a\u0312\u0316";
+      await page.evaluate((m) => {
+        const title = document.querySelector('.block[data-hero="true"] .slab .title')!;
+        title.textContent = [...title.textContent!].map((c) => (c === " " ? c : c + m)).join("");
+      }, marks);
+      const band = await page.evaluate(() => {
+        const label = document.querySelector<HTMLElement>(
+          '.block[data-hero="true"] .slab .play-word',
+        )!;
+        const paper = document.querySelector<HTMLElement>('.block[data-hero="true"] .slab button')!;
+        const l = getComputedStyle(label);
+        return {
+          position: l.position,
+          background: l.backgroundColor,
+          paper: getComputedStyle(paper).backgroundColor,
+        };
+      });
+      // positioned content paints above the title's inline text, and its background is the paper's own
+      expect(band.position).toBe("relative");
+      expect(band.background).toBe(band.paper);
+      // what spills past the slab is cut by its torn edge (the slab clips to its polygon)
+      const clipped = await page.evaluate(
+        () =>
+          getComputedStyle(document.querySelector('.block[data-hero="true"] .slab button')!)
+            .clipPath,
+      );
+      expect(clipped).not.toBe("none");
+    });
+
+    test("a credit line keeps its own ink: stacked marks in a name are cut at the line, not drawn into its neighbours", async ({
+      page,
+    }) => {
+      await ready(page, "/");
+      await expect(page.locator(".roll")).toHaveAttribute("data-audio", "ready");
+      const result = await page.evaluate(() => {
+        const marks = "\u0300\u0301\u0302\u0303\u0304\u0305\u0306\u0307\u0308\u030a";
+        const value = document.querySelector<HTMLElement>(
+          '.block[data-hero="true"] .face .line .value',
+        )!;
+        value.textContent = [..."a name typed by a stranger"]
+          .map((c) => (c === " " ? c : c + marks))
+          .join("");
+        const line = value.closest<HTMLElement>(".line")!;
+        return {
+          overflow: getComputedStyle(line).overflowY,
+          pad: getComputedStyle(line).paddingTop,
+        };
+      });
+      expect(result.overflow).toBe("clip");
+      // the line's own padding is the room its ink has: a few pixels at least, more on a laptop
+      expect(Number.parseFloat(result.pad)).toBeGreaterThanOrEqual(4);
+    });
+
     test("the make page holds a long title and its keyboard note", async ({ page }) => {
       await ready(page, "/make?from=es1418qka9yt");
       await page.evaluate((title) => {
