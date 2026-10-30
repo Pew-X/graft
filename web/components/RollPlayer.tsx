@@ -541,12 +541,15 @@ export function RollPlayer({
           ? copy.offline
           : copy.hint.loadFailed
         : state.kind === "idle"
-          ? [
-              phaseKnown && phase === "armed" ? copy.hint.lockedFirst : copy.hint.locked,
-              unplayableText,
-            ]
-              .filter(Boolean)
-              .join(" ")
+          ? // the perform hint stands above the controls, where this line is: while it is up, it speaks alone
+            phase === "hintPerform"
+            ? unplayableText
+            : [
+                phaseKnown && phase === "armed" ? copy.hint.lockedFirst : copy.hint.locked,
+                unplayableText,
+              ]
+                .filter(Boolean)
+                .join(" ")
           : "");
   const moment = narrating ? momentAt(state, stages) : null;
   const captionText = moment
