@@ -3,6 +3,7 @@
 import { memo, type PointerEvent as ReactPointerEvent } from "react";
 import { copy, fill } from "../lib/copy.ts";
 import { keyOfPad } from "../lib/perform/keys.ts";
+import { positionHint } from "../lib/perform/layout.ts";
 import type { Rule } from "../lib/perform/performer.ts";
 import type { Block } from "../lib/roll/view.ts";
 
@@ -10,17 +11,16 @@ interface Props {
   blocks: readonly Block[];
   /** Whether each stage can be heard now. */
   playable: readonly boolean[];
+  /** For a stage that cannot be heard, why, in words. */
+  reasons: readonly string[];
+  /** What is printed on each key where the browser can say; the US marks where it cannot. */
+  marks: Record<number, string> | null;
   /** The stage last played: the one the page shows large. */
   shown: number | null;
   mode: Rule;
   onMode: (rule: Rule) => void;
   onPress: (stage: number) => void;
   onStop: () => void;
-}
-
-/** Why a pad cannot play, said in words. */
-function whyNot(block: Block): string {
-  return block.state === "available" ? copy.perform.why.silent : copy.perform.why[block.state];
 }
 
 /**
@@ -33,6 +33,8 @@ function whyNot(block: Block): string {
 export const PadBank = memo(function PadBank({
   blocks,
   playable,
+  reasons,
+  marks,
   shown,
   mode,
   onMode,
@@ -44,7 +46,7 @@ export const PadBank = memo(function PadBank({
       <div className="pads" role="group" aria-label={copy.perform.bank}>
         {blocks.map((block, i) => {
           const ok = playable[i] === true;
-          const key = keyOfPad(i);
+          const key = marks?.[i] ?? keyOfPad(i);
           return (
             <button
               key={block.id}
@@ -56,6 +58,7 @@ export const PadBank = memo(function PadBank({
               aria-current={shown === i ? "true" : undefined}
               aria-disabled={ok ? undefined : "true"}
               aria-keyshortcuts={key ?? undefined}
+              title={positionHint(i) ?? undefined}
               aria-label={fill(copy.perform.pad, { n: i + 1, title: block.title })}
               // the sound starts on the press itself; a key's Enter or Space arrives as a click with no detail
               onPointerDown={(e: ReactPointerEvent<HTMLButtonElement>) => {
@@ -75,7 +78,7 @@ export const PadBank = memo(function PadBank({
                 </span>
               ) : null}
               <span className="pad-t" aria-hidden="true">
-                {ok ? block.title : whyNot(block)}
+                {ok ? block.title : (reasons[i] ?? "")}
               </span>
             </button>
           );

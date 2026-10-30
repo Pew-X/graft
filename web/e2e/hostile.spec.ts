@@ -157,6 +157,49 @@ for (const size of SIZES) {
       expect(Number.parseFloat(result.pad)).toBeGreaterThanOrEqual(4);
     });
 
+    for (const [label, text] of HOSTILE) {
+      test(`the pads hold ${label}`, async ({ page }, info) => {
+        await ready(page, "/");
+        await expect(page.locator(".roll")).toHaveAttribute("data-audio", "ready");
+        await page.getByRole("button", { name: "perform", exact: true }).click();
+        await expect(page.locator(".bank")).toBeVisible();
+        const sizeOf = () =>
+          page.evaluate(() =>
+            [...document.querySelectorAll<HTMLElement>(".pad")].map((p) => [
+              Math.round(p.getBoundingClientRect().width),
+              Math.round(p.getBoundingClientRect().height),
+            ]),
+          );
+        const before = await sizeOf();
+        // a stranger's title is on every pad: the pad's own label, and what a reader of the screen hears
+        await page.evaluate((title) => {
+          for (const el of document.querySelectorAll(".pad .pad-t")) el.textContent = title;
+          for (const el of document.querySelectorAll(".pad"))
+            el.setAttribute("aria-label", `stage, ${title}`);
+        }, text);
+        await page.waitForTimeout(300);
+        const result = await page.evaluate(() => {
+          const bank = document.querySelector<HTMLElement>(".bank")!.getBoundingClientRect();
+          return {
+            bankRight: bank.right - window.innerWidth,
+            bankLeft: -bank.left,
+            pageSideways: document.documentElement.scrollWidth - window.innerWidth,
+            overflowing: [...document.querySelectorAll<HTMLElement>(".pad")].filter(
+              (p) => p.scrollHeight > p.clientHeight + 1,
+            ).length,
+          };
+        });
+        await page.screenshot({
+          path: info.outputPath(`pads-${size.name}-${label.replace(/\W+/g, "-")}.png`),
+        });
+        expect(await sizeOf(), "a pad changed size to fit the text").toEqual(before);
+        expect(result.bankRight, "the bank runs off the right").toBeLessThanOrEqual(0);
+        expect(result.bankLeft, "the bank runs off the left").toBeLessThanOrEqual(0);
+        expect(result.pageSideways, "the page scrolls sideways").toBeLessThanOrEqual(0);
+        expect(result.overflowing, "a pad's label spills out of it").toBe(0);
+      });
+    }
+
     test("the make page holds a long title and its keyboard note", async ({ page }) => {
       await ready(page, "/make?from=es1418qka9yt");
       await page.evaluate((title) => {

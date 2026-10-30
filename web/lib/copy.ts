@@ -39,8 +39,11 @@ export const copy = {
     /** The line under the record while performing. */
     hint: "keys 1 to {n} play the stages. escape stops the sound, then leaves.",
     hintFew: "key {n} plays the stage. escape stops the sound, then leaves.",
-    notHere: "stage {n} is not here.",
-    noSound: "stage {n} has no sound to play.",
+    /** More stages than keys: the pads play the rest. */
+    hintMore:
+      "keys 1 to {n} play the first stages; the pads play them all. escape stops the sound, then leaves.",
+    /** A press on a stage that cannot play says why, never a silent dead press. */
+    unplayable: "stage {n} cannot be played: {why}.",
     preparing: "getting the sound ready. press again.",
     resumed: "the sound was asleep: press again.",
     failed: "the sound could not start. press perform to try again.",

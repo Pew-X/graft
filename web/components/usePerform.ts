@@ -4,6 +4,7 @@ import { type RefObject, useCallback, useEffect, useRef, useState } from "react"
 import { copy, fill } from "../lib/copy.ts";
 import { padForKey } from "../lib/perform/keys.ts";
 import { performAudio, type PerformAudio } from "../lib/perform/graph.ts";
+import { printedMarks, type KeyboardLike } from "../lib/perform/layout.ts";
 import { Performer, type Rule } from "../lib/perform/performer.ts";
 import type { LazyAudio } from "../lib/playback/index.ts";
 import type { Live } from "./Disc.tsx";
@@ -15,6 +16,8 @@ interface Options {
   stages: number;
   /** Whether each stage can be heard right now (here, not held, with sound). */
   playable: readonly boolean[];
+  /** For a stage that cannot be heard, why, in words; empty for one that can. */
+  reasons: readonly string[];
   /** Length of each stage's sound in seconds. */
   lengths: readonly number[];
   /** Make the roll's playback engine, and in doing so unlock the audio: called inside the press. */
@@ -41,6 +44,7 @@ export function usePerform({
   audio,
   stages,
   playable,
+  reasons,
   lengths,
   prepare,
   pauseRoll,
@@ -58,9 +62,10 @@ export function usePerform({
   const made = useRef<PerformAudio | null>(null);
   const onRef = useRef(false);
   const modeRef = useRef<Rule>("cut");
-  const latest = useRef({ playable, lengths, stages });
+  const [marks, setMarks] = useState<Record<number, string> | null>(null);
+  const latest = useRef({ playable, reasons, lengths, stages });
   useEffect(() => {
-    latest.current = { playable, lengths, stages };
+    latest.current = { playable, reasons, lengths, stages };
   });
 
   const light = useCallback((now: readonly number[]) => {
@@ -76,7 +81,7 @@ export function usePerform({
 
   const press = useCallback(
     (stage: number): void => {
-      const { playable: ok, stages: count } = latest.current;
+      const { playable: ok, reasons: why, stages: count } = latest.current;
       if (stage < 0 || stage >= count) return;
       const p = performer.current;
       if (!p) {
@@ -84,7 +89,7 @@ export function usePerform({
         return;
       }
       if (!ok[stage]) {
-        say(fill(copy.perform.noSound, { n: stage + 1 }));
+        say(fill(copy.perform.unplayable, { n: stage + 1, why: why[stage] ?? "" }));
         return;
       }
       // the sound is started here, in the same task as the key, before anything is drawn
@@ -118,6 +123,10 @@ export function usePerform({
     setShown(null);
     pauseRoll();
     endNarration();
+    // what is printed on the keys, where the browser can say (labels only: the keys are by position)
+    void printedMarks((navigator as unknown as { keyboard?: KeyboardLike }).keyboard).then(
+      setMarks,
+    );
     try {
       // where the browser has it: sound keeps playing with the phone's ring switch set to silent
       const session = (navigator as unknown as { audioSession?: { type: string } }).audioSession;
@@ -222,7 +231,7 @@ export function usePerform({
     return { stage: last.stage, position: Math.min(length, performance.now() / 1000 - last.at) };
   }, []);
 
-  return { on, shown, sounding, mode, setMode, enter, leave, press, silence, live };
+  return { on, sounding, mode, marks, setMode, enter, leave, press, silence, live };
 }
 
 /** The ring's matching pad, if it is drawn, shows that it was pressed (a short light from within). */

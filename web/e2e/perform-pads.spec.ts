@@ -294,3 +294,118 @@ test("eight presses a second on twelve pads at 4x CPU slowdown keeps the frame b
   // the page still answers: the last pad pressed is lit
   await expect(page.locator('.pad[data-sounding="true"]')).toHaveCount(1);
 });
+
+// Every length a lineage can have. The service's deepest chain is twelve (the number row); a deeper one
+// (a raised cap, or a page cut short) has pads that no key reaches.
+for (const n of [1, 2, 4, 9, 10, 12, 14]) {
+  test(`a chain of ${n}: ${n === 1 ? "nothing to perform, so no control" : "pads, keys and numbers agree"}`, async ({
+    page,
+  }) => {
+    await spy(page);
+    await openLong(page, n);
+    if (n === 1) {
+      await expect(toggle(page)).toHaveCount(0);
+      return;
+    }
+    await toggle(page).click();
+    await expect(roll(page)).toHaveAttribute("data-latency", /\d/);
+    await expect(page.locator(".pad")).toHaveCount(n);
+    const numerals = await page.locator(".pad .pad-n").allInnerTexts();
+    expect(numerals).toEqual(Array.from({ length: n }, (_, i) => String(i + 1)));
+    // each key that exists plays its own stage, and the large stage's number is the pad's
+    const keys = [
+      "Digit1",
+      "Digit2",
+      "Digit3",
+      "Digit4",
+      "Digit5",
+      "Digit6",
+      "Digit7",
+      "Digit8",
+      "Digit9",
+      "Digit0",
+      "Minus",
+      "Equal",
+    ];
+    for (const [i, code] of keys.entries()) {
+      if (i >= n) {
+        const before = (await started(page)).length;
+        await page.keyboard.press(code);
+        expect((await started(page)).length, `${code} with only ${n} stages`).toBe(before);
+        continue;
+      }
+      await page.keyboard.press(code);
+      await expect(roll(page)).toHaveAttribute("data-hero", String(i));
+      await expect(pad(page, i)).toHaveAttribute("data-sounding", "true");
+      await expect(page.locator('.block[data-hero="true"]')).toContainText(
+        `no. ${String(i + 1).padStart(2, "0")}`,
+      );
+    }
+    // a pad past the twelfth has no key printed on it and still plays
+    if (n > 12) {
+      await expect(pad(page, 12).locator(".pad-key")).toHaveCount(0);
+      await pad(page, 13).focus();
+      await page.keyboard.press("Enter");
+      await expect(roll(page)).toHaveAttribute("data-hero", "13");
+      await expect(
+        page.getByRole("status").filter({ hasText: "the pads play them all" }).first(),
+      ).toBeVisible();
+    }
+  });
+}
+
+test("the pads' corners show what is printed on a non-US layout's keys, and the keys still play by position", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const azerty = new Map([
+      ["Digit0", "à"],
+      ["Minus", ")"],
+      ["Equal", "="],
+    ]);
+    Object.defineProperty(navigator, "keyboard", {
+      value: { getLayoutMap: async () => azerty },
+      configurable: true,
+    });
+  });
+  await spy(page);
+  await openLong(page);
+  await toggle(page).click();
+  await expect(pad(page, 9).locator(".pad-key")).toHaveText("à");
+  await expect(pad(page, 10).locator(".pad-key")).toHaveText(")");
+  await expect(pad(page, 11).locator(".pad-key")).toHaveText("=");
+  await expect(pad(page, 9)).toHaveAttribute("aria-keyshortcuts", "à");
+  // the label changes nothing about the key: the tenth position plays stage 10 on any layout
+  await page.evaluate(() => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: "Digit0", key: "à", bubbles: true }));
+  });
+  await expect(roll(page)).toHaveAttribute("data-hero", "9");
+});
+
+test("without a keyboard map a pad's key says where it is in plain words", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "keyboard", { value: undefined, configurable: true });
+  });
+  await spy(page);
+  await openLong(page);
+  await toggle(page).click();
+  await expect(pad(page, 10)).toHaveAttribute("title", "top row, 11th key");
+  await expect(pad(page, 10).locator(".pad-key")).toHaveText("-");
+});
+
+test("while the sounds are still loading there is nothing to perform with, and the keys do nothing", async ({
+  page,
+}) => {
+  await spy(page);
+  await page.route("**/seed/*.pcm", async (route) => {
+    await new Promise((r) => setTimeout(r, 1500));
+    await route.continue();
+  });
+  await page.goto("/");
+  await expect(roll(page)).toHaveAttribute("data-audio", "loading");
+  await expect(toggle(page)).toHaveCount(0);
+  await page.keyboard.press("Digit1");
+  expect(await started(page)).toEqual([]);
+  await expect(roll(page)).toHaveAttribute("data-audio", "ready", { timeout: 15_000 });
+  await expect(toggle(page)).toBeVisible();
+});

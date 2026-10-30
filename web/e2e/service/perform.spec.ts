@@ -106,3 +106,29 @@ test("a withdrawn stage keeps its pad in place, disabled with its reason, and th
   await page.keyboard.press("Digit6");
   await expect(pad(page, 5)).toHaveAttribute("data-sounding", "true");
 });
+
+test("a stage built on one that is held for rights is held: its pad says so and nothing reaches the speakers", async ({
+  page,
+  request,
+}) => {
+  const middle = await publishFlip(request, SEEDED_LAST, "held for rights");
+  const last = await publishFlip(request, middle.id, "built on the held one");
+  await hide(request, middle.id, "rights");
+  await page.goto(`/p/${last.id}`);
+  await perform(page);
+  await expect(page.locator(".pad")).toHaveCount(6);
+  // the held stage and the one built on it both keep their places, disabled, with a reason in words
+  await expect(pad(page, 4)).toHaveAttribute("aria-disabled", "true");
+  await expect(pad(page, 5)).toHaveAttribute("aria-disabled", "true");
+  await expect(pad(page, 5).locator(".pad-t")).toHaveText("held");
+  const before = await page.evaluate(() => window.__started.length);
+  await page.keyboard.press("Digit6");
+  await expect(
+    page.getByRole("status").filter({ hasText: "stage 6 cannot be played: held" }).first(),
+  ).toBeVisible();
+  await page.keyboard.press("Digit5");
+  expect(await page.evaluate(() => window.__started.length)).toBe(before);
+  // the earlier stages still play
+  await page.keyboard.press("Digit2");
+  await expect(pad(page, 1)).toHaveAttribute("data-sounding", "true");
+});

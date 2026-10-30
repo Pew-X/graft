@@ -466,10 +466,22 @@ export function RollPlayer({
   );
 
   // Performing: the number keys and the pads play the stages, beside the roll and on its own sounds.
+  const reasons = useMemo(
+    () =>
+      blocks.map((b, i) =>
+        playable[i]
+          ? ""
+          : b.state === "available"
+            ? copy.perform.why.silent
+            : copy.perform.why[b.state],
+      ),
+    [blocks, playable],
+  );
   const perform = usePerform({
     audio,
     stages,
     playable,
+    reasons,
     lengths,
     prepare: ensure,
     pauseRoll: () => later((e) => e.pause()),
@@ -505,9 +517,14 @@ export function RollPlayer({
     notice ||
     (marking && !markCut ? copy.mark.drag : "") ||
     (performing
-      ? fill(stages === 1 ? copy.perform.hintFew : copy.perform.hint, {
-          n: Math.min(stages, MOST_PADS_BY_KEY),
-        })
+      ? fill(
+          stages === 1
+            ? copy.perform.hintFew
+            : stages > MOST_PADS_BY_KEY
+              ? copy.perform.hintMore
+              : copy.perform.hint,
+          { n: Math.min(stages, MOST_PADS_BY_KEY) },
+        )
       : "") ||
     (load === "loading"
       ? copy.hint.loading
@@ -818,6 +835,8 @@ export function RollPlayer({
           <PadBank
             blocks={blocks}
             playable={playable}
+            reasons={reasons}
+            marks={perform.marks}
             shown={performShown}
             mode={perform.mode}
             onMode={perform.setMode}

@@ -942,15 +942,23 @@ button:disabled {
     ui-monospace,
     monospace;
 }
+/* from the tenth on the numeral has two digits, and the key's own mark sits beside it: both are smaller */
+.pad[data-pad="9"] .pad-n,
+.pad[data-pad="10"] .pad-n,
+.pad[data-pad="11"] .pad-n {
+  left: 6px;
+  top: 5px;
+  font-size: 14px;
+}
 .pad-key {
   position: absolute;
-  right: 6px;
+  right: 4px;
   top: 5px;
-  padding: 0 4px;
+  padding: 0 3px;
   border-radius: 4px;
   background: rgb(255 255 255 / 0.14);
   font:
-    600 9px/1.4 var(--f-mono),
+    600 8px/1.4 var(--f-mono),
     ui-monospace,
     monospace;
 }

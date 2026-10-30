@@ -10,7 +10,10 @@ import { buildBlocks, type StageInput } from "../lib/roll/view.ts";
 import snapshot from "../snapshot/chain.json";
 
 const base = snapshot.stages as StageInput[];
-const stages: StageInput[] = Array.from({ length: 12 }, (_, i) => {
+// how many stages: twelve unless the address says (?n=14 is a chain deeper than the service's cap)
+const asked = Number(new URLSearchParams(location.search).get("n"));
+const count = Number.isInteger(asked) && asked >= 1 && asked <= 30 ? asked : 12;
+const stages: StageInput[] = Array.from({ length: count }, (_, i) => {
   const from = base[i % base.length]!;
   return { ...from, id: `long${i}`, title: `${i + 1} ${from.title}` };
 });
