@@ -133,7 +133,9 @@ export function usePerform({
   const [loop, setLoopState] = useState(false);
   const loopRef = useRef(false);
   const limit = useRef<number | null>(null);
-  const recorder = useMemo(() => new PhraseRecorder(clock.now), []);
+  const [recorder] = useState(() => new PhraseRecorder(clock.now));
+  /** The phrase can go in a link (a pad past the twelfth has no place in one). */
+  const [linkable, setLinkable] = useState(true);
   const soundRef = useRef(sound);
   const playerRef = useRef<PhrasePlayer | null>(null);
   useEffect(() => {
@@ -150,8 +152,12 @@ export function usePerform({
     return () => {
       made.stop();
       playerRef.current = null;
+      // a recording left behind by leaving the page must not write its address later
+      if (limit.current !== null) window.clearTimeout(limit.current);
+      limit.current = null;
+      recorder.stop();
     };
-  }, []);
+  }, [recorder]);
 
   // A phrase in the address (a link that was sent) is offered, never played by itself.
   useEffect(() => {
@@ -176,8 +182,10 @@ export function usePerform({
     }
     setPhrase(kept);
     setInvited(false);
-    writePhrase(encodePhrase(kept));
-    say(fill(copy.phrase.kept, { n: kept.length }));
+    const hash = encodePhrase(kept);
+    setLinkable(hash !== null);
+    writePhrase(hash);
+    say(fill(hash ? copy.phrase.kept : copy.phrase.keptNoLink, { n: kept.length }));
   }, [recorder, say]);
 
   /** A key or a pad: sounds the stage, and keeps the press when a phrase is being recorded. */
@@ -239,12 +247,16 @@ export function usePerform({
   const copyLink = useCallback((): void => {
     const done = (): void => say(copy.phrase.copied);
     const failed = (): void => say(copy.phrase.copyFailed);
+    if (!linkable || !parsePhraseHash(window.location.hash, latest.current.stages)) {
+      say(copy.phrase.noLink);
+      return;
+    }
     try {
       navigator.clipboard.writeText(window.location.href).then(done, failed);
     } catch {
       failed();
     }
-  }, [say]);
+  }, [linkable, say]);
 
   const leave = useCallback((): void => {
     finishRecording();
@@ -407,7 +419,12 @@ export function usePerform({
   // A page that is hidden, or left, goes quiet.
   useEffect(() => {
     const hidden = (): void => {
-      if (document.visibilityState === "hidden") silence();
+      if (document.visibilityState === "hidden") {
+        // a phrase that plays on behind a hidden page would sound with nobody there
+        finishRecording();
+        stopPhrase();
+        silence();
+      }
     };
     document.addEventListener("visibilitychange", hidden);
     return () => {
@@ -415,7 +432,7 @@ export function usePerform({
       performer.current?.silence();
       made.current?.bus.disconnect();
     };
-  }, [silence]);
+  }, [finishRecording, silence, stopPhrase]);
 
   /** Where the stylus is while performing: the last stage played, seconds into its sound. */
   const live = useCallback((): Live | null => {
@@ -425,18 +442,9 @@ export function usePerform({
     return { stage: last.stage, position: Math.min(length, performance.now() / 1000 - last.at) };
   }, []);
 
-  return {
-    on,
-    sounding,
-    mode,
-    marks,
-    setMode,
-    enter,
-    leave,
-    press,
-    silence,
-    live,
-    phrase: {
+  const dismiss = useCallback((): void => setInvited(false), []);
+  const controls = useMemo(
+    () => ({
       has: phrase !== null,
       length: phrase?.length ?? 0,
       invited,
@@ -449,8 +457,36 @@ export function usePerform({
       setLoop,
       clear: clearPhrase,
       copyLink,
-      dismiss: () => setInvited(false),
-    },
+      dismiss,
+    }),
+    [
+      phrase,
+      invited,
+      recording,
+      phraseSounding,
+      loop,
+      record,
+      playPhrase,
+      stopAll,
+      setLoop,
+      clearPhrase,
+      copyLink,
+      dismiss,
+    ],
+  );
+
+  return {
+    on,
+    sounding,
+    mode,
+    marks,
+    setMode,
+    enter,
+    leave,
+    press,
+    silence,
+    live,
+    phrase: controls,
   };
 }
 
@@ -464,7 +500,9 @@ const clock: Timers = {
 function writePhrase(fragment: string | null): void {
   try {
     const here = window.location;
-    if (fragment === null && !here.hash.startsWith("#phrase=")) return;
+    // another fragment (the guide's #how, a marked part's #cut=) is not this function's to replace
+    if (here.hash !== "" && !here.hash.startsWith("#phrase=")) return;
+    if (fragment === null && here.hash === "") return;
     window.history.replaceState(
       window.history.state,
       "",

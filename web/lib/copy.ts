@@ -79,14 +79,15 @@ export const copy = {
     empty: "nothing was pressed, so there is no phrase.",
     kept: "phrase kept: {n} presses. the address of this page carries it.",
     removed: "phrase removed.",
+    keptNoLink:
+      "phrase kept: {n} presses, for this visit. a pad past the twelfth cannot go in a link.",
+    noLink: "there is no link for this phrase to copy.",
     copied: "link copied. it carries the presses and no sound.",
     copyFailed: "the link could not be copied. the address bar has it.",
     /** The quiet invitation on a page opened from a link that carries a phrase. */
     invite: "a run of pads came with this link. no sound with it.",
     inviteButton: "play the phrase",
     dismiss: "not now",
-    /** A reader of the screen: what the rec control is doing. */
-    on: "recording",
   },
   roll: {
     meta: "stage {n} of {total} · {meta}",

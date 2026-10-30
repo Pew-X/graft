@@ -167,3 +167,17 @@ test("the guide's own address, #how, is untouched by phrases", async ({ page }) 
   await arrive(page, "#how");
   await expect(page.locator(".phrase-invite")).toHaveCount(0);
 });
+
+test("a hidden page stops a looping phrase", async ({ page }) => {
+  await arrive(page, "#phrase=1:0,2:20");
+  await page.getByRole("button", { name: "play the phrase" }).click();
+  await page.getByRole("button", { name: "loop" }).click();
+  await expect.poll(() => started(page).then((s) => s.length)).toBeGreaterThan(1);
+  await page.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  const n = (await started(page)).length;
+  await page.waitForTimeout(1500);
+  expect((await started(page)).length).toBe(n);
+});
