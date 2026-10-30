@@ -18,6 +18,11 @@ export default async function globalSetup(): Promise<void> {
   });
   await build({
     ...common,
+    entryPoints: [join(here, "perform-harness.ts")],
+    outfile: join(here, "dist", "perform.js"),
+  });
+  await build({
+    ...common,
     entryPoints: [join(here, "long-fixture.tsx")],
     outfile: join(here, "dist", "long.js"),
     jsx: "automatic",

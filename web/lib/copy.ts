@@ -32,6 +32,21 @@ export const copy = {
     pauseStage: "pause this stage",
     playAll: "play all",
   },
+  /** Performing the roll: the number keys and the pads play the stages. */
+  perform: {
+    /** The control in the transport; it is pressed while the keys are on. */
+    label: "perform",
+    /** The line under the record while performing. */
+    hint: "keys 1 to {n} play the stages. escape stops the sound, then leaves.",
+    hintFew: "key {n} plays the stage. escape stops the sound, then leaves.",
+    notHere: "stage {n} is not here.",
+    noSound: "stage {n} has no sound to play.",
+    preparing: "getting the sound ready. press again.",
+    resumed: "the sound was asleep: press again.",
+    failed: "the sound could not start. press perform to try again.",
+    /** Read out when a stage is played, with its number and title. */
+    played: "stage {n} of {total}: {title}",
+  },
   roll: {
     meta: "stage {n} of {total} · {meta}",
     metaShort: "stage {n} of {total}",

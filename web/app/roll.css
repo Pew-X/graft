@@ -875,6 +875,17 @@ button:disabled {
     ui-monospace,
     monospace;
 }
+/* perform: a mode, so it is a pressed button; lit in the phosphor green (or the live stage's colour) */
+.controls .perform-toggle {
+  margin-left: 6px;
+  border: 1px solid var(--line);
+  letter-spacing: 0.06em;
+}
+.controls .perform-toggle[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--live, #5dff9c);
+  color: #04110a;
+}
 .controls .primary {
   min-width: 88px;
   /* the first visit's label is a short sentence: it stays on one line, and the pill grows to hold it */
