@@ -228,3 +228,41 @@ test.describe("phone", () => {
       .toBe(want);
   });
 });
+
+// Audit 3.4: "a colour flash at stop". The tile and the lit groove took the colour away in one frame while the
+// thread was still fading out, so the stage's colour jumped to green. The colour is now held for the fade.
+test("when the sound stops the stage's own colour is held while the thread fades, then goes", async ({
+  page,
+}) => {
+  await arrive(page);
+  await page.locator(".controls .primary").click();
+  await expect(roll(page)).toHaveAttribute("data-live", /[0-3]/);
+  const live = await roll(page).getAttribute("data-live");
+  const seen = await page.evaluate(
+    () =>
+      new Promise<{ first: string | null; later: string | null }>((resolve) => {
+        const el = document.querySelector(".roll")!;
+        (document.querySelector(".controls .primary") as HTMLElement).click(); // pause
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            const first = el.getAttribute("data-live");
+            setTimeout(() => resolve({ first, later: el.getAttribute("data-live") }), 700);
+          }),
+        );
+      }),
+  );
+  expect(seen.first, "the colour was taken away in the first frames after the stop").toBe(live);
+  expect(seen.later, "and it goes once the thread has faded").toBeNull();
+  await expect(thread(page)).toHaveAttribute("data-on", "false");
+});
+
+test("with reduced motion the colour goes at once: there is no fade to wait for", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await arrive(page);
+  await page.locator(".controls .primary").click();
+  await expect(roll(page)).toHaveAttribute("data-live", /[0-3]/);
+  await page.locator(".controls .primary").click();
+  await expect(roll(page)).not.toHaveAttribute("data-live", /./, { timeout: 500 });
+});

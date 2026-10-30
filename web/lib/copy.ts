@@ -15,7 +15,7 @@ export const copy = {
   hint: {
     locked: "tap play to hear it. nothing sounds until you do.",
     /** The same, for a first visit: it says what the first play is, in the words of the sentence above it. */
-    lockedFirst: "tap play to hear how this was made. nothing sounds until you do.",
+    lockedFirst: "tap to hear how this was made. nothing sounds until you do.",
     loading: "loading the sounds.",
     loadFailed: "the sounds could not be loaded. reload to try again.",
     soundFailed: "the sound could not start. tap play to try again.",
@@ -23,6 +23,8 @@ export const copy = {
   controls: {
     label: "playback",
     play: "play",
+    /** The main button on a first visit: what pressing it does, in the words of the sentence above it. */
+    playFirst: "hear how it was made",
     pause: "pause",
     next: "next stage",
     previous: "previous stage",
@@ -343,9 +345,15 @@ export const copy = {
       body: "the roll plays itself once, with a few words on the screen. you can have that again from the start, as often as you like.",
       link: "play the guide again",
     },
+    /** The keys and the pads: what perform is, and the page that lists every key. */
+    perform: {
+      heading: "playing it",
+      body: "turn on perform and the number keys play the stages of a chain: 1 to 9, 0, minus and equal are stages 1 to 12, by where the key is, so any keyboard works. every stage is also a pad you can touch. a press plays that stage whole, and nothing is cut, looped or changed.",
+      keys: "the keys button lists every keyboard control of the page you are on. a screen reader keeps the digit keys for itself, so the pads are plain buttons.",
+    },
     isNot: {
       heading: "what it is not",
-      body: "not a sampler: one cut and one speed, with no pads, layers, effects or export. an independent experiment, not affiliated with or endorsed by any product named.",
+      body: "not a sampler: perform plays whole stages, with no slicing, no sequencer, no effects and no export. an independent experiment, not affiliated with or endorsed by any product named.",
     },
     states: {
       heading: "declared, computed, unknown",

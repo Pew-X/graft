@@ -274,3 +274,49 @@ test("the admin routes are not reachable from the browser's origin without the s
   const ok = await request.get(`${API}/admin/reports`, { headers: ADMIN });
   expect(ok.status()).toBe(200);
 });
+
+// Audit 9.4: "the tour ran again on the published page". It did not reproduce; these keep it that way.
+test.describe("the first-visit guide on a published page", () => {
+  test("a fresh profile is narrated once, and a reload after it is not", async ({
+    page,
+    request,
+    browser,
+  }) => {
+    const { id } = await publishFlip(request, SEEDED_LAST, "guide once flip");
+    const fresh = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      hasTouch: true,
+      storageState: { cookies: [], origins: [] },
+    });
+    const visitor = await fresh.newPage();
+    await allowBucketReads(visitor);
+    await visitor.goto(`/p/${id}`);
+    await expect(visitor.locator(".roll")).toHaveAttribute("data-audio", "ready");
+    await expect(visitor.getByTestId("narration")).toHaveCount(0);
+    await visitor.locator(".controls .primary").tap();
+    await expect(visitor.getByTestId("narration")).toBeVisible();
+    await visitor.getByTestId("narration").getByRole("button", { name: "skip" }).tap();
+    await visitor.reload();
+    await expect(visitor.locator(".roll")).toHaveAttribute("data-audio", "ready");
+    await visitor.locator(".controls .primary").tap();
+    await expect(visitor.locator(".roll")).toHaveAttribute("data-sounding", "true");
+    await visitor.waitForTimeout(1200);
+    await expect(visitor.getByTestId("narration")).toHaveCount(0);
+    await fresh.close();
+    void page;
+  });
+
+  test("a profile that has finished the guide meets no narration and no hint", async ({
+    page,
+    request,
+  }) => {
+    const { id } = await publishFlip(request, SEEDED_LAST, "guide done flip");
+    await page.goto(`/p/${id}`);
+    await expect(roll(page)).toHaveAttribute("data-audio", "ready");
+    await page.locator(".controls .primary").tap();
+    await expect(roll(page)).toHaveAttribute("data-sounding", "true");
+    await page.waitForTimeout(1200);
+    await expect(page.getByTestId("narration")).toHaveCount(0);
+    await expect(page.getByTestId("hint")).toHaveCount(0);
+  });
+});

@@ -51,6 +51,7 @@ import { EditPart } from "./EditPart.tsx";
 import { Footer } from "./Footer.tsx";
 import { Hint } from "./Hint.tsx";
 import { Thread } from "./Thread.tsx";
+import { useHeld } from "./useHeld.ts";
 import { ThemeToggle } from "./ThemeToggle.tsx";
 
 type Load = "loading" | "ready" | "failed";
@@ -196,6 +197,8 @@ export function RollPlayer({
     if (phaseKnown) writePhase(phase);
   }, [phase, phaseKnown]);
   const narrating = phase === "narrating";
+  // a first visit has one thing to do: the main button says what it does until the narration has begun
+  const firstPlay = phaseKnown && phase === "armed";
   // where the caption sits so that it keeps clear of the record
   const [caption, setCaption] = useState(() => captionBox(1280, 720, blocks.length));
   const place = useCallback((): void => {
@@ -567,6 +570,9 @@ export function RollPlayer({
     state: heroBlock?.state,
     dye: heroBlock?.dye,
   });
+  // when the sound stops, the colour is held for as long as the thread needs to fade (a fifth of a second),
+  // so the tile and the thread leave in the stage's own colour and do not snap to green first
+  const dyeShown = useHeld(dyeNow, reduced ? 0 : 260);
   const threadOn = dyeNow !== null && phase !== "hintNeedle" && phase !== "hintMark" && !marking;
   const level = useCallback((): number => {
     const at = live();
@@ -610,7 +616,7 @@ export function RollPlayer({
       data-audio={load}
       data-reduced={reduced}
       data-guide={phase}
-      data-live={dyeNow ?? undefined}
+      data-live={dyeShown ?? undefined}
     >
       {load === "ready" ? (
         <Disc
@@ -621,7 +627,7 @@ export function RollPlayer({
           live={live}
           playing={playing}
           reduced={reduced}
-          accent={dyeNow === null ? undefined : dyes[dyeNow]?.fill}
+          accent={dyeShown === null ? undefined : dyes[dyeShown]?.fill}
           focus={hero}
           onScrubStart={(stage, offset) => act((e) => e.scrubStart(stage, offset))}
           // The first touch may arrive before the audio engine exists; the move and the release wait
@@ -818,7 +824,13 @@ export function RollPlayer({
           disabled={disabled}
           onClick={() => act((e) => (playing ? e.pause() : e.play()))}
         >
-          {playing ? copy.controls.pause : reduced ? copy.controls.playAll : copy.controls.play}
+          {playing
+            ? copy.controls.pause
+            : firstPlay
+              ? copy.controls.playFirst
+              : reduced
+                ? copy.controls.playAll
+                : copy.controls.play}
         </button>
         <button
           type="button"

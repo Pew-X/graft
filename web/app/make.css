@@ -279,6 +279,7 @@
 }
 .handle:focus-visible {
   outline: 3px solid var(--focus);
+  outline-offset: 2px;
 }
 .cut-editor .help {
   /* said to the eye as well as to a screen reader: the keyboard moves the brackets, and nothing else says so */
@@ -445,10 +446,6 @@
   overflow-wrap: anywhere;
   font-family: var(--f-mono), monospace;
   font-size: 12px;
-}
-.make :focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 2px;
 }
 
 /* the publish step */
@@ -659,8 +656,72 @@
 .about li {
   margin: 0.4rem 0;
 }
-.about h2.kicker {
+/* each part of the page is its own paper strip: a hairline above, and room */
+.about section {
   margin-top: 2rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--hair);
+}
+.about h2.kicker {
+  margin-top: 0;
+}
+/* the four dyes of the record as a rule, and the sentence in the marker hand under the title */
+.about .dye-rule {
+  display: flex;
+  height: 8px;
+  margin: 0.6rem 0 0.4rem;
+}
+.about .dye-rule i {
+  flex: 1;
+}
+.about .dye-rule i:nth-child(1) {
+  background: var(--dye-0);
+}
+.about .dye-rule i:nth-child(2) {
+  background: var(--dye-1);
+}
+.about .dye-rule i:nth-child(3) {
+  background: var(--dye-2);
+}
+.about .dye-rule i:nth-child(4) {
+  background: var(--dye-3);
+}
+.about .about-sentence {
+  margin: 0.75rem 0 1.25rem;
+  font:
+    400 clamp(26px, 4.2vw, 36px) / 1.1 var(--f-brush),
+    cursive;
+}
+/* the three honesty states, each word drawn the way the roll draws it */
+.about .state-line {
+  margin: 0.6rem 0;
+}
+.about .state-word {
+  font-weight: 700;
+}
+.about .state-line[data-honesty="computed"] .state-word {
+  text-shadow:
+    0.8px 0 rgba(226, 54, 42, 0.6),
+    -0.8px 0 rgba(31, 184, 201, 0.6);
+}
+.about .state-line[data-honesty="unknown"] .state-word {
+  color: var(--muted);
+  font-style: italic;
+  font-weight: 400;
+}
+:root[data-decor="off"] .about .state-line[data-honesty="computed"] .state-word {
+  text-shadow: none;
+}
+/* the sounds made for graft: a short list in two columns where there is room */
+.about .sounds {
+  columns: 2 14rem;
+  column-gap: 2rem;
+  list-style: none;
+  padding-left: 0;
+}
+.about .sounds li {
+  margin: 0 0 0.4rem;
+  break-inside: avoid;
 }
 .report-dialog label .gloss {
   display: block;

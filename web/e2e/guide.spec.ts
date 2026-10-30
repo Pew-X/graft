@@ -71,9 +71,7 @@ test("before play a first visit shows the sentence and nothing else: no caption,
   await arrive(page);
   await expect(page.locator(".bar .sentence")).toHaveText(SENTENCE);
   // the line over the controls says what the first play is, in the words of the sentence
-  await expect(page.getByRole("status").first()).toContainText(
-    "tap play to hear how this was made",
-  );
+  await expect(page.getByRole("status").first()).toContainText("tap to hear how this was made");
   await page.waitForTimeout(1500);
   await expect(caption(page)).toHaveCount(0);
   await expect(hint(page)).toHaveCount(0);
@@ -315,7 +313,8 @@ test("with reduced motion the captions are plain text and the underline is alrea
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await arrive(page);
-  await page.getByRole("button", { name: "play all" }).click();
+  // a first visit's button says what it does, even where the roll plays all at once
+  await play(page).click();
   await expect(caption(page)).toBeVisible();
   const state = await page.evaluate(() => {
     const path = document.querySelector(".caption-text path")!;
@@ -535,4 +534,42 @@ test("with the replay button in view the page has no serious accessibility viola
 }, info) => {
   await arriveWith(page, "done+made");
   await scan(page, "roll with the replay button", info);
+});
+
+test("a first visit has one main action, which says what it does, and says play again once the narration is over", async ({
+  page,
+}) => {
+  await arrive(page);
+  // one thing to do: the main button names it, and nothing else on the controls is a second call to act
+  await expect(play(page)).toHaveText("hear how it was made");
+  await expect(page.locator(".controls .primary")).toHaveCount(1);
+  await play(page).click();
+  await expect(caption(page)).toBeVisible();
+  await expect(play(page)).toHaveText("pause");
+  await caption(page).getByRole("button", { name: "skip" }).click();
+  await play(page).click();
+  await expect(play(page)).toHaveText("play");
+});
+
+test("a browser that has met the roll sees the plain play button from the start", async ({
+  page,
+}) => {
+  await arriveWith(page, "done");
+  await expect(play(page)).toHaveText("play");
+});
+
+test("the main button's longer first-visit label stays on one line and clear of the record's status line at every size", async ({
+  page,
+}) => {
+  for (const size of SIZES) {
+    await page.setViewportSize({ width: size.width, height: size.height });
+    await arrive(page);
+    const button = await box(page, ".controls .primary");
+    const status = await box(page, ".notes .status");
+    expect(button, size.name).not.toBeNull();
+    expect(button!.h, `${size.name}: one line`).toBeLessThan(60);
+    expect(button!.x, size.name).toBeGreaterThanOrEqual(0);
+    expect(button!.x + button!.w, size.name).toBeLessThanOrEqual(size.width);
+    if (status) expect(overlap(button!, status), `${size.name}: over the status line`).toBe(0);
+  }
 });

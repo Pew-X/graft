@@ -43,9 +43,23 @@ button:disabled {
   opacity: 0.55;
   cursor: default;
 }
+/* One ring for every page: three pixels, two pixels off the control, in the theme's focus colour. The
+   exceptions are the ones that say why (the record draws its own on the stylus; the title slab, the dark
+   footer and the pads below). */
 :focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
+}
+/* the footer's panel is dark in both themes, and the light theme's ring is a dark green: on that panel the
+   ring is the bright green of the dark theme */
+.roll .footer :focus-visible {
+  outline-color: #5dff9c;
+}
+/* the title slab is cut to a torn shape, which would cut a ring drawn outside it: the ring is drawn inside,
+   in the colour of the lettering, clear of the torn corners */
+.slab button:focus-visible {
+  outline: 3px solid var(--dye-text);
+  outline-offset: -12px;
 }
 
 /* Pages outside the roll (the operator's page, not found, an error). */
@@ -306,10 +320,6 @@ button:disabled {
   text-decoration: none;
   white-space: nowrap;
 }
-.bar .make-link:focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 3px;
-}
 .bar .theme {
   white-space: nowrap;
   pointer-events: auto;
@@ -568,8 +578,12 @@ button:disabled {
   overflow-wrap: anywhere;
   unicode-bidi: isolate;
 }
-/* the plain way to play a stage, kept small */
+/* the plain way to play a stage, kept small. It sits on a band of the slab's own paper, above the title:
+   a title typed with stacked combining marks (they spill above and below their letters) can then never
+   write over this label, and what spills past the slab is cut by the torn edge */
 .slab .play-word {
+  position: relative;
+  background: var(--dye);
   display: block;
   margin-top: calc(var(--size, 48px) * var(--gap, 0.1));
   font:
@@ -623,6 +637,9 @@ button:disabled {
 .line {
   padding: 10px 0;
   border-top: 1px solid var(--hair);
+  /* a name typed with stacked combining marks cannot spill into the credit line above or below it:
+     the line's own padding is all the room ink may use */
+  overflow: clip;
 }
 .line dt {
   margin: 0;
@@ -860,6 +877,8 @@ button:disabled {
 }
 .controls .primary {
   min-width: 88px;
+  /* the first visit's label is a short sentence: it stays on one line, and the pill grows to hold it */
+  white-space: nowrap;
   background: var(--ink);
   color: var(--bg);
 }
@@ -1255,10 +1274,6 @@ button:disabled {
   letter-spacing: 0.1em;
   text-decoration: underline;
   cursor: pointer;
-}
-.caption-skip:focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 2px;
 }
 
 /* THE HINTS: a few words on an ink tag with a short marker arrow, beside the thing they point at. They

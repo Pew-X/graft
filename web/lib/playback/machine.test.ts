@@ -126,8 +126,8 @@ const EXPECTED: Record<string, Record<string, State>> = {
     "scrub start": aud(2, 0.5),
     "scrub move": aud(2, 0.6),
     "scrub end": paused(roll(2, 1.1)),
-    next: paused(roll(3, 0)),
-    previous: paused(roll(1, 0)),
+    next: roll(3, 0),
+    previous: roll(1, 0),
     "dwell ended": paused(roll(2, 1.1)),
     "audition ended": paused(roll(2, 1.1)),
     "tab hidden": paused(roll(2, 1.1)),
@@ -142,8 +142,8 @@ const EXPECTED: Record<string, Record<string, State>> = {
     "scrub start": aud(2, 0.5),
     "scrub move": aud(2, 0.6),
     "scrub end": paused(aud(1, 0.4)),
-    next: paused(aud(2, 0)),
-    previous: paused(aud(0, 0)),
+    next: aud(2, 0),
+    previous: aud(0, 0),
     "dwell ended": paused(aud(1, 0.4)),
     "audition ended": paused(aud(1, 0.4)),
     "tab hidden": paused(aud(1, 0.4)),
@@ -403,4 +403,23 @@ test("leaving the machine through a route change always ends silent and idle", (
     ),
     { numRuns: 200 },
   );
+});
+
+test("an arrow from a pause starts the stage it moves to, rolling or auditioning, and never moves in silence", () => {
+  const starts = (r: ReturnType<typeof transition>) => r.effects.filter((e) => e.type === "start");
+  const forward = transition(paused(roll(2, 1.1)), { type: "next" }, STAGES);
+  assert.deepEqual(forward.state, roll(3, 0));
+  assert.equal(starts(forward).length, 1);
+  const back = transition(paused(aud(1, 0.4)), { type: "previous" }, STAGES);
+  assert.deepEqual(back.state, aud(0, 0));
+  assert.deepEqual(starts(back), [{ type: "start", stage: 0, offset: 0, mode: "audition" }]);
+  // at an end the same step starts again, because the person pressed it
+  assert.equal(starts(transition(paused(roll(0, 0)), { type: "previous" }, STAGES)).length, 1);
+  assert.equal(starts(transition(paused(aud(3, 0.2)), { type: "next" }, STAGES)).length, 1);
+  // and no paused state answers an arrow with a state that is still paused
+  for (const from of [roll(2, 1.1), aud(1, 0.4)]) {
+    for (const type of ["next", "previous"] as const) {
+      assert.notEqual(transition(paused(from), { type }, STAGES).state.kind, "paused");
+    }
+  }
 });
