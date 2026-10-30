@@ -57,6 +57,7 @@ import { Disc, type Live } from "./Disc.tsx";
 import { EditPart } from "./EditPart.tsx";
 import { Footer } from "./Footer.tsx";
 import { Hint } from "./Hint.tsx";
+import { KeysSheet } from "./KeysSheet.tsx";
 import { PadBank } from "./PadBank.tsx";
 import { Thread } from "./Thread.tsx";
 import { useHeld } from "./useHeld.ts";
@@ -69,6 +70,7 @@ type Load = "loading" | "ready" | "failed";
 const HINT_SIDES = {
   needle: ["left", "above", "below"],
   mark: ["right", "below", "above"],
+  perform: ["above", "left", "right"],
 } as const;
 
 const clock = {
@@ -394,16 +396,6 @@ export function RollPlayer({
   // a narration that has begun and then goes quiet (the sound failed, or the visitor left it) is over: it
   // must never leave the page without its skip, and the hints must still come
   const [narrationBegan, setNarrationBegan] = useState(false);
-  if (phase === "narrating" && sounding === "rolling" && !narrationBegan) setNarrationBegan(true);
-  if (phase !== "narrating" && narrationBegan) setNarrationBegan(false);
-  if (phaseKnown) {
-    const event =
-      phase === "narrating" && narrationBegan && sounding === "idle"
-        ? "skipped"
-        : follow(phase, { sounding, marking });
-    if (event !== null) setPhase(nextPhase(phase, event));
-  }
-
   // Leaving the page stops everything.
   useEffect(() => {
     const undo = cleanup.current;
@@ -489,10 +481,25 @@ export function RollPlayer({
     endNarration: () => guide("skipped"),
     say: setNotice,
     marking: markingNow,
-    shown: performShown,
     setShown: setPerformShown,
   });
   const performing = perform.on;
+
+  // (the guide follows what the visitor does, worked out here because it reads whether perform is on)
+  if (phase === "narrating" && sounding === "rolling" && !narrationBegan) setNarrationBegan(true);
+  if (phase !== "narrating" && narrationBegan) setNarrationBegan(false);
+  if (phaseKnown) {
+    const event =
+      phase === "narrating" && narrationBegan && sounding === "idle"
+        ? "skipped"
+        : follow(phase, {
+            sounding,
+            marking,
+            performing,
+            performAvailable: stages > 1,
+          });
+    if (event !== null) setPhase(nextPhase(phase, event));
+  }
 
   // Read by the record every frame, so the stylus follows the sound without re-rendering the page.
   const rollLive = useCallback((): Live | null => {
@@ -661,6 +668,12 @@ export function RollPlayer({
     const tip = needleAt(l, Math.min(Math.max(0, hero), Math.max(0, stages - 1)), 0);
     return { x: tip.x - 36, y: tip.y - 36, w: 72, h: 72 };
   }, [stages, hero]);
+  const findPerform = useCallback((): Rect | null => {
+    const button = document.querySelector(".controls .perform-toggle");
+    if (!button) return null;
+    const b = button.getBoundingClientRect();
+    return b.width < 1 ? null : { x: b.x, y: b.y, w: b.width, h: b.height };
+  }, []);
   const findMark = useCallback((): Rect | null => {
     const button = document.querySelector('.block[data-hero="true"] .mark-toggle');
     const region = document.querySelector('.block[data-hero="true"] > article');
@@ -775,6 +788,17 @@ export function RollPlayer({
           find={findMark}
           prefer={HINT_SIDES.mark}
           seed={41}
+          onFaded={fadedHint}
+        />
+      ) : null}
+
+      {phase === "hintPerform" && load === "ready" && !performing ? (
+        <Hint
+          key="perform"
+          text={copy.hints.perform}
+          find={findPerform}
+          prefer={HINT_SIDES.perform}
+          seed={59}
           onFaded={fadedHint}
         />
       ) : null}
@@ -986,7 +1010,9 @@ export function RollPlayer({
             e.play();
           });
         }}
-      />
+      >
+        {toolsShown(phase) ? <KeysSheet page="roll" /> : null}
+      </Footer>
     </div>
   );
 }

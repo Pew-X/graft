@@ -1106,7 +1106,7 @@ button:disabled {
   letter-spacing: 0.04em;
   color: #b9b2a4;
 }
-.roll .footer :is(a, .how-link) {
+.roll .footer :is(a, .how-link, .keys-link) {
   color: #ece6d8;
 }
 .roll .footer p {
@@ -1185,7 +1185,7 @@ button:disabled {
     text-align: left;
     color: var(--muted);
   }
-  .roll .footer :is(a, .how-link) {
+  .roll .footer :is(a, .how-link, .keys-link) {
     color: inherit;
   }
   /* the note and its two links share a row, so the header does not crowd the stage's room */
@@ -1336,7 +1336,9 @@ button:disabled {
 /* the footer's second link is a button that looks like the first */
 .footer-links {
   display: inline-flex;
-  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px 14px;
   align-items: center;
 }
 .how-link {
@@ -1352,10 +1354,49 @@ button:disabled {
   font: inherit;
   letter-spacing: inherit;
   color: inherit;
+  white-space: nowrap;
   cursor: pointer;
 }
 .how-mark {
   font-weight: 700;
+}
+.keys-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid color-mix(in srgb, currentColor 50%, transparent);
+  border-radius: 999px;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.keys-icon {
+  display: none;
+}
+@media (max-width: 420px) {
+  /* the keys button is a round keyboard here, still named "keys": the note beside it keeps its three lines */
+  .keys-link {
+    justify-content: center;
+    width: 44px;
+    padding: 0;
+  }
+  .keys-link .keys-icon {
+    display: block;
+  }
+  .keys-link .keys-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .footer-links {
+    gap: 8px;
+  }
 }
 @media (max-width: 420px) {
   /* a narrow phone has no room for the words: a round question mark, still named "how it works" */

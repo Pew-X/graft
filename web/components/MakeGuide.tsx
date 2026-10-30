@@ -31,14 +31,20 @@ export function MakeGuide({
     <div className="make-guide" data-testid="make-guide" data-line={line ?? "none"}>
       {line ? (
         <>
-          <p
-            key={line}
-            className="make-guide-text"
-            role="status"
-            aria-label={copy.make.guide.label}
-          >
-            {copy.make.guide[line]}
-          </p>
+          <div className="make-guide-copy">
+            <p
+              key={line}
+              className="make-guide-text"
+              role="status"
+              aria-label={copy.make.guide.label}
+            >
+              {copy.make.guide[line]}
+            </p>
+            {/* what the keyboard does to a bracket, under the line that says to move one: same slot, no new height */}
+            {line === "change" ? (
+              <p className="make-guide-keys">{copy.make.guide.changeKeys}</p>
+            ) : null}
+          </div>
           <button type="button" className="make-guide-skip" onClick={onSkip}>
             {copy.make.guide.skip}
           </button>

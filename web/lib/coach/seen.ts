@@ -5,8 +5,10 @@
  * anyone. A browser that blocks storage simply shows the guide again, and nothing here can throw.
  *
  * The word names how far the roll's guide has got: "narrated" (the first play is over, the hints are
- * next), "needle" (the first hint is over), "done" (everything on the roll has been shown). When the make
- * flow's hints have been shown too, "+made" is added to it ("done+made"); "made" alone is a browser that
+ * next), "needle" (the first hint is over), "done" (the second hint is over: this was the last word before
+ * the perform hint existed, so a browser holding it sees that hint once), "keys" (everything on the roll
+ * has been shown). When the make
+ * flow's hints have been shown too, "+made" is added to it ("keys+made"); "made" alone is a browser that
  * has been through the make flow first. "seen" was what the earlier three-card coach wrote; it is read as
  * nothing shown, because the guide it stood for is not the one in use now, and never written.
  */
@@ -19,10 +21,12 @@ export const COACH_VALUES = [
   "narrated",
   "needle",
   "done",
+  "keys",
   "made",
   "narrated+made",
   "needle+made",
   "done+made",
+  "keys+made",
 ] as const;
 
 interface Store {
@@ -38,8 +42,8 @@ function browserStore(): Store | null {
   }
 }
 
-const RANK: Record<string, number> = { narrated: 1, needle: 2, done: 3 };
-const ROLL = ["", "narrated", "needle", "done"] as const;
+const RANK: Record<string, number> = { narrated: 1, needle: 2, done: 3, keys: 4 };
+const ROLL = ["", "narrated", "needle", "done", "keys"] as const;
 
 /** What a stored word says: how far the roll's guide got (0 to 3) and whether the make flow's was shown. */
 function parse(word: string | null | undefined): { roll: number; made: boolean } {
@@ -79,6 +83,8 @@ export function readPhase(store: Store | null = browserStore()): Phase {
     case 2:
       return "hintMark";
     case 3:
+      return "hintPerform";
+    case 4:
       return "done";
     default:
       return "armed";
@@ -91,7 +97,16 @@ export function readPhase(store: Store | null = browserStore()): Phase {
  * mark is kept as it is.
  */
 export function writePhase(phase: Phase, store: Store | null = browserStore()): void {
-  const reached = phase === "hintNeedle" ? 1 : phase === "hintMark" ? 2 : phase === "done" ? 3 : 0;
+  const reached =
+    phase === "hintNeedle"
+      ? 1
+      : phase === "hintMark"
+        ? 2
+        : phase === "hintPerform"
+          ? 3
+          : phase === "done"
+            ? 4
+            : 0;
   if (reached === 0) return;
   const now = read(store);
   if (now.roll >= reached) return;

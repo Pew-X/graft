@@ -58,11 +58,13 @@ test("the make mark and the roll's progress sit in one word and neither undoes t
   assert.equal(readPhase(store), "armed", "making first does not count as the roll's guide");
   writePhase("hintNeedle", store);
   assert.equal(store.items.get(COACH_KEY), "narrated+made");
-  writePhase("done", store);
+  writePhase("hintPerform", store);
   assert.equal(store.items.get(COACH_KEY), "done+made");
+  writePhase("done", store);
+  assert.equal(store.items.get(COACH_KEY), "keys+made");
   writePhase("hintNeedle", store); // a replay passes through the early phases again
   writeMade(store);
-  assert.equal(store.items.get(COACH_KEY), "done+made");
+  assert.equal(store.items.get(COACH_KEY), "keys+made");
   assert.equal(readPhase(store), "done");
   assert.equal(readMade(store), true);
   assert.ok(store.writes.every((w) => (COACH_VALUES as readonly string[]).includes(w)));
@@ -75,7 +77,7 @@ test("the roll's progress is kept when the make mark is added, and the other way
   assert.equal(roll.items.get(COACH_KEY), "needle+made");
   assert.equal(readPhase(roll), "hintMark");
   const both = new Memory();
-  both.items.set(COACH_KEY, "done+made");
+  both.items.set(COACH_KEY, "keys+made");
   assert.equal(readPhase(both), "done");
   assert.equal(readMade(both), true);
 });

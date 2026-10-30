@@ -30,8 +30,7 @@ interface Options {
   say: (text: string) => void;
   /** Whether a part is being marked on the record: Escape belongs to it first. */
   marking: RefObject<boolean>;
-  /** The stage last played, kept by the page (it is needed before this hook can run). */
-  shown: number | null;
+  /** Record the stage last played, which the page keeps (it is needed before this hook can run). */
   setShown: (stage: number | null) => void;
 }
 
@@ -51,7 +50,6 @@ export function usePerform({
   endNarration,
   say,
   marking,
-  shown,
   setShown,
 }: Options) {
   const [on, setOn] = useState(false);

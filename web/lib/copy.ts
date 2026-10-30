@@ -493,6 +493,8 @@ export const copy = {
       pick: "pick any sound. you cut a piece of it next.",
       hear: "this flip is already set up. press hear it.",
       change: "now move a bracket or the speed, and hear it change.",
+      /** A second, smaller line under the change hint: what the keyboard does to a bracket. */
+      changeKeys: "arrow keys nudge a bracket; shift nudges it ten times more.",
       share: "like it? publish it with the button below.",
       skip: "skip",
       how: "how it works",
@@ -627,6 +629,79 @@ export const copy = {
   hints: {
     needle: "drag the needle to hear any moment.",
     mark: "like a part? mark it, change its speed, flip it.",
+    perform: "press perform, then 1 2 3 to play the stages.",
+  },
+  /** The keys sheet: every keyboard control of a page, in words, one sheet for each kind of page. */
+  keys: {
+    button: "keys",
+    heading: "keys",
+    close: "close",
+    roll: [
+      {
+        heading: "the roll",
+        rows: [
+          [
+            "play, ← →",
+            "the buttons at the bottom play and pause, and step to the stage before or after.",
+          ],
+          ["← →", "on the record: move the stylus a tenth of a second."],
+          ["↑ ↓", "on the record: go to the stage outside or inside, at the same place in it."],
+          ["home, end", "on the record: the start or the end of the stage."],
+          ["enter, space", "on the record: play from the stylus."],
+          [
+            "[ and ]",
+            "while marking a part: set where it starts and where it ends, at the stylus.",
+          ],
+          ["escape", "leave marking a part, or skip the narration."],
+        ],
+        note: "the dashed ring shows where the sound is. the needle follows your pointer. they are two things on purpose.",
+      },
+      {
+        heading: "perform",
+        rows: [
+          [
+            "1 2 3 4 5 6 7 8 9 0 - =",
+            "play stages 1 to 12 by where the key is on the number row, whatever your keyboard prints there. the keypad plays 1 to 9.",
+          ],
+          [
+            "the pads",
+            "every stage is also a pad: touch it, or tab to it and press enter or space. a chain longer than twelve has pads that no key reaches.",
+          ],
+          [
+            "cut, layer",
+            "cut: a new press ends what sounds. layer: pads sound together, six at most.",
+          ],
+          ["escape", "the first press silences the sound. the next leaves perform."],
+          [
+            "screen readers",
+            "a screen reader keeps the digit keys for itself, so use the pads: they are plain buttons.",
+          ],
+          [
+            "a pad's corner",
+            "pads 10 to 12 show their key as printed on your keyboard, where your browser can say.",
+          ],
+        ],
+        note: null,
+      },
+    ],
+    make: [
+      {
+        heading: "making a flip",
+        rows: [
+          ["← →", "on a bracket: move it one millisecond. with shift, ten."],
+          ["home, end", "on a bracket: send it to the start or the end of the sound."],
+          [
+            "← →",
+            "on the speed: change the speed, and the sound with it, at once. that is on purpose.",
+          ],
+          [
+            "tab",
+            "goes in the order of the page: pick, hear it, the brackets, the speed, publish.",
+          ],
+        ],
+        note: null,
+      },
+    ],
   },
 } as const;
 

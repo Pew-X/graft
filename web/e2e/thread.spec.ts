@@ -177,7 +177,7 @@ for (const size of [
       await expect(page.getByTestId("hint")).toBeVisible();
       await expect(thread(page)).toHaveAttribute("data-on", "false");
       // the hints go by themselves after a few seconds; then nothing is left in the way
-      await expect(page.getByTestId("hint")).toHaveCount(0, { timeout: 25_000 });
+      await expect(page.getByTestId("hint")).toHaveCount(0, { timeout: 40_000 });
       await expect(roll(page)).toHaveAttribute("data-guide", "done");
       await expect(thread(page)).toHaveAttribute("data-on", "true");
     });

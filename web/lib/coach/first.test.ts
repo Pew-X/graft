@@ -18,11 +18,15 @@ class Memory {
   }
 }
 
-test("the guide goes narration, needle hint, mark hint, done, in that order", () => {
+test("the guide goes narration, needle hint, mark hint, perform hint, done, in that order", () => {
   assert.equal(run("armed", ["rolled"]), "narrating");
   assert.equal(run("armed", ["rolled", "narrationEnded"]), "hintNeedle");
   assert.equal(run("armed", ["rolled", "narrationEnded", "hintFaded"]), "hintMark");
-  assert.equal(run("armed", ["rolled", "narrationEnded", "hintFaded", "hintFaded"]), "done");
+  assert.equal(run("armed", ["rolled", "narrationEnded", "hintFaded", "hintFaded"]), "hintPerform");
+  assert.equal(
+    run("armed", ["rolled", "narrationEnded", "hintFaded", "hintFaded", "hintFaded"]),
+    "done",
+  );
 });
 
 test("skipping the narration leads to the first hint, not to both at once", () => {
@@ -38,9 +42,10 @@ test("a visitor who starts with the needle is not narrated to; the hint they hav
   assert.equal(run("armed", ["tookOver", "needleUsed"]), "hintMark");
 });
 
-test("doing the thing a hint says dismisses it at once, and marking ends the guide", () => {
+test("doing the thing a hint says dismisses it at once, and performing ends the guide", () => {
   assert.equal(run("hintNeedle", ["needleUsed"]), "hintMark");
-  assert.equal(run("hintMark", ["marked"]), "done");
+  assert.equal(run("hintMark", ["marked"]), "hintPerform");
+  assert.equal(run("hintPerform", ["performed"]), "done");
 });
 
 test("an event that does not belong to the phase changes nothing", () => {
@@ -50,7 +55,8 @@ test("an event that does not belong to the phase changes nothing", () => {
   );
   assert.equal(run("narrating", ["rolled", "needleUsed", "marked"]), "narrating");
   assert.equal(run("hintNeedle", ["rolled", "marked", "skipped"]), "hintNeedle");
-  assert.equal(run("hintMark", ["rolled", "needleUsed", "skipped"]), "hintMark");
+  assert.equal(run("hintMark", ["rolled", "needleUsed", "skipped", "performed"]), "hintMark");
+  assert.equal(run("hintPerform", ["rolled", "needleUsed", "skipped", "marked"]), "hintPerform");
 });
 
 test("nothing returns after the guide is done, except by the footer's replay", () => {
@@ -61,11 +67,16 @@ test("nothing returns after the guide is done, except by the footer's replay", (
     "skipped",
     "needleUsed",
     "marked",
+    "performed",
     "hintFaded",
   ];
   assert.equal(run("done", events), "done");
   assert.equal(run("done", ["replay"]), "narrating");
-  assert.equal(run("hintMark", ["replay", "narrationEnded", "hintFaded", "hintFaded"]), "done");
+  // a replay ends with the perform hint, and then the guide is done again
+  assert.equal(
+    run("hintMark", ["replay", "narrationEnded", "hintFaded", "hintFaded", "hintFaded"]),
+    "done",
+  );
 });
 
 test("the browser keeps only a word, and only goes forward", () => {
@@ -79,12 +90,49 @@ test("the browser keeps only a word, and only goes forward", () => {
   assert.equal(readPhase(store), "hintNeedle");
   writePhase("hintMark", store);
   assert.equal(readPhase(store), "hintMark");
+  writePhase("hintPerform", store);
+  assert.equal(store.items.get(COACH_KEY), "done");
+  assert.equal(readPhase(store), "hintPerform");
   writePhase("done", store);
+  assert.equal(store.items.get(COACH_KEY), "keys");
   assert.equal(readPhase(store), "done");
   writePhase("hintNeedle", store); // a replay passes through the early phases again
-  assert.equal(store.items.get(COACH_KEY), "done");
-  assert.deepEqual(store.writes, ["narrated", "needle", "done"]);
+  assert.equal(store.items.get(COACH_KEY), "keys");
+  assert.deepEqual(store.writes, ["narrated", "needle", "done", "keys"]);
   assert.ok(store.writes.every((w) => (COACH_VALUES as readonly string[]).includes(w)));
+});
+
+test("every stored word, old and new, lands on the right phase", () => {
+  const where: Array<[string, Phase]> = [
+    ["narrated", "hintNeedle"],
+    ["needle", "hintMark"],
+    // the last word before the perform hint existed: its browser sees the new hint once
+    ["done", "hintPerform"],
+    ["keys", "done"],
+    ["narrated+made", "hintNeedle"],
+    ["needle+made", "hintMark"],
+    ["done+made", "hintPerform"],
+    ["keys+made", "done"],
+    ["made", "armed"],
+    ["seen", "armed"],
+    ["", "armed"],
+  ];
+  for (const [word, phase] of where) {
+    const store = new Memory();
+    store.items.set(COACH_KEY, word);
+    assert.equal(readPhase(store), phase, `"${word}"`);
+  }
+});
+
+test("a browser holding the old final word sees the perform hint once, then the new final word", () => {
+  const store = new Memory();
+  store.items.set(COACH_KEY, "done+made");
+  assert.equal(readPhase(store), "hintPerform");
+  writePhase("hintPerform", store); // arriving at the hint writes nothing: it has not been seen yet
+  assert.deepEqual(store.writes, []);
+  writePhase(next("hintPerform", "performed"), store);
+  assert.equal(store.items.get(COACH_KEY), "keys+made");
+  assert.equal(readPhase(store), "done");
 });
 
 test("a browser that kept the earlier coach's word starts the new guide from the beginning", () => {
@@ -109,7 +157,11 @@ test("a browser that blocks storage shows the guide again and nothing throws", (
   assert.equal(readPhase(null), "armed");
 });
 
-const doing = (sounding: Doing["sounding"], marking = false): Doing => ({ sounding, marking });
+const doing = (sounding: Doing["sounding"], marking = false, performing = false): Doing => ({
+  sounding,
+  marking,
+  performing,
+});
 
 test("what the visitor does moves the guide: the first sound narrates, the needle ends it, marking is the last hint", () => {
   assert.equal(follow("armed", doing("idle")), null);
@@ -122,7 +174,27 @@ test("what the visitor does moves the guide: the first sound narrates, the needl
   assert.equal(follow("hintNeedle", doing("rolling")), null, "the roll playing is not the needle");
   assert.equal(follow("hintMark", doing("auditioning")), null);
   assert.equal(follow("hintMark", doing("idle", true)), "marked");
-  assert.equal(follow("done", doing("auditioning", true)), null);
+  assert.equal(follow("hintPerform", doing("idle")), null);
+  assert.equal(follow("hintPerform", doing("idle", false, true)), "performed");
+  assert.equal(follow("done", doing("auditioning", true, true)), null);
+});
+
+test("a perform press is never read as the needle: sounding a pad is not an audition", () => {
+  // perform plays beside the engine, which stays idle or paused, so it cannot be mistaken for taking over
+  for (const phase of ["armed", "narrating", "hintNeedle"] as const) {
+    assert.equal(follow(phase, { sounding: "paused", marking: false, performing: true }), null);
+  }
+});
+
+test("a chain with no perform control has nothing for its perform hint to point at, so it ends", () => {
+  assert.equal(
+    follow("hintPerform", { sounding: "idle", marking: false, performAvailable: false }),
+    "hintFaded",
+  );
+  assert.equal(
+    follow("hintPerform", { sounding: "idle", marking: false, performAvailable: true }),
+    null,
+  );
 });
 
 test("following the visitor always comes to rest: nothing they do loops the guide", () => {
@@ -130,7 +202,7 @@ test("following the visitor always comes to rest: nothing they do loops the guid
     for (const marking of [false, true]) {
       let phase: Phase = "armed";
       let settled = false;
-      for (let step = 0; step < 6; step++) {
+      for (let step = 0; step < 8; step++) {
         const event = follow(phase, { sounding, marking });
         if (event === null) {
           settled = true;

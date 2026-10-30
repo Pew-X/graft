@@ -22,6 +22,7 @@ import { type Features, readFeatures } from "../lib/own/features.ts";
 import { type Basis, DECLARATION_TEXT, sourceBody } from "../lib/own/source.ts";
 import { OwnSound } from "./OwnSound.tsx";
 import { PublishStep } from "./PublishStep.tsx";
+import { KeysSheet } from "./KeysSheet.tsx";
 import { MakeGuide } from "./MakeGuide.tsx";
 import { TrimStep } from "./TrimStep.tsx";
 import { SoundPicker } from "./SoundPicker.tsx";
@@ -153,6 +154,7 @@ export function Make({
         >
           <span aria-hidden="true">{copy.footer.howMark}</span> {copy.make.guide.how}
         </button>
+        <KeysSheet page="make" className="back how" />
       </div>
       {(origin === null && own !== null && toTrim === null) ||
       (origin !== null && sound.status === "ready") ? null : (
