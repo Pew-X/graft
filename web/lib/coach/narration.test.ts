@@ -44,7 +44,7 @@ test("the four moments of the seeded chain, in the order the sound plays", () =>
       "then a piece was cut out and slowed down.",
       // 4800 to 33600 of the 34559 before it, at 1/2
       "then a piece was cut out and slowed down.",
-      "that is how it was made. tap any ring to hear that step.",
+      "that is how it was made. tap any ring to hear that step, or press make a flip to make the next one.",
     ],
   );
 });
@@ -112,7 +112,7 @@ test("a chain of one stage, two stages and twelve all begin and end the same way
   assert.deepEqual(one, [
     "this is the sound.",
     "it began as “dm9 chord”.",
-    "that is all of it so far. tap the ring to hear it.",
+    "that is all of it so far. tap the ring to hear it, or press make a flip to make the next one.",
   ]);
   const two = all([source(), flip([0, 100], { p: 3, q: 2 })]);
   assert.equal(two.length, 4);
@@ -122,7 +122,10 @@ test("a chain of one stage, two stages and twelve all begin and end the same way
     ...Array.from({ length: 11 }, () => flip([0, 100], { p: 3, q: 2 })),
   ]);
   assert.equal(twelve.length, 14);
-  assert.equal(twelve.at(-1), "that is how it was made. tap any ring to hear that step.");
+  assert.equal(
+    twelve.at(-1),
+    "that is how it was made. tap any ring to hear that step, or press make a flip to make the next one.",
+  );
 });
 
 test("the moment follows the engine's step, and a paused roll keeps its caption", () => {

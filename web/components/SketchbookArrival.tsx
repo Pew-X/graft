@@ -42,7 +42,21 @@ export function SketchbookArrival() {
     setArrival((was) => ({ payload: null, n: was.n + 1 }));
   }, []);
 
+  // on a page with the roll, a first visit's narration is not talked over: the offer waits for it to end
+  const [narrating, setNarrating] = useState(false);
+  useEffect(() => {
+    if (payload === null || path === "/make") return undefined;
+    const look = (): void => {
+      const guide = document.querySelector(".roll")?.getAttribute("data-guide");
+      setNarrating(guide === "armed" || guide === "narrating");
+    };
+    look();
+    const timer = window.setInterval(look, 500);
+    return () => window.clearInterval(timer);
+  }, [payload, path]);
+
   if (payload === null) return null;
+  if (path !== "/make" && narrating) return null;
   if (path === "/make") return <ImportQuestion key={arrival.n} text={payload} onDone={done} />;
   return (
     <div className="sketch-arrival aside" role="status" data-testid="import-elsewhere">

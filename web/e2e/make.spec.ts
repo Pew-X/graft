@@ -336,7 +336,7 @@ test.describe("arriving from the header's make a flip", () => {
   }) => {
     await page.goto("/make");
     await expect(page.getByTestId("make-intro")).toHaveText(
-      "cut a piece of a sound. play it faster or slower. hear it. share it if you like.",
+      "cut a piece of a sound, play it faster or slower, and hear it. keep the tries you like as sketches, and publish the ones worth sharing.",
     );
     await expect(page.getByTestId("steps").locator("li")).toHaveText([
       /pick/,

@@ -237,7 +237,20 @@ test("opened on another page, it offers the make page instead of importing out o
 }) => {
   await seed(page);
   const url = await copiedLink(page);
-  const other = await fresh(browser);
+  // a returning visitor (the roll's guide finished), so nothing is being narrated
+  const context = await browser.newContext({
+    bypassCSP: true,
+    storageState: {
+      cookies: [],
+      origins: [
+        {
+          origin: "http://127.0.0.1:3100",
+          localStorage: [{ name: "graft.coach", value: "keys+made" }],
+        },
+      ],
+    },
+  });
+  const other = await context.newPage();
   await other.goto(`/${new URL(url).hash}`);
   const offer = other.getByTestId("import-elsewhere");
   await expect(offer).toContainText("they are added on the make page");
@@ -245,6 +258,20 @@ test("opened on another page, it offers the make page instead of importing out o
   await offer.getByRole("link", { name: "open the make page" }).click();
   await expect(other).toHaveURL(/\/make#sketchbook=/);
   await expect(other.getByTestId("import-question")).toBeVisible();
+  await context.close();
+});
+
+test("on a first visit the offer waits for the narration to end and never sits over it", async ({
+  page,
+  browser,
+}) => {
+  await seed(page);
+  const url = await copiedLink(page);
+  const other = await fresh(browser);
+  await other.goto(`/${new URL(url).hash}`);
+  await expect(other.locator(".roll")).toHaveAttribute("data-audio", "ready");
+  await other.waitForTimeout(1500);
+  await expect(other.getByTestId("import-elsewhere")).toHaveCount(0);
   await other.context().close();
 });
 

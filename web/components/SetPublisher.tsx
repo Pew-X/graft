@@ -63,8 +63,11 @@ function stateText(state: ItemState): string {
 export function SetPublisher({
   apiUrl,
   render,
+  onStarted,
 }: {
   apiUrl: string;
+  /** The visitor started a set: the make guide's last lines follow it. */
+  onStarted?: () => void;
   /** The hash of the sound a sketch renders to here: sent as the preview, so a differing render is caught. */
   render: Renderer;
 }) {
@@ -118,6 +121,7 @@ export function SetPublisher({
     }
     const controller = new AbortController();
     abort.current = controller;
+    onStarted?.();
     setRunning(true);
     setStopWhy(null);
     setStoppedAt(null);

@@ -302,6 +302,7 @@ export function YourSketches({
   compare,
   bank,
   choose,
+  teach = false,
   children,
 }: {
   openedId: string | null;
@@ -311,12 +312,22 @@ export function YourSketches({
   compare?: CompareApi;
   bank?: BankApi | undefined;
   choose?: ChooseApi | undefined;
+  /** Say what a sketch is even when there are none yet (the editor is up and the maker may keep one). */
+  teach?: boolean;
   children?: React.ReactNode;
 }) {
   const book = useSketchBook();
   const [message, setMessage] = useState("");
   const c = copy.sketch;
-  if (book.sketches.length === 0 && message === "") return null;
+  if (book.sketches.length === 0 && message === "") {
+    return teach ? (
+      <section className="your-sketches" data-testid="no-sketches">
+        <h3 className="kicker">{c.heading}</h3>
+        <p className="hint">{c.empty}</p>
+        <p className="hint">{c.where}</p>
+      </section>
+    ) : null;
+  }
   return (
     <section aria-labelledby="your-sketches" data-testid="your-sketches" className="your-sketches">
       <h3 id="your-sketches" className="kicker">

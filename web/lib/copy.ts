@@ -289,6 +289,7 @@ export const copy = {
   stageFlips: {
     line: "flips of this stage ({n})",
     label: "the flips of this stage",
+    none: "nobody has flipped this stage yet. press flip this to make the first.",
     by: "by {author}",
     more: "show more",
     newest:
@@ -790,7 +791,8 @@ export const copy = {
     title: "make a flip",
     kicker: "make a flip",
     home: "← graft",
-    intro: "cut a piece of a sound. play it faster or slower. hear it. share it if you like.",
+    intro:
+      "cut a piece of a sound, play it faster or slower, and hear it. keep the tries you like as sketches, and publish the ones worth sharing.",
     steps: {
       label: "steps",
       pick: "pick",
@@ -802,12 +804,16 @@ export const copy = {
     one: "a flip is one cut and one speed of one sound. nothing is mixed into another.",
     /** One line at a time above the editor, each gone when the visitor does the thing it says. */
     guide: {
-      pick: "pick any sound. you cut a piece of it next.",
-      hear: "this flip is already set up. press hear it.",
+      pick: "pick a sound. you cut a piece of it next.",
+      hear: "this flip plays higher, a fifth up. press hear it.",
       change: "now move a bracket or the speed, and hear it change.",
       /** A second, smaller line under the change hint: what the keyboard does to a bracket. */
       changeKeys: "arrow keys nudge a bracket; shift nudges it ten times more.",
-      share: "like it? publish it with the button below.",
+      keep: "like a try? keep it as a sketch. only you can hear it.",
+      another: "try another, or press go on from this on a sketch.",
+      pads: "put two sketches on the bank, then touch their pads.",
+      publish: "tick the ones worth keeping and press publish these.",
+      next: "after a flip is published, press flip this next.",
       skip: "skip",
       how: "how it works",
       label: "a short guide to making a flip",
@@ -935,8 +941,9 @@ export const copy = {
     wholeDown: "then it was slowed down.",
     wholeSame: "then it was kept as it was.",
     missing: "this step is no longer here. its credit stays.",
-    rest: "that is how it was made. tap any ring to hear that step.",
-    restOne: "that is all of it so far. tap the ring to hear it.",
+    rest: "that is how it was made. tap any ring to hear that step, or press make a flip to make the next one.",
+    restOne:
+      "that is all of it so far. tap the ring to hear it, or press make a flip to make the next one.",
     skip: "skip",
   },
   /** Two small hints after the first play, each shown once. */

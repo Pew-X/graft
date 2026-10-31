@@ -118,7 +118,8 @@ export function FlipsOfStage({
         </button>
       </p>
     );
-  if (first.total === 0 || first.flips.length === 0) return null;
+  if (first.total === 0 || first.flips.length === 0)
+    return <p className="flips-of-note">{c.none}</p>;
   const shown = [...first.flips, ...more.flips];
   const next = more.next === undefined ? first.next : more.next;
   const listId = `${uid}-list`;

@@ -14,8 +14,14 @@ import type { Sound } from "../lib/make/sounds.ts";
 import { STOPS, parseSpeed } from "../lib/make/speed.ts";
 import { nudge, speedOf, startEditing, withCut, withStop } from "../lib/make/editing.ts";
 import type { Start } from "../lib/make/editing.ts";
-import { next as nextGuide, replayAt, type MakeEvent, type MakePhase } from "../lib/coach/make.ts";
-import { readMade, writeMade } from "../lib/coach/seen.ts";
+import {
+  next as nextGuide,
+  PHASES,
+  replayAt,
+  type MakeEvent,
+  type MakePhase,
+} from "../lib/coach/make.ts";
+import { startPhase, writeProgress } from "../lib/coach/sketch-guide.ts";
 import { type Async, useAsync } from "../lib/make/use-async.ts";
 import { fetchPcm } from "../lib/roll/pcm.ts";
 import { describeSpeed } from "../lib/roll/speed.ts";
@@ -158,19 +164,24 @@ export function Make({
   // is shown.
   const [guide, setGuide] = useState<MakePhase>("done");
   const [slot, setSlot] = useState(false);
-  const send = useCallback((event: MakeEvent) => setGuide((p) => nextGuide(p, event)), [setGuide]);
+  const send = useCallback(
+    (event: MakeEvent) => setGuide((p) => nextGuide(p, event, PERFORM_ON)),
+    [setGuide],
+  );
   const skipGuide = useCallback(() => send("skipped"), [send]);
   const fadedGuide = useCallback(() => send("faded"), [send]);
   useEffect(() => {
     // read after the page is up, in a microtask: the server cannot know what the browser has stored
     queueMicrotask(() => {
-      if (readMade()) return;
-      setGuide("pick");
+      const from = startPhase();
+      if (from === "done") return;
+      setGuide(from);
       setSlot(true);
     });
   }, []);
+  // where the guide has got to is kept (forward only), so a reload resumes at the right line
   useEffect(() => {
-    if (guide === "done" && slot) writeMade();
+    if (slot) writeProgress(guide);
   }, [guide, slot]);
   const liveId = origin?.kind === "live" ? origin.id : null;
   // where a published stage's audio comes from: the site's own files for a shipped one, else the service
@@ -245,11 +256,15 @@ export function Make({
     setGoingOn(null);
     setPicked(null);
   }, []);
-  const goOn = useCallback((sketch: Sketch) => {
-    setGoingOn(sketch);
-    setOpened(null);
-    setPicked(null);
-  }, []);
+  const goOn = useCallback(
+    (sketch: Sketch) => {
+      setGoingOn(sketch);
+      setOpened(null);
+      setPicked(null);
+      send("wentOn");
+    },
+    [send],
+  );
   // Back to the list. A sound named in the link is forgotten with it, and so are an opened sketch and one gone on from.
   const leave = useCallback(() => {
     setOpened(null);
@@ -430,7 +445,10 @@ export function Make({
     add: (id) => {
       const made = addToBank(sketchStorage(), id);
       announceSketchChange();
-      if (made.ok) return "";
+      if (made.ok) {
+        send("banked");
+        return "";
+      }
       return made.why === "full"
         ? fill(copy.sketch.bank.full, { max: MOST_ON_BANK })
         : copy.sketch.failed.invalid;
@@ -445,8 +463,19 @@ export function Make({
     if (guide === "pick" && editing) queueMicrotask(() => send("picked"));
   }, [guide, editing, send]);
   // which line fits what is on the screen now; none while a sound loads or is being trimmed
+  // the lines about sketches, pads and publishing point at the strip, the bank and the set, which show
+  // wherever a sketch exists: they do not wait for an editor
+  const sketchLine = PHASES.indexOf(guide) >= PHASES.indexOf("another");
   const line =
-    guide === "done" ? null : guide === "pick" ? (picking ? "pick" : null) : editing ? guide : null;
+    guide === "done"
+      ? null
+      : guide === "pick"
+        ? picking
+          ? "pick"
+          : null
+        : editing || sketchLine
+          ? guide
+          : null;
   // The line sits under the step markers, which the editor draws once it is up and this page draws before.
   const guideSlot = slot ? <MakeGuide line={line} onSkip={skipGuide} onFaded={fadedGuide} /> : null;
 
@@ -622,12 +651,15 @@ export function Make({
           compare={compare}
           bank={PERFORM_ON ? bankApi : undefined}
           choose={chooseApi}
+          teach
         />
       ) : null}
       {PERFORM_ON && book.sketches.length > 0 ? (
         <SketchBankPanel bank={bank} status={bankStatus} />
       ) : null}
-      {book.sketches.length > 0 ? <SetPublisher apiUrl={apiUrl} render={hashOf} /> : null}
+      {book.sketches.length > 0 ? (
+        <SetPublisher apiUrl={apiUrl} render={hashOf} onStarted={() => send("published")} />
+      ) : null}
       <MoveSketches />
       <p className="local">{copy.make.local}</p>
       <p className="local">{copy.make.one}</p>
@@ -866,7 +898,7 @@ function Editor({
               aria-describedby="why-not"
               onClick={() => {
                 setPublishing(true);
-                onGuide("shared");
+                onGuide("published");
               }}
             >
               {copy.publish.open}
@@ -930,6 +962,7 @@ function Editor({
           enabled={problem === null}
           wholeFrames={frames}
           label={opened ? copy.sketch.another : copy.sketch.keep}
+          onKept={() => onGuide("kept")}
         />
         {opened && !sameAsOpened ? (
           <div className="actions">
