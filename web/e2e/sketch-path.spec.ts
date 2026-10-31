@@ -179,6 +179,7 @@ test("deleting a sketch that is being compared clears the comparison", async ({ 
   await page.goto(link(SOURCE.id, "0-12000", "1/1"));
   await ready(page);
   await keep(page, "gone soon");
+  await keep(page, "stays");
   await row(page, "gone soon").getByRole("button", { name: "marked A" }).click();
   await expect(page.getByTestId("compare")).toBeVisible();
   await row(page, "gone soon").getByRole("button", { name: "discard" }).click();
@@ -296,8 +297,44 @@ test("the strip passes an accessibility scan and its controls are reachable by k
   await page.goto(link(SOURCE.id, "0-12000"));
   await ready(page);
   await keep(page, "scanned");
+  await keep(page, "second");
   await row(page, "scanned").getByRole("button", { name: "marked A" }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("compare")).toBeVisible();
   await scan(page, "the sketch strip with a comparison", info);
+});
+
+test("with one sketch there is only what one sketch needs; the second brings the rest", async ({
+  page,
+}) => {
+  await page.goto(link(SOURCE.id, "0-12000", "1/1"));
+  await ready(page);
+  await keep(page, "only one");
+  const one = row(page, "only one");
+  for (const name of ["open", "go on from this", "rename", "discard"]) {
+    await expect(one.getByRole("button", { name })).toBeVisible();
+  }
+  await expect(one.getByRole("button", { name: "marked A" })).toHaveCount(0);
+  await expect(one.getByRole("button", { name: "put on the bank" })).toHaveCount(0);
+  await expect(one.getByLabel("publish this one")).toHaveCount(0);
+  await expect(page.getByTestId("sketch-bank")).toHaveCount(0);
+  await expect(page.getByTestId("set-publisher")).toHaveCount(0);
+  await keep(page, "and two");
+  await expect(one.getByRole("button", { name: "marked A" })).toBeVisible();
+  await expect(one.getByRole("button", { name: "put on the bank" })).toBeVisible();
+  await expect(one.getByLabel("publish this one")).toBeVisible();
+  await expect(page.getByTestId("sketch-bank")).toBeVisible();
+  await expect(page.getByTestId("set-publisher")).toBeVisible();
+});
+
+test("the sketches say why they exist: a published flip cannot be changed and a sketch can", async ({
+  page,
+}) => {
+  await page.goto(link(SOURCE.id, "0-12000", "1/1"));
+  await ready(page);
+  await expect(page.getByTestId("no-sketches")).toBeVisible();
+  await keep(page, "why");
+  await expect(page.getByTestId("your-sketches")).toContainText(
+    "a published flip is public and cannot be changed",
+  );
 });

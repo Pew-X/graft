@@ -654,10 +654,10 @@ export function Make({
           teach
         />
       ) : null}
-      {PERFORM_ON && book.sketches.length > 0 ? (
+      {PERFORM_ON && (book.sketches.length >= 2 || book.bank.length > 0) ? (
         <SketchBankPanel bank={bank} status={bankStatus} />
       ) : null}
-      {book.sketches.length > 0 ? (
+      {book.sketches.length >= 2 || sketchSet.chosen.ids.length > 0 ? (
         <SetPublisher apiUrl={apiUrl} render={hashOf} onStarted={() => send("published")} />
       ) : null}
       <MoveSketches />
@@ -883,6 +883,7 @@ function Editor({
             className="primary"
             disabled={problem !== null || ready === null}
             aria-describedby="why-not"
+            data-guide="hear"
             onClick={() => {
               if (listening) setListening(false);
               else touch();

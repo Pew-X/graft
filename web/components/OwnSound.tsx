@@ -135,7 +135,11 @@ export function OwnSound({
               ? status.text
               : ""}
       </p>
-      <p className="hint">{copy.own.honesty}</p>
+      <details className="own-more">
+        <summary>{copy.own.moreSummary}</summary>
+        {uploads === true ? <p className="hint">{copy.own.reportNote}</p> : null}
+        <p className="hint">{copy.own.honesty}</p>
+      </details>
     </section>
   );
 }

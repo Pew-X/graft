@@ -8,11 +8,11 @@ import { COACH_VALUES } from "../lib/coach/seen.ts";
 
 test.use({ storageState: { cookies: [], origins: [] }, viewport: { width: 1280, height: 720 } });
 
-const PICK = "pick a sound. you cut a piece of it next.";
+const PICK = "pick a sound, or record your own. you cut a piece of it next.";
 const HEAR = "this flip plays higher, a fifth up. press hear it.";
 const CHANGE = "now move a bracket or the speed, and hear it change.";
 const CHANGE_KEYS = "arrow keys nudge a bracket; shift nudges it ten times more.";
-const KEEP = "like a try? keep it as a sketch. only you can hear it.";
+const KEEP = "keep a try as a sketch. a published flip is permanent; a sketch is not.";
 const ANOTHER = "try another, or press go on from this on a sketch.";
 const PADS = "put two sketches on the bank, then touch their pads.";
 const PUBLISH = "tick the ones worth keeping and press publish these.";
@@ -179,12 +179,23 @@ test("with a line up the page has no serious accessibility violation", async ({ 
   await scan(page, "make flow with a hint", info);
 });
 
-test("the line is announced politely and the skip is the only thing in the slot that takes a press", async ({
+test("the line is announced politely and only show me and skip take a press in the slot", async ({
   page,
 }) => {
   await choose(page);
   await expect(guide(page).getByRole("status")).toHaveText(HEAR);
-  expect(await guide(page).getByRole("button").count()).toBe(1);
+  await expect(guide(page).getByRole("button")).toHaveText(["show me", "skip"]);
+});
+
+test("show me brings the named control into view and focuses it, and the line stays", async ({
+  page,
+}) => {
+  await choose(page);
+  await expect(guide(page).getByRole("status")).toHaveText(HEAR);
+  await guide(page).getByRole("button", { name: "show me" }).click();
+  await expect(page.locator('[data-guide="hear"]')).toBeFocused();
+  await expect(page.locator('[data-guide="hear"]')).toBeInViewport();
+  await expect(guide(page).getByRole("status")).toHaveText(HEAR);
 });
 
 test.describe("reduced motion", () => {

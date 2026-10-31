@@ -319,6 +319,8 @@ export function YourSketches({
   const book = useSketchBook();
   const [message, setMessage] = useState("");
   const c = copy.sketch;
+  // with one sketch there is nothing to compare, no second pad and no set: those arrive with the second
+  const many = book.sketches.length >= 2;
   if (book.sketches.length === 0 && message === "") {
     return teach ? (
       <section className="your-sketches" data-testid="no-sketches">
@@ -380,9 +382,9 @@ export function YourSketches({
             goingOn={below(book, s.id).length}
             twin={twinOf(book, s)}
             where={where}
-            compare={compare}
-            bank={bank}
-            choose={choose}
+            compare={many ? compare : undefined}
+            bank={many ? bank : undefined}
+            choose={many ? choose : undefined}
             onOpen={onOpen}
             onGoOn={onGoOn}
             onGone={setMessage}
