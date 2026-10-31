@@ -5,6 +5,7 @@ import { copy, fill } from "../lib/copy.ts";
 import { intervalPhrase, secondsText } from "../lib/flips/describe.ts";
 import { below, discard, rename, twinOf } from "../lib/sketch/book.ts";
 import { type Sketch } from "../lib/sketch/sketch.ts";
+import { cleanTitle, TITLE_LIMIT } from "../lib/sketch/title.ts";
 import { announceSketchChange, sketchStorage, useSketchBook } from "./useSketchBook.ts";
 
 function Row({
@@ -55,7 +56,14 @@ function Row({
           className="sketch-rename"
           onSubmit={(e) => {
             e.preventDefault();
-            const done = rename(sketchStorage(), sketch.id, title.trim());
+            const cleaned = cleanTitle(title);
+            if (!cleaned.ok) {
+              setProblem(
+                fill(c.titleWhy[cleaned.rule], { limit: TITLE_LIMIT, detail: cleaned.detail }),
+              );
+              return;
+            }
+            const done = rename(sketchStorage(), sketch.id, cleaned.value);
             announceSketchChange();
             if (done.ok) setMode("idle");
             else setProblem(c.failed.invalid);

@@ -595,6 +595,7 @@ function Editor({
           parent={flipParent === null ? null : { kind: "stage", id: flipParent }}
           value={valueOf(editing)}
           enabled={problem === null}
+          wholeFrames={frames}
         />
         {opened && flipParent !== null ? (
           <OpenedNotes opened={opened} apiUrl={apiUrl} parentId={flipParent} />

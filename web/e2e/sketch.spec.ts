@@ -9,7 +9,7 @@ import { scan } from "./a11y.ts";
 const web = join(dirname(fileURLToPath(import.meta.url)), "..");
 const sources = (
   JSON.parse(readFileSync(join(web, "snapshot", "sources.json"), "utf8")) as {
-    stages: Array<{ id: string; title: string }>;
+    stages: Array<{ id: string; title: string; frames: number }>;
   }
 ).stages;
 const FIRST = sources[0]!;
@@ -48,7 +48,7 @@ test("keeping a try makes a private sketch: stored as specs, listed, and nothing
     const text = `${r.url()} ${r.postData() ?? ""}`;
     if (/sk[0-9a-z]{12}|retryKey|retry_key|graft\.sketches/.test(text)) leaks.push(text);
   });
-  await page.goto(link());
+  await page.goto(link(`0-${Math.min(FIRST.frames, 480_000)}`));
   await ready(page);
   await keepOne(page);
   await expect(page.getByText("kept as a sketch: up a fifth. nothing is published.")).toBeVisible();
@@ -57,7 +57,7 @@ test("keeping a try makes a private sketch: stored as specs, listed, and nothing
   expect(book?.sketches).toHaveLength(1);
   const sketch = book!.sketches[0]!;
   expect(sketch["parent"]).toEqual({ kind: "stage", id: FIRST.id });
-  expect(sketch["cut"]).toEqual({ start: 0, end: 24000 });
+  expect(sketch["cut"]).toEqual({ start: 0, end: Math.min(FIRST.frames, 480_000) });
   expect([sketch["p"], sketch["q"]]).toEqual([3, 2]);
   expect(String(sketch["retryKey"]).length).toBeGreaterThanOrEqual(16);
   // specs only: no audio is ever stored
@@ -65,7 +65,11 @@ test("keeping a try makes a private sketch: stored as specs, listed, and nothing
   const item = page.getByTestId("your-sketches").locator(".your-sketch");
   await expect(item).toHaveCount(1);
   await expect(item.locator(".sketch-title")).toHaveText("up a fifth");
-  await expect(item.locator(".sketch-facts")).toHaveText("up a fifth, 0 to 0.5 s");
+  await expect(item.locator(".sketch-facts")).toHaveText(
+    new RegExp(
+      `^up a fifth, 0 to ${Number((Math.min(FIRST.frames, 480_000) / 48000).toFixed(2))} s$`,
+    ),
+  );
   expect(leaks, "keeping a sketch sends nothing").toEqual([]);
 });
 
@@ -335,4 +339,37 @@ test("the sketch controls are reachable by keyboard and pass an accessibility sc
   await page.keyboard.press("Enter");
   await expect(page.getByText(/kept as a sketch: by keyboard/)).toBeVisible();
   await scan(page, "make page with a sketch", info);
+});
+
+test("an empty title is named from the speed, the cut when it is not the whole sound, and a clash gets a number", async ({
+  page,
+}) => {
+  await page.goto(link("0-24000", "3/2"));
+  await ready(page);
+  await keepOne(page);
+  await expect(page.getByText(/kept as a sketch: up a fifth, 0 to 0\.5 s\./)).toBeVisible();
+  await keepOne(page);
+  await expect(page.getByText(/kept as a sketch: up a fifth, 0 to 0\.5 s \(2\)\./)).toBeVisible();
+  const titles = (await stored(page))!.sketches.map((s) => s["title"]);
+  expect(titles).toEqual(["up a fifth, 0 to 0.5 s", "up a fifth, 0 to 0.5 s (2)"]);
+});
+
+test("a typed title is checked as the service will: links are removed and said, bad ones are refused with the reason", async ({
+  page,
+}) => {
+  await page.goto(link());
+  await ready(page);
+  await keepOne(page, "listen at example.com now");
+  await expect(
+    page.getByText(/kept as a sketch: listen at now\. a link or a handle/),
+  ).toBeVisible();
+  await keepOne(page, "a\u202eb");
+  await expect(page.getByText(/the title has a character that is not allowed/)).toBeVisible();
+  await keepOne(page, "p\u0430ypal");
+  await expect(page.getByText(/mixes letters from different scripts/)).toBeVisible();
+  await keepOne(page, "@someone");
+  await expect(
+    page.getByText(/the title is empty once links and handles are removed/),
+  ).toBeVisible();
+  expect((await stored(page))!.sketches).toHaveLength(1);
 });

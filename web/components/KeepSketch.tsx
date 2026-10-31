@@ -2,9 +2,10 @@
 
 import { useId, useState } from "react";
 import { copy, fill } from "../lib/copy.ts";
-import { intervalPhrase } from "../lib/flips/describe.ts";
 import type { FlipValue } from "../lib/make/editing.ts";
 import { discard, keep, oldestUnused, readBook } from "../lib/sketch/book.ts";
+import { defaultTitle } from "../lib/sketch/names.ts";
+import { cleanTitle, TITLE_LIMIT } from "../lib/sketch/title.ts";
 import { MOST_SKETCHES, type Parent, type Sketch } from "../lib/sketch/sketch.ts";
 import { announceSketchChange, sketchStorage } from "./useSketchBook.ts";
 
@@ -17,6 +18,7 @@ export function KeepSketch({
   parent,
   value,
   enabled,
+  wholeFrames,
   onKept,
 }: {
   /** What the sketch starts from; null while there is nothing published to start from (an own sound not yet published). */
@@ -24,6 +26,8 @@ export function KeepSketch({
   value: FlipValue;
   /** The try on the screen can be rendered and is within the limits. */
   enabled: boolean;
+  /** How long the sound being cut is, in frames: the default name mentions the cut unless it is all of it. */
+  wholeFrames: number;
   onKept?: (sketch: Sketch) => void;
 }) {
   const uid = useId();
@@ -35,7 +39,28 @@ export function KeepSketch({
   const press = (): void => {
     if (parent === null) return;
     setOffer(null);
-    const name = title.trim() === "" ? intervalPhrase(value.p, value.q) : title.trim();
+    const book = readBook(sketchStorage());
+    let adjusted = false;
+    let name: string;
+    if (title.trim() === "") {
+      name = defaultTitle({
+        p: value.p,
+        q: value.q,
+        cut: value.cut,
+        wholeFrames,
+        taken: book.sketches
+          .filter((s) => s.parent.kind === parent.kind && s.parent.id === parent.id)
+          .map((s) => s.title),
+      });
+    } else {
+      const cleaned = cleanTitle(title);
+      if (!cleaned.ok) {
+        setSaid(fill(c.titleWhy[cleaned.rule], { limit: TITLE_LIMIT, detail: cleaned.detail }));
+        return;
+      }
+      name = cleaned.value;
+      adjusted = cleaned.adjusted;
+    }
     const made = keep(sketchStorage(), {
       parent,
       cut: value.cut,
@@ -45,7 +70,7 @@ export function KeepSketch({
     });
     announceSketchChange();
     if (made.ok) {
-      setSaid(fill(c.kept, { title: made.sketch.title }));
+      setSaid(fill(adjusted ? c.keptAdjusted : c.kept, { title: made.sketch.title }));
       setTitle("");
       onKept?.(made.sketch);
       return;

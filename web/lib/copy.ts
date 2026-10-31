@@ -84,6 +84,15 @@ export const copy = {
     titleLabel: "name of this try",
     titleGloss: "optional: left empty, it is named from the speed",
     kept: "kept as a sketch: {title}. nothing is published.",
+    keptAdjusted:
+      "kept as a sketch: {title}. a link or a handle in the title was removed, as it would be when published.",
+    titleWhy: {
+      empty: "the title is empty once links and handles are removed.",
+      too_long: "the title is longer than {limit} characters.",
+      character: "the title has a character that is not allowed: {detail}",
+      mixed_scripts: "a word in the title mixes letters from different scripts.",
+      denied_word: "the word {detail} cannot be used in a title.",
+    },
     needSource: "publish your sound first: a sketch starts from a published sound.",
     failed: {
       storage:
