@@ -73,6 +73,18 @@ export const copy = {
     ...PAD_RULE,
     stop: "stop",
   },
+  /** The flips made from a stage, listed under it on a chain page. */
+  stageFlips: {
+    line: "flips of this stage ({n})",
+    label: "the flips of this stage",
+    by: "by {author}",
+    more: "show more",
+    newest:
+      "newest first. titles and names are typed by the people who made them, and graft does not check them.",
+    failed: "the flips of this stage could not be read. the service may be waking up.",
+    moreFailed: "the next flips could not be read. the ones above are still here.",
+    tryAgain: "try again",
+  },
   /** A phrase: the presses made in perform, kept in the page's address. */
   phrase: {
     group: "a phrase",

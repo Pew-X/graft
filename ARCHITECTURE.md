@@ -557,6 +557,14 @@ Written by ticket 28. `/make` lets a maker pick a sound, drag the two ends of a 
 
 **Not claimed.** The preview latency is measured in CI-grade Chromium (new bytes at the speaker within 500 ms of a keypress); a real phone is a manual check, recorded in the ticket.
 
+## The flips of a stage
+
+Written by ticket 77. `GET /v1/publications/{id}/flips` lists the flips made from one stage, newest first (ties by id), a page at a time: `limit` is 1 to 50 (24 when absent) and `next` is an opaque cursor for the page after. Each item carries its id, title and maker as typed, the cut, the speed, the length in frames and the creation time, and nothing else: no audio address, no key and no hash of one (a test reads the whole response for those words). The response also carries `total`, the number of flips of the stage that are listed.
+
+What it lists is decided by the chain read's own rule, read from the parent's side. A flip is listed when it is not hidden, and when no rights hide stands on the stage or above it (`holds_flips`, which a test checks against `availability` for every combination of hides on chains of up to four stages). So a withdrawn flip is never listed; a rights-hidden flip is never listed; a stage hidden for rights lists nothing, because every flip of it is held; a stage that is only withdrawn still lists its flips, which keep playing; a stage closed to new flips still lists the flips it has. The parent's chain is read to one stage less than the depth cap, so the rule sees exactly as far as the chain read of a flip would. A malformed or unknown id answers the same 404 the other reads give.
+
+The cursor is `f1.<stage>.<creation microseconds>.<last id>`. It names its stage: a cursor made for another stage, a malformed one, or one over 120 characters answers 400 and is never read as a position. The query compares `(created_at, id)` against it, through the parent column's index, so a late page costs what the first does (a test proves the index can serve the read; the planner may still read a small table whole). The guarantee: a flip withdrawn between two page reads disappears without moving any other; a flip published after the first page was read sorts before the cursor and so belongs to an earlier page, never to a later one; no flip appears twice. `total` and the page are two statements and can differ by one around a publish. The response is cacheable for three seconds.
+
 ## Publishing from the page
 
 Written by ticket 29. The publish step is the last, optional step of making: a title, a name, a plain statement that what is published is public, and a button. There is no account and no gate at the start.

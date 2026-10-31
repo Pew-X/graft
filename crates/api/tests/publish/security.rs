@@ -36,6 +36,7 @@ const ROUTES: &[(&str, &str)] = &[
     ("GET", "/openapi.json"),
     ("GET", "/v1/chains/{id}"),
     ("GET", "/v1/publications/{id}"),
+    ("GET", "/v1/publications/{id}/flips"),
     ("POST", "/v1/publications"),
     ("GET", "/v1/features"),
     ("POST", "/v1/sources"),

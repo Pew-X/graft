@@ -118,6 +118,7 @@ export function RollPlayer({
   makeHref,
   apiUrl,
   flipsHref,
+  flipsFrom,
 }: {
   blocks: readonly Block[];
   load: Loader;
@@ -131,6 +132,8 @@ export function RollPlayer({
     | undefined;
   /** Where the bar's make a flip link goes; none, no link. */
   makeHref?: string | undefined;
+  /** Where the service is, to list the flips of the stage in view: only a chain read from the service has any. */
+  flipsFrom?: string | undefined;
   /** Where the service is, for reports. Without it there is nowhere to send one, so no report control is shown. */
   apiUrl?: string | undefined;
   /** The list of the flips this browser holds a key for, when it holds any: the footer links to it. */
@@ -843,6 +846,7 @@ export function RollPlayer({
                 onReport={apiUrl ? onReport : undefined}
                 onMark={openMake ? toggleMarking : undefined}
                 marking={marking}
+                flipsFrom={flipsFrom}
                 register={register}
                 onFocusBlock={onFocusBlock}
               />

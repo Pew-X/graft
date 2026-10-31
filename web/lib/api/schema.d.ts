@@ -93,6 +93,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/publications/{id}/flips": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** The flips of a stage, newest first. */
+    get: operations["get_flips"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/publications/{id}/fork-permission": {
     parameters: {
       query?: never;
@@ -281,6 +298,44 @@ export interface components {
           /** @enum {string} */
           state: "unavailable";
         };
+    /**
+     * @description One flip of a stage, as the list shows it. No audio and nothing private: the flip's own page
+     *     gives its audio, and no manage key or hash of one is ever part of this shape.
+     */
+    FlipItem: {
+      /** @description Maker's name as typed. Plain text, never a handle. */
+      author: string;
+      /**
+       * Format: int64
+       * @description Creation time, milliseconds since the Unix epoch.
+       */
+      created_at_ms: number;
+      /** @description The cut of the parent, computed. */
+      cut: components["schemas"]["CutView"];
+      /**
+       * Format: int32
+       * @description How many frames of 48 kHz audio the flip comes out as, computed.
+       */
+      frames: number;
+      /** @description Public id of the flip. */
+      id: string;
+      /** @description The speed, computed. */
+      speed: components["schemas"]["SpeedView"];
+      /** @description Title as typed. */
+      title: string;
+    };
+    /** @description A page of the flips of a stage. */
+    FlipsView: {
+      /** @description This page, newest first. */
+      flips: components["schemas"]["FlipItem"][];
+      /** @description Pass this as `cursor` to read the page after this one; absent on the last page. */
+      next?: string | null;
+      /**
+       * Format: int64
+       * @description How many flips of the stage are listed in all (not hidden).
+       */
+      total: number;
+    };
     /** @description Close or reopen a stage to new flips. */
     ForkPermissionRequest: {
       /** @description True to allow new flips of this stage, false to close it. Existing flips are untouched. */
@@ -744,6 +799,52 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["EntryView"];
+        };
+      };
+      /** @description No such publication */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  get_flips: {
+    parameters: {
+      query?: {
+        /** @description Flips per page: 1 to 50, 24 when absent */
+        limit?: number;
+        /** @description The `next` of the page before; made for this stage only */
+        cursor?: string;
+      };
+      header?: never;
+      path: {
+        /** @description Public id of the stage */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description A page of the stage's flips */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FlipsView"];
+        };
+      };
+      /** @description A limit out of range, or a cursor that is not this stage's */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
         };
       };
       /** @description No such publication */

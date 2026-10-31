@@ -3,6 +3,7 @@
 pub mod blobs;
 pub mod config;
 pub mod events;
+pub mod flips;
 pub mod guard;
 pub mod http;
 pub mod ingest;

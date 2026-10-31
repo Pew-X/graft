@@ -154,6 +154,7 @@ pub fn router(state: AppState, config: &Config) -> Router {
         .route("/v1/chains/{id}", get(routes::get_chain))
         .route("/v1/features", get(routes::get_features))
         .route("/v1/publications/{id}", get(routes::get_publication))
+        .route("/v1/publications/{id}/flips", get(crate::flips::get_flips))
         .route(
             "/v1/publications/{id}/fork-permission",
             put(maker::set_fork_permission)

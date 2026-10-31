@@ -719,6 +719,87 @@ button:disabled {
 .details {
   margin-top: 0.25rem;
 }
+/* the flips made from this stage: one quiet line that opens a list */
+.flips-of {
+  margin-top: 0.25rem;
+}
+.flips-of-toggle {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font:
+    500 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.flips-of-toggle::after {
+  content: "+";
+  margin-left: 0.6em;
+}
+.flips-of-toggle[aria-expanded="true"]::after {
+  content: "\2212";
+}
+.flips-of-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.flips-of-item {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-top: 1px solid var(--hair);
+}
+.flips-of-trace {
+  flex: none;
+  width: 72px;
+}
+.flips-of-trace .trace {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 300 / 84;
+}
+.flips-of-text {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.flips-of-title {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-weight: 600;
+}
+.flips-of-by,
+.flips-of-facts {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font:
+    400 12px/1.4 var(--f-mono),
+    ui-monospace,
+    monospace;
+}
+.flips-of-note {
+  margin: 0.5rem 0 0;
+  color: var(--muted);
+  font:
+    400 12px/1.4 var(--f-mono),
+    ui-monospace,
+    monospace;
+}
+.block:not([data-hero="true"]) .flips-of {
+  opacity: 0.62;
+}
 .details summary {
   display: flex;
   align-items: center;
