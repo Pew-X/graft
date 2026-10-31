@@ -123,7 +123,7 @@ function write(storage: StorageLike | null, book: Book): WriteWhy | null {
 }
 
 /** A change to the freshly read book: the edit returns the new book (with anything else to report), or a reason it is refused. */
-function change<T>(
+export function transact<T>(
   storage: StorageLike | null,
   edit: (book: Book) => { book: Book; extra: T } | string,
 ): { ok: true; book: Book; extra: T } | { ok: false; why: string } {
@@ -154,7 +154,7 @@ export type Kept =
  * the page can offer for discard.
  */
 export function keep(storage: StorageLike | null, input: KeepInput, now = Date.now()): Kept {
-  const made = change<Sketch>(storage, (book) => {
+  const made = transact<Sketch>(storage, (book) => {
     if (book.sketches.length >= MOST_SKETCHES) return "limit";
     if (input.parent.kind === "sketch" && !book.sketches.some((s) => s.id === input.parent.id))
       return "invalid";
@@ -208,7 +208,7 @@ export function discard(
   storage: StorageLike | null,
   id: string,
 ): { ok: true; book: Book; removed: string[] } | { ok: false; why: string } {
-  const made = change<string[]>(storage, (book) => {
+  const made = transact<string[]>(storage, (book) => {
     if (!book.sketches.some((s) => s.id === id)) return { book, extra: [] };
     const removed = new Set([id, ...below(book, id).map((s) => s.id)]);
     return {
@@ -228,7 +228,7 @@ export function rename(
   id: string,
   title: string,
 ): { ok: true; book: Book } | { ok: false; why: string } {
-  const made = change<null>(storage, (book) => {
+  const made = transact<null>(storage, (book) => {
     const target = book.sketches.find((s) => s.id === id);
     if (!target) return "missing";
     if (target.publishedAs !== undefined) return "published";
@@ -248,7 +248,7 @@ export function markPublished(
   id: string,
   publication: string,
 ): { ok: true; book: Book } | { ok: false; why: string } {
-  const made = change<null>(storage, (book) => {
+  const made = transact<null>(storage, (book) => {
     const target = book.sketches.find((s) => s.id === id);
     if (!target) return "missing";
     if (target.publishedAs !== undefined) return { book, extra: null };

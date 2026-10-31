@@ -24,6 +24,7 @@ import { type Features, readFeatures } from "../lib/own/features.ts";
 import { type Basis, DECLARATION_TEXT, sourceBody } from "../lib/own/source.ts";
 import { KeepSketch } from "./KeepSketch.tsx";
 import { OwnFlipsPicker } from "./OwnFlipsPicker.tsx";
+import { MoveSketches } from "./MoveSketches.tsx";
 import { YourSketches } from "./YourSketches.tsx";
 import { announceSketchChange, sketchStorage, useSketchBook } from "./useSketchBook.ts";
 import { usePublicationRead } from "./usePublicationRead.ts";
@@ -307,6 +308,7 @@ export function Make({
       {editing && unfit === null ? (
         <YourSketches openedId={opened?.id ?? null} onOpen={openSketch} />
       ) : null}
+      <MoveSketches />
       <p className="local">{copy.make.local}</p>
       <p className="local">{copy.make.one}</p>
     </div>

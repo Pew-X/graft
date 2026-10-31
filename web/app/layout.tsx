@@ -11,6 +11,7 @@ import type { ReactNode } from "react";
 import { copy } from "../lib/copy.ts";
 import { themeInitScript } from "../lib/theme/init.ts";
 import { themeCss } from "../lib/theme/tokens.ts";
+import { SketchbookArrival } from "../components/SketchbookArrival.tsx";
 import { WakeOnLoad } from "../components/WakeOnLoad.tsx";
 import "./roll.css";
 import "./make.css";
@@ -74,6 +75,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           </filter>
         </svg>
         <WakeOnLoad />
+        <SketchbookArrival />
         {children}
       </body>
     </html>

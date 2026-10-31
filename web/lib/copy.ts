@@ -129,6 +129,52 @@ export const copy = {
     },
     publishedAlready: "this sketch is published, and a published sketch is not published again.",
     empty: "no sketches yet. press keep as sketch after you hear a try you like.",
+    move: {
+      summary: "move my sketches",
+      copyLink: "copy my sketchbook link",
+      linkCopied:
+        "link copied. this link carries your sketches, and anyone you send it to can read them. it carries no keys and nothing that publishes anything.",
+      copyFailed: "the link could not be copied. nothing was changed.",
+      longLink:
+        "this link is long ({n} characters), and a messenger may cut it short. a file is the safer way.",
+      saveFile: "save my sketches to a file",
+      fileSaved:
+        "saved. the file carries your sketches in plain text, and no keys. anyone who has it can read them.",
+      addFile: "add sketches from a file",
+      fileBad:
+        "that is not a sketchbook file. it is a small text file made by save my sketches, at most 64 kilobytes.",
+      nothing: "keep a sketch first: there is nothing to move yet.",
+      question: "this carries {what}. add them to this browser?",
+      one: "1 sketch",
+      many: "{n} sketches",
+      moreTitles: "and {n} more",
+      yes: "add them",
+      no: "not now",
+      elsewhere: "this link carries sketches. they are added on the make page.",
+      goMake: "open the make page",
+      added: "added {n}.",
+      already: "{n} were already here.",
+      leftOut: "did not fit in the limit of {max}: {titles}.",
+      refused: {
+        tooLong: "this is too long to be a sketchbook link, so none of it was added.",
+        format: "this is not a sketchbook link, so none of it was added.",
+        version: "this was made by a newer version of graft and cannot be read here.",
+        cutShort:
+          "this link looks cut short, so none of it was added. ask for it again, or use a file.",
+        checksum: "this link was changed or damaged, so none of it was added.",
+        number: "this link has a number that is out of range, so none of it was added.",
+        title: "a title in this link breaks the rules for titles, so none of it was added.",
+        parent:
+          "a sketch in this link goes on from one that is not in it, so none of it was added.",
+        cycle:
+          "the sketches in this link go on from each other in a circle, so none of it was added.",
+        depth:
+          "the sketches in this link go on from each other too many times, so none of it was added.",
+        many: "this link carries more than {max} sketches, so none of it was added.",
+      },
+      storageFailed: "this browser would not keep them. nothing was added.",
+      newer: "this browser holds sketches from a newer version of graft, so nothing was added.",
+    },
   },
   /** The flips made from a stage, listed under it on a chain page. */
   stageFlips: {

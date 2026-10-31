@@ -1456,3 +1456,52 @@
 .opened-notes .notice {
   overflow-wrap: anywhere;
 }
+
+/* a sketchbook link or file asking to be added: fixed to the bottom, over the page, never over the editor's controls' focus */
+.sketch-arrival {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  z-index: 40;
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 32px));
+  max-height: 60vh;
+  overflow: auto;
+  padding: 0.9rem 1rem;
+  border: 2px solid var(--ink);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.25);
+}
+.sketch-arrival p {
+  margin: 0 0 0.4rem;
+  overflow-wrap: anywhere;
+}
+.sketch-arrival ul {
+  margin: 0 0 0.5rem;
+  padding-left: 1.2rem;
+  overflow-wrap: anywhere;
+}
+.move-sketches {
+  margin: 1.5rem 0;
+}
+.move-sketches summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  cursor: pointer;
+  font:
+    500 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.move-sketches .hint {
+  overflow-wrap: anywhere;
+  font:
+    400 12px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+  color: var(--muted);
+}
