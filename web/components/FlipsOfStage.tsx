@@ -4,6 +4,8 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { copy, fill } from "../lib/copy.ts";
 import { describeFlip } from "../lib/flips/describe.ts";
 import { type FlipItem, readFlips } from "../lib/flips/read.ts";
+import { parseBankHash, type BankLink } from "../lib/perform/bank-link.ts";
+import { FlipsBank, type FlipsAudio } from "./FlipsBank.tsx";
 import { Trace } from "./Trace.tsx";
 
 /** A service that did not answer is often one that was asleep: ask again by itself, a few times. */
@@ -21,11 +23,37 @@ type First =
  * offline is said once and asked again by itself; a failed second page keeps the first on the screen.
  * Titles and makers are shown as typed; each description is built only from computed facts.
  */
-export function FlipsOfStage({ id, apiUrl }: { id: string; apiUrl: string }) {
+export function FlipsOfStage({
+  id,
+  apiUrl,
+  audio,
+}: {
+  id: string;
+  apiUrl: string;
+  /** What the roll lends a bank of these flips; without it the list has no pads. */
+  audio?: FlipsAudio | undefined;
+}) {
   const uid = useId();
   const [first, setFirst] = useState<First>({ status: "loading" });
   const [again, setAgain] = useState(0);
   const [open, setOpen] = useState(false);
+  const [padsOpen, setPadsOpen] = useState(false);
+  // a link that carries a bank of this stage's flips: offered, never played by itself
+  const [arrived, setArrived] = useState<BankLink | null>(null);
+  useEffect(() => {
+    if (!audio) return undefined;
+    const read = (): void => {
+      const found = parseBankHash(window.location.hash, audio.stageIds);
+      if (found && found.stage === id) {
+        setArrived(found);
+        setOpen(true);
+        setPadsOpen(true);
+      }
+    };
+    queueMicrotask(read);
+    window.addEventListener("hashchange", read);
+    return () => window.removeEventListener("hashchange", read);
+  }, [audio, id]);
   // `next` is undefined until a second page has been read: the first page's own cursor stands until then
   const [more, setMore] = useState<{
     flips: FlipItem[];
@@ -147,6 +175,30 @@ export function FlipsOfStage({ id, apiUrl }: { id: string; apiUrl: string }) {
           </button>
         ) : null}
         <p className="hint">{c.newest}</p>
+        {audio ? (
+          padsOpen ? (
+            <FlipsBank
+              stage={id}
+              apiUrl={apiUrl}
+              flips={first.flips}
+              total={first.total}
+              audio={audio}
+              arrived={arrived}
+              onClose={() => setPadsOpen(false)}
+            />
+          ) : (
+            <button
+              type="button"
+              className="pill"
+              onClick={() => {
+                setArrived(null);
+                setPadsOpen(true);
+              }}
+            >
+              {copy.stageFlips.bank.open}
+            </button>
+          )
+        ) : null}
       </div>
     </div>
   );

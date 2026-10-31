@@ -34,30 +34,60 @@ interface Audio {
   performer: Performer;
 }
 
-/**
- * Playing the sketches on the sketch bank with the pads and, when the maker turns them on, the number keys:
- * the same rules as perform on the roll (one at a time or overlap, stop, rec, play, loop), over the page's
- * one audio context. Nothing is published and nothing is sent: a phrase recorded here is held in memory for
- * this visit only, as which sketch and when, and a sketch taken off the bank leaves its phrase saying so
- * rather than quietly renumbering it. A press on a pad that is not ready yet starts the audio inside the
- * press itself and plays when it is ready, so no press is ever silent without a reason.
- */
-export function useSketchBank({
-  previewer,
-  book,
-  samplesOf,
-  beforeSound,
-  say,
-}: {
-  previewer: Previewer;
-  book: Book;
+export interface BankOptions {
+  /** The pads, in order: one id each. */
+  ids: readonly string[];
+  titleOf: (id: string) => string;
+  /** The sound of one pad: made, fetched or decoded, or why it cannot be. */
   samplesOf: (id: string) => Promise<Made>;
+  /** The page's one audio context, started inside the press that wants sound. */
+  getContext: () => Promise<AudioContextLike>;
   /** Something on the page is about to sound: whatever else sounds goes quiet. */
   beforeSound: () => void;
   say: (text: string) => void;
-}) {
-  const ids = book.bank;
+  words: {
+    preparing: string;
+    recording: string;
+    phraseKept: (n: number, linked: boolean) => string;
+    padRemoved: string;
+  };
+  /** A phrase that came with a link: offered, never played by itself. */
+  arrived?: { presses: Phrase; ids: string[] } | null;
+  /**
+   * A phrase was kept (or removed): where it goes, if anywhere. Returns whether it could be put in the address,
+   * which is what lets "link" copy it.
+   */
+  onPhrase?: (phrase: { presses: Phrase; ids: string[] } | null) => boolean;
+  /** Copy the address that carries the phrase. */
+  copyLink?: () => void;
+}
+
+/**
+ * Playing pads with the pads themselves and, when the maker turns them on, the number keys: the same rules as
+ * perform on the roll (one at a time or overlap, stop, rec, play, loop), over the page's one audio context.
+ * Nothing is published. A phrase is which pad and when; a pad taken off the bank leaves its phrase saying so
+ * rather than quietly renumbering it. A press on a pad that is not ready yet starts the audio inside the press
+ * itself and plays when it is ready, so no press is ever silent without a reason.
+ */
+export function useBank({
+  ids,
+  titleOf,
+  samplesOf,
+  getContext,
+  beforeSound,
+  say,
+  words,
+  arrived = null,
+  onPhrase,
+  copyLink: copyLinkOption,
+}: BankOptions) {
+  const {
+    preparing: wordsPreparing,
+    recording: wordsRecording,
+    padRemoved: wordsPadRemoved,
+  } = words;
   const [made, setMade] = useState<Record<string, Made | "loading">>({});
+  const [again, setAgain] = useState(0);
   const madeRef = useRef(made);
   useEffect(() => {
     madeRef.current = made;
@@ -84,16 +114,11 @@ export function useSketchBank({
         setMade(madeRef.current);
       });
     }
-  }, [ids, samplesOf]);
+  }, [ids, samplesOf, again]);
 
   const pads: PadItem[] = useMemo(
-    () =>
-      ids.map((id, i) => ({
-        id,
-        dye: (i % 4) as 0 | 1 | 2 | 3,
-        title: book.sketches.find((s) => s.id === id)?.title ?? "",
-      })),
-    [ids, book.sketches],
+    () => ids.map((id, i) => ({ id, dye: (i % 4) as 0 | 1 | 2 | 3, title: titleOf(id) })),
+    [ids, titleOf],
   );
   const playable = ids.map((id) => {
     const m = made[id];
@@ -101,7 +126,7 @@ export function useSketchBank({
   });
   const reasons = ids.map((id) => {
     const m = made[id];
-    if (m === undefined || m === "loading") return copy.sketch.bank.preparing;
+    if (m === undefined || m === "loading") return wordsPreparing;
     return m.ok ? "" : m.why;
   });
 
@@ -137,7 +162,7 @@ export function useSketchBank({
     if (starting.current) return starting.current;
     const started = (async (): Promise<boolean> => {
       try {
-        const context = (await previewer.unlock()) as unknown as AudioContextLike;
+        const context = await getContext();
         const bus = new MixBus(context as unknown as BusContext);
         const graph = new BankGraph(context, bus);
         graph.setPads(
@@ -163,13 +188,15 @@ export function useSketchBank({
     })();
     starting.current = started;
     return started;
-  }, [light, previewer, say]);
+  }, [getContext, light, say]);
 
   const silence = useCallback((): boolean => audio.current?.performer.silence() ?? false, []);
 
   // --- A phrase: which pad and when, for this visit only
   const [recording, setRecording] = useState(false);
-  const [phrase, setPhrase] = useState<{ presses: Phrase; ids: string[] } | null>(null);
+  const [phrase, setPhrase] = useState<{ presses: Phrase; ids: string[] } | null>(arrived);
+  const [invited, setInvited] = useState(arrived !== null);
+  const [linkable, setLinkable] = useState(arrived !== null);
   const [phraseSounding, setPhraseSounding] = useState(false);
   const phraseRef = useRef(phrase);
   useEffect(() => {
@@ -188,13 +215,13 @@ export function useSketchBank({
       if (!a) return false;
       const ok = madeRef.current[idsRef.current[index] ?? ""];
       if (typeof ok !== "object" || !ok.ok) return false;
-      void previewer.unlock().catch(() => undefined);
+      void getContext().catch(() => undefined);
       beforeSound();
       if (!a.performer.press(index)) return false;
       setShown(index);
       return true;
     },
-    [beforeSound, previewer],
+    [beforeSound, getContext],
   );
   const playRef = useRef(playPad);
   useEffect(() => {
@@ -211,9 +238,14 @@ export function useSketchBank({
       say(copy.phrase.empty);
       return;
     }
-    setPhrase({ presses: kept, ids: [...idsRef.current] });
-    say(fill(copy.sketch.bank.phraseKept, { n: kept.length }));
-  }, [recorder, say]);
+    const entry = { presses: kept, ids: [...idsRef.current] };
+    setPhrase(entry);
+    setInvited(false);
+    // a bank with an address puts the phrase in it; one without says it is kept for this visit only
+    const wrote = onPhrase ? onPhrase(entry) : false;
+    setLinkable(wrote);
+    say(words.phraseKept(kept.length, wrote));
+  }, [onPhrase, recorder, say, words]);
 
   const press = useCallback(
     (index: number): void => {
@@ -221,7 +253,7 @@ export function useSketchBank({
       if (id === undefined) return;
       const m = madeRef.current[id];
       if (typeof m !== "object" || !m.ok) {
-        const why = m === undefined || m === "loading" ? copy.sketch.bank.preparing : m.why;
+        const why = m === undefined || m === "loading" ? wordsPreparing : m.why;
         say(fill(copy.perform.unplayable, { n: index + 1, why }));
         return;
       }
@@ -248,7 +280,7 @@ export function useSketchBank({
         sounded();
       });
     },
-    [ensure, finishRecording, playPad, recorder, say],
+    [ensure, finishRecording, playPad, recorder, say, wordsPreparing],
   );
 
   useEffect(() => {
@@ -258,7 +290,7 @@ export function useSketchBank({
         const id = entry?.ids[stored];
         const at = id === undefined ? -1 : idsRef.current.indexOf(id);
         if (at < 0) {
-          say(copy.sketch.bank.padRemoved);
+          say(wordsPadRemoved);
           return;
         }
         playRef.current(at);
@@ -274,7 +306,7 @@ export function useSketchBank({
       limit.current = null;
       recorder.stop();
     };
-  }, [recorder, say]);
+  }, [recorder, say, wordsPadRemoved]);
 
   const stopPhrase = useCallback((): boolean => {
     const was = player.current?.playing ?? false;
@@ -291,12 +323,13 @@ export function useSketchBank({
     stopPhrase();
     recorder.start();
     setRecording(true);
-    say(copy.sketch.bank.recording);
-  }, [finishRecording, recorder, say, stopPhrase]);
+    say(wordsRecording);
+  }, [finishRecording, recorder, say, stopPhrase, wordsRecording]);
 
   const playPhrase = useCallback(async (): Promise<void> => {
     if (!phrase) return;
     finishRecording();
+    setInvited(false);
     if (!(await ensure())) return;
     silence();
     setPhraseSounding(true);
@@ -322,8 +355,10 @@ export function useSketchBank({
       setRecording(false);
     }
     setPhrase(null);
+    setInvited(false);
+    onPhrase?.(null);
     say(copy.phrase.removed);
-  }, [recorder, say, stopPhrase]);
+  }, [onPhrase, recorder, say, stopPhrase]);
 
   const setMode = useCallback((rule: Rule): void => {
     modeRef.current = rule;
@@ -394,23 +429,51 @@ export function useSketchBank({
     () => ({
       has: phrase !== null,
       length: phrase?.presses.length ?? 0,
-      invited: false,
+      invited,
       recording,
       playing: phraseSounding,
       loop,
-      canLink: false,
+      canLink: onPhrase !== undefined,
       record,
       play: playPhrase,
       stop: stopAll,
       setLoop,
       clear,
-      copyLink: () => undefined,
-      dismiss: () => undefined,
+      copyLink: () => {
+        if (!linkable) say(copy.phrase.noLink);
+        else copyLinkOption?.();
+      },
+      dismiss: () => setInvited(false),
     }),
-    [phrase, recording, phraseSounding, loop, record, playPhrase, stopAll, setLoop, clear],
+    [
+      phrase,
+      invited,
+      linkable,
+      onPhrase,
+      copyLinkOption,
+      say,
+      recording,
+      phraseSounding,
+      loop,
+      record,
+      playPhrase,
+      stopAll,
+      setLoop,
+      clear,
+    ],
   );
 
+  /** Ask again for one pad's sound, after it failed. */
+  const retry = useCallback((id: string): void => {
+    const rest = { ...madeRef.current };
+    delete rest[id];
+    madeRef.current = rest;
+    setMade(rest);
+    setAgain((n) => n + 1);
+  }, []);
+
   return {
+    retry,
     pads,
     playable,
     reasons,
@@ -423,4 +486,47 @@ export function useSketchBank({
     stop: stopAll,
     phrase: phraseControls,
   };
+}
+
+/** The sketch bank on the make page: the sketches on the pads, made here, over the page's one context. */
+export function useSketchBank({
+  previewer,
+  book,
+  samplesOf,
+  beforeSound,
+  say,
+}: {
+  previewer: Previewer;
+  book: Book;
+  samplesOf: (id: string) => Promise<Made>;
+  beforeSound: () => void;
+  say: (text: string) => void;
+}) {
+  const titleOf = useCallback(
+    (id: string): string => book.sketches.find((s) => s.id === id)?.title ?? "",
+    [book.sketches],
+  );
+  const getContext = useCallback(
+    async (): Promise<AudioContextLike> =>
+      (await previewer.unlock()) as unknown as AudioContextLike,
+    [previewer],
+  );
+  const words = useMemo(
+    () => ({
+      preparing: copy.sketch.bank.preparing,
+      recording: copy.sketch.bank.recording,
+      phraseKept: (n: number) => fill(copy.sketch.bank.phraseKept, { n }),
+      padRemoved: copy.sketch.bank.padRemoved,
+    }),
+    [],
+  );
+  return useBank({
+    ids: book.bank,
+    titleOf,
+    samplesOf,
+    getContext,
+    beforeSound,
+    say,
+    words,
+  });
 }

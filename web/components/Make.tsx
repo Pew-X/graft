@@ -29,7 +29,7 @@ import { type BankApi, type ChooseApi, type CompareApi, YourSketches } from "./Y
 import { SketchBankPanel } from "./SketchBankPanel.tsx";
 import { SetPublisher } from "./SetPublisher.tsx";
 import { useSketchSet } from "./useSketchSet.ts";
-import { useSketchBank } from "./useSketchBank.ts";
+import { useSketchBank } from "./useBank.ts";
 import { PERFORM_ON } from "../lib/perform/enabled.ts";
 import { useStageDepth } from "./useStageDepth.ts";
 import { announceSketchChange, sketchStorage, useSketchBook } from "./useSketchBook.ts";

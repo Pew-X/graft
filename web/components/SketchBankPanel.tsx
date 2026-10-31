@@ -4,7 +4,7 @@ import { copy, fill } from "../lib/copy.ts";
 import { moveInBank, removeFromBank } from "../lib/sketch/book.ts";
 import { MOST_ON_BANK } from "../lib/sketch/sketch.ts";
 import { PadBank } from "./PadBank.tsx";
-import type { useSketchBank } from "./useSketchBank.ts";
+import type { useSketchBank } from "./useBank.ts";
 import { announceSketchChange, sketchStorage } from "./useSketchBook.ts";
 
 type Bank = ReturnType<typeof useSketchBank>;

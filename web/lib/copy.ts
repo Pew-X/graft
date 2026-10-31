@@ -296,6 +296,34 @@ export const copy = {
     failed: "the flips of this stage could not be read. the service may be waking up.",
     moreFailed: "the next flips could not be read. the ones above are still here.",
     tryAgain: "try again",
+    bank: {
+      open: "play these flips as pads",
+      close: "put the pads away",
+      heading: "the flips of this stage, as pads",
+      honesty:
+        "these are other people's flips of the same stage. their titles and names are shown as typed and are not checked. nothing is mixed into one sound, and nothing is published.",
+      newest: "the newest {n} of {total} are on the pads.",
+      once: "there is one flip of this stage, so there is one pad.",
+      pad: "pad {n}, {title}",
+      preparing: "getting the sound ready",
+      goneHere: "no longer here",
+      held: "held",
+      unreadable: "could not be read",
+      retry: "try again: {title}",
+      keysOff: "number keys: off",
+      keysOn: "number keys: on",
+      keysWhy:
+        "the number keys play the pads only while this is on. escape turns it off. a screen reader keeps the digit keys for itself, so use the pads.",
+      recording: "recording: press the pads. sixteen seconds or sixty-four presses at most.",
+      phraseKeptLinked:
+        "phrase kept: {n} presses. the address of this page carries it, with the flips it was played on.",
+      phraseKept:
+        "phrase kept: {n} presses, for this visit. this page's link cannot carry it (another address part is in use).",
+      padRemoved: "this pad is no longer here, so it does not sound in the phrase.",
+      invite: "a run of pads came with this link, on these flips. no sound with it.",
+      linkCopied: "link copied. it carries the presses and the ids of the flips, and no sound.",
+      linkFailed: "the link could not be copied. the address bar has it.",
+    },
   },
   /** A phrase: the presses made in perform, kept in the page's address. */
   phrase: {

@@ -28,6 +28,7 @@ import { levelAt, liveDye } from "../lib/thread/live.ts";
 import { dyes } from "../lib/theme/tokens.ts";
 import { type Rect } from "../lib/coach/marks.ts";
 import { SAMPLE_RATE } from "../lib/playback/config.ts";
+import type { AudioContextLike } from "../lib/playback/webaudio.ts";
 import { usePerform } from "./usePerform.ts";
 import {
   type Event,
@@ -60,6 +61,7 @@ import { Hint } from "./Hint.tsx";
 import { KeysSheet } from "./KeysSheet.tsx";
 import { PadBank } from "./PadBank.tsx";
 import { useNarrow } from "./useNarrow.ts";
+import type { FlipsAudio } from "./FlipsBank.tsx";
 import { Thread } from "./Thread.tsx";
 import { useHeld } from "./useHeld.ts";
 import { MOST_PADS_BY_KEY } from "../lib/perform/keys.ts";
@@ -533,6 +535,25 @@ export function RollPlayer({
         })
       : undefined;
   const narrow = useNarrow();
+  // what a bank of the stage's flips borrows from the roll: its one audio context, a pause, and the stages it shows
+  const flipsAudio = useMemo<FlipsAudio | undefined>(
+    () =>
+      flipsFrom
+        ? {
+            context: async () => {
+              await ensure();
+              const lazy = audio.current;
+              await lazy?.unlock();
+              if (!lazy?.context) throw new Error("no audio");
+              return lazy.context as unknown as AudioContextLike;
+            },
+            beforeSound: () => later((e) => e.pause()),
+            stageIds: new Set(blocks.map((b) => b.id)),
+            ready: toolsShown(phase) && load === "ready",
+          }
+        : undefined,
+    [flipsFrom, ensure, later, blocks, phase, load],
+  );
   const status =
     notice ||
     (marking && !markCut ? copy.mark.drag : "") ||
@@ -847,6 +868,7 @@ export function RollPlayer({
                 onMark={openMake ? toggleMarking : undefined}
                 marking={marking}
                 flipsFrom={flipsFrom}
+                flipsAudio={flipsAudio}
                 register={register}
                 onFocusBlock={onFocusBlock}
               />
