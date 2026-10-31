@@ -88,7 +88,7 @@ test("the keyboard reaches the pads: Tab, then Enter or Space plays, once each",
 
 test("two fingers play two pads at once, each tracked by its own pointer", async ({ page }) => {
   await home(page);
-  await page.getByRole("button", { name: "layer", exact: true }).click();
+  await page.getByRole("button", { name: "overlap", exact: true }).click();
   await page.evaluate(() => {
     const down = (el: Element, id: number): void => {
       const r = el.getBoundingClientRect();
@@ -148,17 +148,23 @@ test("a sounding pad is lit, goes dark when its sound ends or is stopped, and cu
   await expect(roll(page)).toHaveAttribute("data-perform", "true");
 });
 
-test("cut and layer are a labelled pair, cut first, and layer lets pads sound together", async ({
+test("one at a time and overlap are a labelled pair, each says what it does, and overlap lets pads sound together", async ({
   page,
 }) => {
   await home(page);
-  const group = page.getByRole("group", { name: "a new press" });
-  await expect(group.getByRole("button", { name: "cut" })).toHaveAttribute("aria-pressed", "true");
-  await group.getByRole("button", { name: "layer" }).click();
-  await expect(group.getByRole("button", { name: "layer" })).toHaveAttribute(
+  const group = page.getByRole("group", { name: "when you press another pad" });
+  const says = page.getByTestId("rule-says");
+  await expect(group.getByRole("button", { name: "one at a time" })).toHaveAttribute(
     "aria-pressed",
     "true",
   );
+  await expect(says).toHaveText("a new pad stops the last one.");
+  await group.getByRole("button", { name: "overlap" }).click();
+  await expect(group.getByRole("button", { name: "overlap" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(says).toHaveText("pads sound together, up to six.");
   await page.keyboard.press("Digit1");
   await page.keyboard.press("Digit2");
   await expect(pad(page, 0)).toHaveAttribute("data-sounding", "true");

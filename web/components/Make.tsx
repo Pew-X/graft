@@ -20,6 +20,7 @@ import { describeSpeed } from "../lib/roll/speed.ts";
 import { CutEditor } from "./CutEditor.tsx";
 import { type Features, readFeatures } from "../lib/own/features.ts";
 import { type Basis, DECLARATION_TEXT, sourceBody } from "../lib/own/source.ts";
+import { OwnFlipsPicker } from "./OwnFlipsPicker.tsx";
 import { OwnSound } from "./OwnSound.tsx";
 import { PublishStep } from "./PublishStep.tsx";
 import { KeysSheet } from "./KeysSheet.tsx";
@@ -195,7 +196,14 @@ export function Make({
           onChange={() => setOwn(null)}
         />
       ) : origin === null ? (
-        <SoundPicker curated={curated} flips={flips} onChoose={setPicked}>
+        <SoundPicker
+          curated={curated}
+          flips={flips}
+          onChoose={setPicked}
+          after={
+            <OwnFlipsPicker apiUrl={apiUrl} onChoose={(id) => router.push(`/make?from=${id}`)} />
+          }
+        >
           <OwnSound
             uploads={features.status === "ready" ? features.value.uploads : null}
             onSound={(samples, needsTrim) => {
@@ -257,6 +265,7 @@ export function Make({
         </div>
       )}
       <p className="local">{copy.make.local}</p>
+      <p className="local">{copy.make.one}</p>
     </div>
   );
 }

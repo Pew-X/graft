@@ -94,11 +94,12 @@ export const PadBank = memo(function PadBank({
       </div>
       <div className="bank-side">
         <div role="group" aria-label={copy.perform.rule} className="rule">
-          {(["cut", "layer"] as const).map((rule) => (
+          {(["single", "overlap"] as const).map((rule) => (
             <button
               key={rule}
               type="button"
               aria-pressed={mode === rule}
+              title={copy.perform[`${rule}Says`]}
               onClick={() => onMode(rule)}
             >
               {copy.perform[rule]}
@@ -109,11 +110,15 @@ export const PadBank = memo(function PadBank({
           {copy.perform.stop}
         </button>
       </div>
+      <p className="bank-help bank-help-rule" data-testid="rule-says">
+        {copy.perform[`${mode}Says`]}
+      </p>
       <div className="bank-phrase" role="group" aria-label={copy.phrase.group}>
         <button
           type="button"
           className="rec"
           aria-pressed={phrase.recording}
+          title={copy.phrase.recTitle}
           onClick={phrase.record}
         >
           <span className="rec-dot" aria-hidden="true" />
@@ -125,6 +130,7 @@ export const PadBank = memo(function PadBank({
               type="button"
               aria-pressed={phrase.playing}
               aria-label={phrase.playing ? undefined : copy.phrase.play}
+              title={phrase.playing ? undefined : copy.phrase.playTitle}
               disabled={phrase.recording}
               onClick={phrase.playing ? phrase.stop : () => void phrase.play()}
             >
@@ -144,6 +150,7 @@ export const PadBank = memo(function PadBank({
             <button
               type="button"
               aria-pressed={phrase.loop}
+              title={copy.phrase.loopTitle}
               onClick={() => phrase.setLoop(!phrase.loop)}
             >
               {copy.phrase.loop}
@@ -151,6 +158,7 @@ export const PadBank = memo(function PadBank({
             <button
               type="button"
               aria-label={copy.phrase.copy}
+              title={copy.phrase.copyTitle}
               disabled={phrase.recording}
               onClick={phrase.copyLink}
             >
@@ -161,12 +169,22 @@ export const PadBank = memo(function PadBank({
                 {copy.phrase.copyShort}
               </span>
             </button>
-            <button type="button" onClick={phrase.clear}>
+            <button type="button" title={copy.phrase.clearTitle} onClick={phrase.clear}>
               {copy.phrase.clear}
             </button>
           </>
         ) : null}
+        {phrase.has || phrase.recording ? null : (
+          <p className="bank-help bank-help-how" data-testid="phrase-says">
+            {copy.phrase.howTo}
+          </p>
+        )}
       </div>
+      {phrase.has ? (
+        <p className="bank-help bank-help-after" data-testid="phrase-says">
+          {copy.phrase.after}
+        </p>
+      ) : null}
     </div>
   );
 });

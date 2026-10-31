@@ -4,9 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { copy, fill } from "../lib/copy.ts";
 import { ID_SHAPE, LISTED_MAX, flipIds, stateOf } from "../lib/flips/list.ts";
-import { useAsync } from "../lib/make/use-async.ts";
-import { readPublication } from "../lib/manage/read.ts";
 import { forgetKey, keptKeys } from "../lib/publish/keep.ts";
+import { usePublicationRead } from "./usePublicationRead.ts";
 
 function storage(): Storage | null {
   try {
@@ -15,10 +14,6 @@ function storage(): Storage | null {
     return null;
   }
 }
-
-/** How long a flip waits before it asks the service again, and how many times: a service that was asleep needs about a minute. */
-const ASK_AGAIN_MS = 6_000;
-const ASK_AGAIN_TIMES = 20;
 
 /** One flip: what it is called and how it stands, read from the service, with the ways to act on it. */
 function Row({
@@ -34,20 +29,13 @@ function Row({
   onFailing: (id: string, failing: boolean) => void;
 }) {
   // a service that did not answer is often one that was asleep (the site has already asked it to wake):
-  // ask again by itself for a few minutes
-  const [again, setAgain] = useState(0);
-  const read = useAsync(`flip:${id}:${again}`, (signal) => readPublication(apiUrl, id, signal));
+  // the read asks again by itself for a few minutes
+  const { read, failed } = usePublicationRead(apiUrl, id);
   const [asking, setAsking] = useState(false);
-  const failed = read.status === "failed";
   useEffect(() => {
     onFailing(id, failed);
     return () => onFailing(id, false);
   }, [id, failed, onFailing]);
-  useEffect(() => {
-    if (!failed || again >= ASK_AGAIN_TIMES) return undefined;
-    const timer = window.setTimeout(() => setAgain((n) => n + 1), ASK_AGAIN_MS);
-    return () => window.clearTimeout(timer);
-  }, [failed, again]);
 
   const f = copy.flips;
   const title =

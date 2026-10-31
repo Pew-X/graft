@@ -4,6 +4,14 @@
  * with `fill`. A test walks this object, so a word the project does not use cannot get in unnoticed.
  */
 
+/** The pad rule is told in one place: the pads, the keys sheet and the about page all read these. */
+const PAD_RULE = {
+  single: "one at a time",
+  overlap: "overlap",
+  singleSays: "a new pad stops the last one.",
+  overlapSays: "pads sound together, up to six.",
+} as const;
+
 export const copy = {
   site: {
     name: "graft",
@@ -60,10 +68,9 @@ export const copy = {
       unavailable: "not read",
       silent: "no sound",
     },
-    /** The rule for a new press while something sounds. */
-    rule: "a new press",
-    cut: "cut",
-    layer: "layer",
+    /** The rule for a press on another pad while something sounds: two names, each with what it does. */
+    rule: "when you press another pad",
+    ...PAD_RULE,
     stop: "stop",
   },
   /** A phrase: the presses made in perform, kept in the page's address. */
@@ -77,6 +84,16 @@ export const copy = {
     copyShort: "link",
     loop: "loop",
     clear: "clear",
+    /** Read when a button is hovered or focused: what each of the five does, in plain words. */
+    recTitle: "keep the pads you press, up to sixteen seconds",
+    playTitle: "play the pads you kept, once",
+    loopTitle: "repeat your phrase until you stop it",
+    copyTitle: "copy a link to this phrase: it holds the presses and no sound",
+    clearTitle: "remove this phrase",
+    /** Shown until there is a phrase: the five steps, in order. */
+    howTo: "press rec, tap pads, press stop rec, then play.",
+    /** Shown once there is one: the words that need a sentence. */
+    after: "play runs it once. loop repeats it until you stop it.",
     copy: "copy link",
     recording: "recording: press the pads. sixteen seconds or sixty-four presses at most.",
     empty: "nothing was pressed, so there is no phrase.",
@@ -269,6 +286,11 @@ export const copy = {
     done: {
       heading: "published",
       link: "the link to your flip",
+      /** The main button: the next stage is made from this one, in this tab. */
+      next: "flip this next",
+      /** Shown when the key is neither kept in this browser nor copied and "flip this next" is pressed. */
+      leaveWarn:
+        "the key for this flip is not kept in this browser and not copied. it is shown once. press again to leave anyway.",
       open: "open it in a new tab",
       copy: "copy the link",
       copied: "copied.",
@@ -408,9 +430,9 @@ export const copy = {
     /** The keys and the pads: what perform is, and the page that lists every key. */
     perform: {
       heading: "playing it",
-      body: "turn on perform and the number keys play the stages of a chain: 1 to 9, 0, minus and equal are stages 1 to 12, by where the key is, so any keyboard works. every stage is also a pad you can touch. a press plays that stage whole, and nothing is cut or changed.",
+      body: `turn on perform and the number keys play the stages of a chain: 1 to 9, 0, minus and equal are stages 1 to 12, by where the key is, so any keyboard works. every stage is also a pad you can touch. a press plays that stage whole, and nothing is cut or changed. two rules decide what a press on another pad does: ${PAD_RULE.single} (${PAD_RULE.singleSays.replace(/\.$/, "")}) and ${PAD_RULE.overlap} (${PAD_RULE.overlapSays.replace(/\.$/, "")}).`,
       phrase:
-        "rec keeps your presses as a phrase: which pad, and when, up to sixteen seconds. play runs it again, once or round and round. the phrase lives in the address of the page, so copying the link sends it. it holds no sound and no name; a link you open only offers it, and it plays when you press play.",
+        "rec keeps your presses as a phrase: which pad, and when, up to sixteen seconds. play runs it again, once, and loop repeats it until you stop it. the phrase lives in the address of the page, so copying the link sends it. it holds no sound and no name; a link you open only offers it, and it plays when you press play.",
       keys: "the keys button lists every keyboard control of the page you are on. a screen reader keeps the digit keys for itself, so the pads are plain buttons.",
     },
     /** Own sounds are switched on or off by the service, so the page says it with a condition. */
@@ -420,10 +442,10 @@ export const copy = {
     },
     isNot: {
       heading: "what it is not",
-      body: "not a sampler: perform plays whole stages, with no slicing, no grid, no tempo, no effects and no export of sound. an independent experiment, not affiliated with or endorsed by any product named.",
+      body: "not a sampler: every pad plays one cut and one speed of one parent, with its lineage kept. no sound is ever mixed into another, and there is no export of sound, no sequencer and no effects. an independent experiment, not affiliated with or endorsed by any product named.",
       /** The same, for a build that holds perform back. */
       bodyWithoutPerform:
-        "not a sampler: one cut and one speed, with no pads, layers, effects or export. an independent experiment, not affiliated with or endorsed by any product named.",
+        "not a sampler: a flip is one cut and one speed of one parent. no sound is ever mixed into another, and there is no export of sound, no sequencer and no effects. an independent experiment, not affiliated with or endorsed by any product named.",
     },
     states: {
       heading: "declared, computed, unknown",
@@ -524,6 +546,8 @@ export const copy = {
       publish: "share",
     },
     local: "nothing leaves this device until you publish.",
+    /** What a flip is, so the page cannot be read as a sampler. */
+    one: "a flip is one cut and one speed of one sound. nothing is mixed into another.",
     /** One line at a time above the editor, each gone when the visitor does the thing it says. */
     guide: {
       pick: "pick any sound. you cut a piece of it next.",
@@ -540,6 +564,8 @@ export const copy = {
       heading: "pick a sound to start from",
       curated: "sounds made for graft",
       flips: "flips from the roll",
+      own: "your flips",
+      ownOlder: "{n} older flips are also kept in this browser.",
       by: "by {author}",
       choose: "flip this sound",
       change: "pick another sound",
@@ -706,8 +732,8 @@ export const copy = {
             "every stage is also a pad: touch it, or tab to it and press enter or space. a chain longer than twelve has pads that no key reaches.",
           ],
           [
-            "cut, layer",
-            "cut: a new press ends what sounds. layer: pads sound together, six at most.",
+            `${PAD_RULE.single}, ${PAD_RULE.overlap}`,
+            `${PAD_RULE.single}: ${PAD_RULE.singleSays} ${PAD_RULE.overlap}: ${PAD_RULE.overlapSays}`,
           ],
           [
             "rec, play phrase, loop",

@@ -29,7 +29,9 @@ export default async function MakePage({
   return (
     <>
       <main>
+        {/* keyed on the stage named in the link: a soft move to another stage starts the editor afresh */}
         <Make
+          key={one(query["from"]) ?? "none"}
           curated={curated}
           flips={flips}
           from={one(query["from"])}

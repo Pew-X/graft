@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { copy, fill } from "../lib/copy.ts";
 import {
@@ -109,6 +110,8 @@ export function PublishStep({
   children?: ReactNode;
 }) {
   const uid = useId();
+  const router = useRouter();
+  const [warned, setWarned] = useState(false);
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
   const [phase, setPhase] = useState<Phase>({ name: "form" });
@@ -185,7 +188,24 @@ export function PublishStep({
           </a>
         </p>
         <div className="actions">
-          {/* a new tab, so this screen (the ticket below is shown once) is still here when they come back */}
+          {/* the next stage is made from this one, in this tab. The ticket below is shown once: when it is
+              neither kept in this browser nor copied, the first press warns and the second leaves. */}
+          <button
+            type="button"
+            className="primary"
+            data-testid="flip-next"
+            onClick={() => {
+              const safe = outcome.manageKey === null || kept === "yes" || keyCopied === "yes";
+              if (!safe && !warned) {
+                setWarned(true);
+                return;
+              }
+              router.push(`/make?from=${outcome.id}`);
+            }}
+          >
+            {copy.publish.done.next}
+          </button>
+          {/* a new tab, so this screen is still here when they come back */}
           <a className="pill" href={`/p/${outcome.id}`} target="_blank" rel="noopener">
             {copy.publish.done.open}
           </a>
@@ -215,6 +235,11 @@ export function PublishStep({
                 : ""}
           </span>
         </div>
+        {warned ? (
+          <p className="notice" role="alert">
+            {copy.publish.done.leaveWarn}
+          </p>
+        ) : null}
         {outcome.previewMatches === false ? (
           <p className="notice" role="status">
             {copy.publish.done.mismatch}

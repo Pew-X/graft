@@ -69,7 +69,7 @@ export function usePerform({
   const [on, setOn] = useState(false);
   /** Whether any performed voice sounds now (a change of this re-renders; a press that keeps it does not). */
   const [sounding, setSounding] = useState(false);
-  const [mode, setModeState] = useState<Rule>("cut");
+  const [mode, setModeState] = useState<Rule>("single");
   const performer = useRef<Performer | null>(null);
   const made = useRef<PerformAudio | null>(null);
   const onRef = useRef(false);
@@ -79,7 +79,7 @@ export function usePerform({
   const ready = useRef<Promise<boolean> | null>(null);
   /** The audio session type before perform set it to playback, to put back on leaving. */
   const savedSession = useRef<string | null>(null);
-  const modeRef = useRef<Rule>("cut");
+  const modeRef = useRef<Rule>("single");
   const [marks, setMarks] = useState<Record<number, string> | null>(null);
   const latest = useRef({ playable, reasons, lengths, stages });
   useEffect(() => {

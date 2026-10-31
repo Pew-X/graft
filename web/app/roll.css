@@ -1023,7 +1023,7 @@ button:disabled {
   justify-content: center;
   gap: 6px;
 }
-/* cut | layer is one pill with two halves, and stop sits under it */
+/* one at a time | overlap is one pill with two halves, and stop sits under it */
 .bank-side .rule {
   display: flex;
   border: 1px solid rgb(236 230 216 / 0.4);
@@ -1031,7 +1031,8 @@ button:disabled {
   overflow: hidden;
 }
 .bank-side .rule button {
-  flex: 1;
+  flex: 1 1 auto;
+  white-space: nowrap;
   border: 0;
   border-radius: 0;
 }
@@ -1052,6 +1053,36 @@ button:disabled {
 .bank-side button[aria-pressed="true"] {
   background: #ece6d8;
   color: #0a0b0a;
+}
+
+/* one line of plain words under the rule and under the phrase buttons: what they do */
+.bank-help {
+  flex-basis: 100%;
+  margin: 0;
+  text-align: center;
+  color: rgb(236 230 216 / 0.78);
+  font:
+    400 11px/1.4 var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.04em;
+}
+.bank-help:empty {
+  display: none;
+}
+/* how-to sits beside rec while there is no phrase (the row has the room), so it adds no height */
+.bank-phrase .bank-help-how {
+  flex: 1 1 0;
+  text-align: left;
+}
+/* a narrow screen has no room for a line of its own under each group: the rule's sentence moves into the
+   status pill under the bank (where the keys hint, useless without a keyboard, would be), and the
+   line about play and loop goes; the buttons keep their titles */
+@media (max-width: 480px) {
+  .bank-help-rule,
+  .bank-help-after {
+    display: none;
+  }
 }
 
 /* a phrase: rec, play, loop, copy link and clear sit on a second row of the panel */

@@ -59,6 +59,7 @@ import { Footer } from "./Footer.tsx";
 import { Hint } from "./Hint.tsx";
 import { KeysSheet } from "./KeysSheet.tsx";
 import { PadBank } from "./PadBank.tsx";
+import { useNarrow } from "./useNarrow.ts";
 import { Thread } from "./Thread.tsx";
 import { useHeld } from "./useHeld.ts";
 import { MOST_PADS_BY_KEY } from "../lib/perform/keys.ts";
@@ -528,9 +529,11 @@ export function RollPlayer({
           n: markSeconds(mark, (lengths[mark.stage] ?? 0) * 48_000).toFixed(2),
         })
       : undefined;
+  const narrow = useNarrow();
   const status =
     notice ||
     (marking && !markCut ? copy.mark.drag : "") ||
+    (performing && narrow ? copy.perform[`${perform.mode}Says`] : "") ||
     (performing
       ? fill(
           stages === 1
