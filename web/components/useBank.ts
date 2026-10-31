@@ -64,7 +64,7 @@ export interface BankOptions {
 
 /**
  * Playing pads with the pads themselves and, when the maker turns them on, the number keys: the same rules as
- * perform on the roll (one at a time or overlap, stop, rec, play, loop), over the page's one audio context.
+ * perform on the roll (cut or overlap, stop, rec, play, loop), over the page's one audio context.
  * Nothing is published. A phrase is which pad and when; a pad taken off the bank leaves its phrase saying so
  * rather than quietly renumbering it. A press on a pad that is not ready yet starts the audio inside the press
  * itself and plays when it is ready, so no press is ever silent without a reason.

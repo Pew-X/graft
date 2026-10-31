@@ -148,23 +148,23 @@ test("a sounding pad is lit, goes dark when its sound ends or is stopped, and cu
   await expect(roll(page)).toHaveAttribute("data-perform", "true");
 });
 
-test("one at a time and overlap are a labelled pair, each says what it does, and overlap lets pads sound together", async ({
+test("cut and overlap are a labelled pair, each says what it does, and overlap lets pads sound together", async ({
   page,
 }) => {
   await home(page);
   const group = page.getByRole("group", { name: "when you press another pad" });
   const says = page.getByTestId("rule-says");
-  await expect(group.getByRole("button", { name: "one at a time" })).toHaveAttribute(
+  await expect(group.getByRole("button", { name: "cut", exact: true })).toHaveAttribute(
     "aria-pressed",
     "true",
   );
-  await expect(says).toHaveText("a new pad stops the last one.");
+  await expect(says).toHaveText("a new pad cuts off the one still sounding.");
   await group.getByRole("button", { name: "overlap" }).click();
   await expect(group.getByRole("button", { name: "overlap" })).toHaveAttribute(
     "aria-pressed",
     "true",
   );
-  await expect(says).toHaveText("pads sound together, up to six.");
+  await expect(says).toHaveText("pads keep sounding together, up to six.");
   await page.keyboard.press("Digit1");
   await page.keyboard.press("Digit2");
   await expect(pad(page, 0)).toHaveAttribute("data-sounding", "true");

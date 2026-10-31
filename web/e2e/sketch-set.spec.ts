@@ -208,7 +208,7 @@ test("a limit stops the set at that sketch: how many were published, how many wa
   const summary = page.getByTestId("set-summary");
   await expect(summary).toContainText("2 published, 1 waiting.");
   await expect(summary).toContainText(
-    "this stage has been flipped as often as is allowed this hour. try again in about 20 minutes.",
+    "this stage has been flipped as often as is allowed this hour. nothing you made is lost, so please try again in about 20 minutes.",
   );
   await expect(summary).toContainText("nothing is lost");
   expect(seen).toHaveLength(3);
@@ -224,7 +224,10 @@ test("each limit reads in its own words: per address, per stage, and everyone to
   page,
 }) => {
   const words: Array<[string, RegExp]> = [
-    ["rate-limited", /you have published a lot in a short time\. try again in about 5 minutes/],
+    [
+      "rate-limited",
+      /you have published a lot in a short time\. nothing you made is lost, so please try again in about 5 minutes/,
+    ],
     ["fork-cap", /this stage has been flipped as often as is allowed this hour/],
     ["publish-cap", /everyone together has published as much as is allowed for now/],
   ];

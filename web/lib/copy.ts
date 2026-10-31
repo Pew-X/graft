@@ -6,10 +6,10 @@
 
 /** The pad rule is told in one place: the pads, the keys sheet and the about page all read these. */
 const PAD_RULE = {
-  single: "one at a time",
+  single: "cut",
   overlap: "overlap",
-  singleSays: "a new pad stops the last one.",
-  overlapSays: "pads sound together, up to six.",
+  singleSays: "a new pad cuts off the one still sounding.",
+  overlapSays: "pads keep sounding together, up to six.",
 } as const;
 
 export const copy = {
@@ -99,10 +99,10 @@ export const copy = {
         "this browser would not keep it. nothing was kept, and the editor is as you left it.",
       newer:
         "this browser holds sketches from a newer version of graft. they are left as they are, and nothing new can be kept here.",
-      limit: "this browser keeps at most {max} sketches, and none was dropped to make room.",
+      limit: "this browser keeps at most {max} sketches. discard one to keep another.",
       invalid: "this try could not be kept.",
     },
-    offerDiscard: "discard the oldest one nothing goes on from, {title}?",
+    offerDiscard: "make room by discarding {title}, the oldest sketch nothing goes on from?",
     open: "open",
     rename: "rename",
     renameSave: "save the name",
@@ -175,7 +175,7 @@ export const copy = {
       pad: "pad {n}, {title}",
       recording: "recording: press the pads. sixteen seconds or sixty-four presses at most.",
       phraseKept:
-        "phrase kept: {n} presses, for this visit only. it is not put in the address, because a sketch has no public identity.",
+        "phrase kept: {n} presses, for this visit only. sketches are private, so the link cannot carry it.",
       padRemoved: "this pad was removed from the bank, so it does not sound in the phrase.",
       phraseLocal:
         "a phrase on this bank is kept for this visit only and cannot be sent as a link.",
@@ -184,7 +184,7 @@ export const copy = {
       heading: "publish these",
       choose: "choose for publish these",
       intro:
-        "tick the sketches worth keeping, then press publish these. they are published in order, one after another, and every link and every key ends on one screen.",
+        "tick the sketches to publish, then press publish these. they go out in order, and the links and keys end up on one screen.",
       plan: "{n} will be published, in this order:",
       pulledIn:
         "also published, because a sketch you chose goes on from them and they are not published yet: {titles}.",
@@ -211,7 +211,7 @@ export const copy = {
       stoppedBecause: {
         gaveUp: "the service did not answer: {why}. nothing was lost; press continue to try again.",
         mismatch:
-          "the set stopped here: the last flip came out differently on the service than it did here, so what goes on from it would be made from a sound the service does not hold.",
+          "stopped here. the service made the last flip a little differently from this page, so anything built on it would not match. the rest was not published.",
         render: "this sketch could not be made here: {why}",
         cancelled: "stopped. press continue to go on.",
       },
@@ -305,7 +305,7 @@ export const copy = {
       close: "put the pads away",
       heading: "the flips of this stage, as pads",
       honesty:
-        "these are other people's flips of the same stage. their titles and names are shown as typed and are not checked. nothing is mixed into one sound, and nothing is published.",
+        "these are other people's flips of this stage. titles and names are shown as typed and are not checked. nothing here publishes anything.",
       newest: "the newest {n} of {total} are on the pads.",
       once: "there is one flip of this stage, so there is one pad.",
       pad: "pad {n}, {title}",
@@ -500,10 +500,12 @@ export const copy = {
         "publishing is switched off for now. your flip is still here: you can keep making and try again later.",
       storageFull:
         "graft has reached the storage it keeps for sounds, so nothing new can be published for now. try again later.",
-      rateLimited: "you have published a lot in a short time. try again {when}.",
+      rateLimited:
+        "you have published a lot in a short time. nothing you made is lost, so please try again {when}.",
       publishCap:
-        "everyone together has published as much as is allowed for now. try again {when}.",
-      forkCap: "this stage has been flipped as often as is allowed this hour. try again {when}.",
+        "everyone together has published as much as is allowed for now. nothing you made is lost, so please try again {when}.",
+      forkCap:
+        "this stage has been flipped as often as is allowed this hour. nothing you made is lost, so please try again {when}.",
       forkClosed: "the maker of this stage has closed it to new flips.",
       depthCap: "this chain is as long as chains can be, so it cannot hold another stage.",
       parentHeld:
@@ -696,12 +698,12 @@ export const copy = {
       heading: "your own sound",
       body: "when own sounds are switched on, the make page can start from your own recording or an audio file. the microphone asks your browser for permission first. the sound stays on your device until you publish it, and what is published is the sound as your browser read it. publish only sounds you made or may share: graft cannot check that for you.",
     },
-    isNot: {
-      heading: "what it is not",
-      body: "not a sampler: every pad plays one cut and one speed of one parent, with its lineage kept. no sound is ever mixed into another, and there is no export of sound, no sequencer and no effects. an independent experiment, not affiliated with or endorsed by any product named.",
+    whatItIs: {
+      heading: "what a flip is",
+      body: "a flip is one cut and one speed of one parent sound, and every pad plays exactly that, with its lineage kept. an independent experiment, not affiliated with or endorsed by any product named.",
       /** The same, for a build that holds perform back. */
       bodyWithoutPerform:
-        "not a sampler: a flip is one cut and one speed of one parent. no sound is ever mixed into another, and there is no export of sound, no sequencer and no effects. an independent experiment, not affiliated with or endorsed by any product named.",
+        "a flip is one cut and one speed of one parent sound, with its lineage kept. an independent experiment, not affiliated with or endorsed by any product named.",
     },
     states: {
       heading: "declared, computed, unknown",
@@ -803,8 +805,8 @@ export const copy = {
       publish: "share",
     },
     local: "nothing leaves this device until you publish.",
-    /** What a flip is, so the page cannot be read as a sampler. */
-    one: "a flip is one cut and one speed of one sound. nothing is mixed into another.",
+    /** What a flip is, in one line, above the editor. */
+    one: "a flip is one cut and one speed of one sound.",
     /** One line at a time above the editor, each gone when the visitor does the thing it says. */
     guide: {
       pick: "pick a sound. you cut a piece of it next.",

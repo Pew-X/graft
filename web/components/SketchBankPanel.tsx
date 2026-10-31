@@ -11,7 +11,7 @@ type Bank = ReturnType<typeof useSketchBank>;
 
 /**
  * The sketch bank on the make page: up to twelve sketches on pads, played with the touch of a pad or, when
- * turned on, the number keys, with the roll's rules (one at a time or overlap, stop, rec, play, loop). Each
+ * turned on, the number keys, with the roll's rules (cut or overlap, stop, rec, play, loop). Each
  * pad is a real button; the order is changed with buttons too (move earlier, move later), so the bank can
  * be arranged from the keyboard. A pad that cannot play says why on itself.
  */

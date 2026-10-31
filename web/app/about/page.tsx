@@ -67,8 +67,8 @@ export default function About() {
           <p>{a.own.body}</p>
         </section>
         <section>
-          <h2 className="kicker">{a.isNot.heading}</h2>
-          <p>{PERFORM_ON ? a.isNot.body : a.isNot.bodyWithoutPerform}</p>
+          <h2 className="kicker">{a.whatItIs.heading}</h2>
+          <p>{PERFORM_ON ? a.whatItIs.body : a.whatItIs.bodyWithoutPerform}</p>
         </section>
         <section>
           <h2 className="kicker">{a.states.heading}</h2>

@@ -135,7 +135,7 @@ test("a digit typed in a field is typed, never played", async ({ page }) => {
   expect(await started(page)).toEqual([]);
 });
 
-test("one at a time stops the last pad; overlap lets pads sound together", async ({ page }) => {
+test("cut stops the last pad; overlap lets pads sound together", async ({ page }) => {
   await seed(page);
   await page.goto("/make");
   await putOn(page, ["try 1", "try 3"]);

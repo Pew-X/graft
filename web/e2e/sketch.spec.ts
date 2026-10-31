@@ -247,7 +247,9 @@ test("the limit refuses the forty-first, offers the oldest unused one for discar
   await ready(page);
   await keepOne(page);
   await expect(page.getByText(/keeps at most 40 sketches/)).toBeVisible();
-  await expect(page.getByText("discard the oldest one nothing goes on from, try 0?")).toBeVisible();
+  await expect(
+    page.getByText("make room by discarding try 0, the oldest sketch nothing goes on from?"),
+  ).toBeVisible();
   expect((await stored(page))?.sketches).toHaveLength(40);
   await page.getByRole("button", { name: "yes, discard" }).last().click();
   await keepOne(page);

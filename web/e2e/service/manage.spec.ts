@@ -269,7 +269,7 @@ test("the about page says what graft is and is not, lists the sounds, and the fo
 }) => {
   await page.goto("/about");
   await expect(page.getByRole("heading", { name: "what graft is" })).toBeVisible();
-  await expect(page.getByText("not a sampler")).toBeVisible();
+  await expect(page.getByText("a flip is one cut and one speed")).toBeVisible();
   await expect(page.getByText("no ip address in its own records")).toBeVisible();
   await expect(page.getByText("cannot be recalled")).toBeVisible();
   await expect(page.locator("main li").filter({ hasText: "dm9 chord" })).toBeVisible();

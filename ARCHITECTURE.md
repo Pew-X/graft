@@ -539,7 +539,7 @@ The locked direction, "the label + the beam" (vault: `decisions/T11-visual-gramm
 
 ## The make flow
 
-Written by ticket 28. `/make` lets a maker pick a sound, drag the two ends of a cut on its waveform, turn one speed control and hear the result as the control moves. It is a flip tool, not a sampler: one cut, one ratio, one parent, and no sound is mixed into another.
+Written by ticket 28. `/make` lets a maker pick a sound, drag the two ends of a cut on its waveform, turn one speed control and hear the result as the control moves. A flip is one cut, one ratio and one parent, and no sound is mixed into another.
 
 **One artefact.** The browser instantiates the same pinned `.wasm` the service runs (`web/public/renderer/v1.wasm`, with an empty import object) and renders the cut in the page, on the exact bytes that would be submitted. A script test fails if that file is not the pinned artefact of the current renderer version, so it cannot drift from `fixtures/renderer/PINS`. The site's policy allows `'wasm-unsafe-eval'` for it, which permits compiling WebAssembly and nothing else (a test pins that production still refuses `'unsafe-eval'`).
 
