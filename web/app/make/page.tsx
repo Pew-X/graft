@@ -37,6 +37,7 @@ export default async function MakePage({
           from={one(query["from"])}
           start={{ cut: one(query["cut"]), speed: one(query["speed"]) }}
           apiUrl={apiUrls().browser}
+          chainIds={(chain as Shipped).stages.map((s) => s.id)}
         />
       </main>
       <Footer />

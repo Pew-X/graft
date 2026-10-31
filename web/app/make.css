@@ -1521,3 +1521,81 @@
     width: auto;
   }
 }
+
+/* a sketch in the strip: its hand-drawn trace beside what it is, in computed facts */
+.sketch-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.sketch-trace {
+  flex: none;
+  width: 72px;
+}
+.sketch-trace .trace {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 300 / 84;
+}
+.sketch-text {
+  min-width: 0;
+  flex: 1;
+}
+.sketch-marks {
+  display: inline-flex;
+  gap: 0.35rem;
+}
+.sketch-marks .mark {
+  min-width: 44px;
+  padding: 0;
+  justify-content: center;
+}
+.sketch-marks .mark[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--bg);
+}
+.compare {
+  margin: 0.5rem 0 1rem;
+}
+/* the sketch bank */
+.sketch-bank-panel {
+  margin: 1.5rem 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--hair);
+}
+.sketch-bank-panel .hint {
+  overflow-wrap: anywhere;
+  font:
+    400 12px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+  color: var(--muted);
+}
+.sketch-bank {
+  display: flex;
+  justify-content: center;
+  margin: 0.75rem 0;
+}
+.bank-order {
+  list-style: none;
+  margin: 0.75rem 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.bank-order li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.bank-n {
+  min-width: 1.5rem;
+  font-weight: 700;
+}
+.bank-title {
+  flex: 1 1 10rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

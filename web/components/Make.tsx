@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createApi, fetchChain } from "../lib/api/chain.ts";
 import { copy, fill } from "../lib/copy.ts";
 import { checkFlip, renderFlip } from "../lib/make/flip.ts";
@@ -25,13 +25,17 @@ import { type Basis, DECLARATION_TEXT, sourceBody } from "../lib/own/source.ts";
 import { KeepSketch } from "./KeepSketch.tsx";
 import { OwnFlipsPicker } from "./OwnFlipsPicker.tsx";
 import { MoveSketches } from "./MoveSketches.tsx";
-import { YourSketches } from "./YourSketches.tsx";
+import { type CompareApi, YourSketches } from "./YourSketches.tsx";
+import { useStageDepth } from "./useStageDepth.ts";
 import { announceSketchChange, sketchStorage, useSketchBook } from "./useSketchBook.ts";
 import { usePublicationRead } from "./usePublicationRead.ts";
 import { markPublished } from "../lib/sketch/book.ts";
 import { type Sketch } from "../lib/sketch/sketch.ts";
 import { whyNotPublishable } from "../lib/sketch/parent-state.ts";
-import { valueOf } from "../lib/make/editing.ts";
+import { pathKey, pathOf, publishedParent } from "../lib/sketch/path.ts";
+import { remaining } from "../lib/sketch/depth.ts";
+import { PathCache } from "../lib/sketch/render-path.ts";
+import { editingFor, valueOf } from "../lib/make/editing.ts";
 import { OwnSound } from "./OwnSound.tsx";
 import { PublishStep } from "./PublishStep.tsx";
 import { KeysSheet } from "./KeysSheet.tsx";
@@ -41,7 +45,11 @@ import { SoundPicker } from "./SoundPicker.tsx";
 import { Steps } from "./Steps.tsx";
 
 /** Where the audio of the sound being flipped comes from. */
-type Origin = { kind: "shipped"; sound: Sound } | { kind: "live"; id: string };
+type Origin =
+  | { kind: "shipped"; sound: Sound }
+  | { kind: "live"; id: string }
+  /** The output of a sketch: the sound a sketch that goes on from it is cut from. */
+  | { kind: "sketch"; parent: Sketch };
 
 // One renderer for the page: fetched once and instantiated once.
 const wait = (ms: number, signal: AbortSignal) =>
@@ -60,16 +68,51 @@ export function Make({
   from,
   start,
   apiUrl,
+  chainIds,
 }: {
   curated: readonly Sound[];
   flips: readonly Sound[];
   from: string | null;
   start: Start;
   apiUrl: string;
+  /** The ids of the chain that ships with the site, source first: how deep a shipped stage is needs no read. */
+  chainIds: readonly string[];
 }) {
   const router = useRouter();
+  const book = useSketchBook();
+  // one audio context for the page: the editor's loop, comparing two sketches and (later) the bank share it
+  const [previewer] = useState(
+    () =>
+      new Previewer(
+        () =>
+          (window.AudioContext ??
+            (window as unknown as { webkitAudioContext?: typeof AudioContext })
+              .webkitAudioContext) as
+            (new (options?: { sampleRate?: number }) => never) | undefined,
+      ),
+  );
+  useEffect(() => {
+    const stopWhenHidden = (): void => {
+      if (document.hidden) previewer.stop();
+    };
+    document.addEventListener("visibilitychange", stopWhenHidden);
+    return () => {
+      document.removeEventListener("visibilitychange", stopWhenHidden);
+      previewer.close();
+    };
+  }, [previewer]);
+  const cache = useRef(new PathCache());
+  const roots = useRef(new Map<string, Promise<Int16Array>>());
   // a sketch opened from the list: the editor starts from its cut and speed, on its parent
   const [opened, setOpened] = useState<Sketch | null>(null);
+  // a sketch to go on from: the editor starts on that sketch's own output
+  const [goingOn, setGoingOn] = useState<Sketch | null>(null);
+  const sketchParent: Sketch | null =
+    goingOn !== null
+      ? (book.sketches.find((s) => s.id === goingOn.id) ?? goingOn)
+      : opened?.parent.kind === "sketch"
+        ? (book.sketches.find((s) => s.id === (opened.parent as { id: string }).id) ?? null)
+        : null;
   const targetId = opened?.parent.kind === "stage" ? opened.parent.id : from;
   const known = useMemo(
     () => [...curated, ...flips].find((s) => s.id === targetId) ?? null,
@@ -79,8 +122,9 @@ export function Make({
   // The maker's own sound: in memory only. `toTrim` is one longer than a source may be.
   const [own, setOwn] = useState<Int16Array | null>(null);
   const [toTrim, setToTrim] = useState<Int16Array | null>(null);
-  const origin: Origin | null =
-    picked && opened === null
+  const origin: Origin | null = sketchParent
+    ? { kind: "sketch", parent: sketchParent }
+    : picked && opened === null
       ? { kind: "shipped", sound: picked }
       : known
         ? { kind: "shipped", sound: known }
@@ -108,7 +152,7 @@ export function Make({
   // is shown.
   const [guide, setGuide] = useState<MakePhase>("done");
   const [slot, setSlot] = useState(false);
-  const send = useCallback((event: MakeEvent) => setGuide((p) => nextGuide(p, event)), []);
+  const send = useCallback((event: MakeEvent) => setGuide((p) => nextGuide(p, event)), [setGuide]);
   const skipGuide = useCallback(() => send("skipped"), [send]);
   const fadedGuide = useCallback(() => send("faded"), [send]);
   useEffect(() => {
@@ -123,14 +167,55 @@ export function Make({
     if (guide === "done" && slot) writeMade();
   }, [guide, slot]);
   const liveId = origin?.kind === "live" ? origin.id : null;
-  const sound = useAsync(path ?? (liveId === null ? null : `live:${liveId}`), async (signal) => {
+  // where a published stage's audio comes from: the site's own files for a shipped one, else the service
+  const loadStage = useCallback(
+    async (id: string, signal?: AbortSignal): Promise<Int16Array> => {
+      const shipped = [...curated, ...flips].find((x) => x.id === id);
+      if (shipped) return fetchPcm(shipped.audioPath, signal);
+      const chain = await fetchChain(createApi(apiUrl), id);
+      const last = chain?.stages.at(-1);
+      if (!last || last.state !== "available") throw new GoneError();
+      return fetchPcm(last.audio.url, signal);
+    },
+    [curated, flips, apiUrl],
+  );
+  // a published stage's audio is read once for the page, however many sketches start from it
+  const rootAudio = useCallback(
+    (id: string, signal?: AbortSignal): Promise<Int16Array> => {
+      const had = roots.current.get(id);
+      if (had) return had;
+      const made = loadStage(id, signal);
+      roots.current.set(id, made);
+      made.catch(() => roots.current.delete(id));
+      return made;
+    },
+    [loadStage],
+  );
+  // the audio of a sketch's parent: the output of its path, rendered here from the published stage it starts on
+  const sketchPath = origin?.kind === "sketch" ? pathOf(book, origin.parent.id) : null;
+  const renderer = engine.status === "ready" ? engine.value : null;
+  const soundKey =
+    origin?.kind === "sketch"
+      ? sketchPath?.ok && renderer
+        ? `sketch:${pathKey(sketchPath.root, sketchPath.steps)}`
+        : null
+      : (path ?? (liveId === null ? null : `live:${liveId}`));
+  const sound = useAsync(soundKey, async (signal) => {
+    if (origin?.kind === "sketch") {
+      if (!sketchPath?.ok || !renderer) throw new Error("not ready");
+      const rootSamples = await rootAudio(sketchPath.root, signal);
+      const made = await cache.current.render(
+        renderer,
+        sketchPath.root,
+        rootSamples,
+        sketchPath.steps,
+      );
+      if (!made.ok) throw new FitError(refusal(made.problem));
+      return made.samples;
+    }
     if (path !== null) return fetchPcm(path, signal);
-    const chain = await fetchChain(createApi(apiUrl), liveId ?? "");
-    const last = chain?.stages.at(-1);
-    if (!last || last.state !== "available") throw new GoneError();
-    return fetchPcm(last.audio.url, signal);
+    return loadStage(liveId ?? "", signal);
   });
-
   // a sketch that was kept against a sound it no longer fits (a shorter sound, a speed off the table)
   // opens as a plain statement of why, never as a crash
   const unfit: string | null =
@@ -148,20 +233,157 @@ export function Make({
       : null;
   const editing =
     (origin !== null && sound.status === "ready") || (origin === null && own !== null);
+  const [quiet, setQuiet] = useState(0);
   const openSketch = useCallback((sketch: Sketch) => {
     setOpened(sketch);
+    setGoingOn(null);
     setPicked(null);
   }, []);
-  // Back to the list. A sound named in the link is forgotten with it, and so is an opened sketch.
+  const goOn = useCallback((sketch: Sketch) => {
+    setGoingOn(sketch);
+    setOpened(null);
+    setPicked(null);
+  }, []);
+  // Back to the list. A sound named in the link is forgotten with it, and so are an opened sketch and one gone on from.
   const leave = useCallback(() => {
     setOpened(null);
+    setGoingOn(null);
     if (from) router.push("/make");
     else setPicked(null);
   }, [from, router]);
-  // where the editor starts: a sketch's own cut and speed, else what the link names
+  // where the editor starts: a sketch's own cut and speed, else what the link names (a sketch gone on from starts plain)
   const startFrom: Start = opened
     ? { cut: `${opened.cut.start}-${opened.cut.end}`, speed: `${opened.p}/${opened.q}` }
-    : start;
+    : goingOn
+      ? { cut: null, speed: null }
+      : start;
+
+  // Comparing two sketches: A and B marked, then heard one after the other from the start. Each is made
+  // (from its published stage, through the sketches it goes on from) and played on the page's one context.
+  const [cmp, setCmp] = useState<{ a: string | null; b: string | null; next: "a" | "b" }>({
+    a: null,
+    b: null,
+    next: "a",
+  });
+  const [cmpPlaying, setCmpPlaying] = useState(false);
+  const [cmpMessage, setCmpMessage] = useState("");
+  const heard = useRef(0);
+  const samplesOf = useCallback(
+    async (id: string): Promise<{ ok: true; samples: Int16Array } | { ok: false; why: string }> => {
+      const path = pathOf(book, id);
+      if (!path.ok) return { ok: false, why: copy.sketch.cannot.missing };
+      if (!renderer) return { ok: false, why: copy.make.renderer.loading };
+      try {
+        const rootSamples = await rootAudio(path.root);
+        const made = await cache.current.render(renderer, path.root, rootSamples, path.steps);
+        return made.ok
+          ? { ok: true, samples: made.samples }
+          : { ok: false, why: refusal(made.problem) };
+      } catch {
+        return { ok: false, why: copy.make.pick.failed };
+      }
+    },
+    [book, renderer, rootAudio],
+  );
+  const hear = useCallback(
+    async (order: Array<"a" | "b">) => {
+      const mine = ++heard.current;
+      setQuiet((n) => n + 1);
+      setCmpMessage("");
+      try {
+        await previewer.unlock();
+      } catch {
+        setCmpMessage(copy.perform.failed);
+        return;
+      }
+      setCmpPlaying(true);
+      for (const side of order) {
+        const id = cmp[side];
+        if (id === null) continue;
+        const made = await samplesOf(id);
+        if (heard.current !== mine) return;
+        if (!made.ok) {
+          setCmpMessage(
+            fill(copy.sketch.compare.cannotPlay, { side: side.toUpperCase(), why: made.why }),
+          );
+          break;
+        }
+        await previewer.playOnce(made.samples);
+        if (heard.current !== mine) return;
+      }
+      if (heard.current === mine) setCmpPlaying(false);
+    },
+    [cmp, previewer, samplesOf],
+  );
+  const compare: CompareApi = {
+    a: cmp.a,
+    b: cmp.b,
+    next: cmp.next,
+    playing: cmpPlaying,
+    message: cmpMessage,
+    mark: (side, id) =>
+      setCmp((c) => ({
+        ...c,
+        [side]: c[side] === id ? null : id,
+        ...(c[side === "a" ? "b" : "a"] === id ? { [side === "a" ? "b" : "a"]: null } : {}),
+      })),
+    playBoth: () => void hear(["a", "b"]),
+    playOne: () => {
+      void hear([cmp.next]);
+      setCmp((c) => ({ ...c, next: c.next === "a" ? "b" : "a" }));
+    },
+    stop: () => {
+      heard.current += 1;
+      previewer.stop();
+      setCmpPlaying(false);
+    },
+    clear: () => {
+      heard.current += 1;
+      previewer.stop();
+      setCmpPlaying(false);
+      setCmp({ a: null, b: null, next: "a" });
+      setCmpMessage("");
+    },
+  };
+  const shippedDepth = useCallback(
+    (id: string): number | null => {
+      const at = chainIds.indexOf(id);
+      if (at >= 0) return at + 1;
+      return curated.some((c) => c.id === id) ? 1 : null;
+    },
+    [chainIds, curated],
+  );
+  const where = { apiUrl, shippedDepth };
+  // the budget of the editor's own parent: how many more stages can follow it
+  const rootOfEditor = sketchPath?.ok
+    ? sketchPath.root
+    : origin?.kind === "sketch"
+      ? null
+      : origin?.kind === "shipped"
+        ? origin.sound.id
+        : origin?.kind === "live"
+          ? origin.id
+          : null;
+  const aboveEditor = sketchPath?.ok ? sketchPath.sketches.length : 0;
+  const editorDepth = useStageDepth(
+    apiUrl,
+    rootOfEditor,
+    rootOfEditor === null ? null : shippedDepth(rootOfEditor),
+  );
+  const budgetLine =
+    editorDepth.state === "checking"
+      ? copy.sketch.budget.checking
+      : editorDepth.state === "failed"
+        ? copy.sketch.budget.failed
+        : (() => {
+            const room = remaining(editorDepth.stages, aboveEditor);
+            return room === 0
+              ? copy.sketch.budget.none
+              : room === 1
+                ? copy.sketch.budget.roomOne
+                : fill(copy.sketch.budget.room, { n: room });
+          })();
+
   const picking = origin === null && own === null && toTrim === null;
   useEffect(() => {
     if (guide === "pick" && editing) queueMicrotask(() => send("picked"));
@@ -226,6 +448,10 @@ export function Make({
           onRetryEngine={() => setEngineTry((n) => n + 1)}
           start={startFrom}
           opened={null}
+          sketchParent={null}
+          previewer={previewer}
+          quiet={quiet}
+          budgetLine={""}
           onGuide={send}
           guideSlot={guideSlot}
           onChange={() => setOwn(null)}
@@ -237,7 +463,13 @@ export function Make({
           onChoose={setPicked}
           after={
             <>
-              <YourSketches openedId={null} onOpen={openSketch} />
+              <YourSketches
+                openedId={null}
+                onOpen={openSketch}
+                onGoOn={goOn}
+                where={where}
+                compare={compare}
+              />
               <OwnFlipsPicker apiUrl={apiUrl} onChoose={(id) => router.push(`/make?from=${id}`)} />
             </>
           }
@@ -265,11 +497,27 @@ export function Make({
           </div>
         ) : (
           <Editor
-            key={`${origin.kind === "shipped" ? origin.sound.id : origin.id}:${opened?.id ?? ""}`}
-            title={origin.kind === "shipped" ? origin.sound.title : null}
+            key={`${origin.kind === "shipped" ? origin.sound.id : origin.kind === "live" ? origin.id : `sketch:${origin.parent.id}`}:${opened?.id ?? ""}`}
+            title={
+              origin.kind === "shipped"
+                ? origin.sound.title
+                : origin.kind === "sketch"
+                  ? origin.parent.title
+                  : null
+            }
             own={false}
             features={features}
-            parentId={origin.kind === "shipped" ? origin.sound.id : origin.id}
+            parentId={
+              origin.kind === "shipped"
+                ? origin.sound.id
+                : origin.kind === "live"
+                  ? origin.id
+                  : null
+            }
+            sketchParent={origin.kind === "sketch" ? origin.parent : null}
+            previewer={previewer}
+            quiet={quiet}
+            budgetLine={budgetLine}
             apiUrl={apiUrl}
             samples={sound.value}
             engine={engine.status === "ready" ? engine.value : null}
@@ -288,7 +536,9 @@ export function Make({
             {sound.status === "failed"
               ? sound.error instanceof GoneError
                 ? copy.make.pick.gone
-                : copy.make.pick.failed
+                : sound.error instanceof FitError
+                  ? fill(copy.sketch.noFit, { why: sound.error.message })
+                  : copy.make.pick.failed
               : copy.make.pick.loading}
           </p>
           {sound.status === "failed" ? (
@@ -296,7 +546,7 @@ export function Make({
               <button type="button" className="pill" onClick={leave}>
                 {copy.make.pick.change}
               </button>
-              {sound.error instanceof GoneError ? null : (
+              {sound.error instanceof GoneError || sound.error instanceof FitError ? null : (
                 <button type="button" className="pill" onClick={() => window.location.reload()}>
                   {copy.publish.retry}
                 </button>
@@ -306,7 +556,13 @@ export function Make({
         </div>
       )}
       {editing && unfit === null ? (
-        <YourSketches openedId={opened?.id ?? null} onOpen={openSketch} />
+        <YourSketches
+          openedId={opened?.id ?? null}
+          onOpen={openSketch}
+          onGoOn={goOn}
+          where={where}
+          compare={compare}
+        />
       ) : null}
       <MoveSketches />
       <p className="local">{copy.make.local}</p>
@@ -316,6 +572,8 @@ export function Make({
 }
 
 class GoneError extends Error {}
+/** A sketch on the path no longer fits the sound it is cut from; the message says why. */
+class FitError extends Error {}
 
 function Editor({
   title,
@@ -329,6 +587,10 @@ function Editor({
   onRetryEngine,
   start,
   opened,
+  sketchParent,
+  previewer,
+  quiet,
+  budgetLine,
   onGuide,
   guideSlot,
   onChange,
@@ -347,6 +609,14 @@ function Editor({
   start: Start;
   /** The sketch this editor was opened from, if any. */
   opened: Sketch | null;
+  /** When the sound being edited is the output of a sketch: that sketch. */
+  sketchParent: Sketch | null;
+  /** The page's one audio context for hearing a try. */
+  previewer: Previewer;
+  /** Counts up when something else on the page starts a sound, so this editor stops its own loop. */
+  quiet: number;
+  /** How many more stages can follow this one, or that it is being checked. */
+  budgetLine: string;
   /** What the visitor did that the make flow's hints follow. */
   onGuide: (event: MakeEvent) => void;
   /** The hint line, drawn under the step markers. */
@@ -357,13 +627,16 @@ function Editor({
   // what is being edited is one plain value (lib/make/editing.ts): a cut and a stop of the speed table
   const [editing, setEditing] = useState(() => startEditing(frames, start));
   const { cut, stop } = editing;
-  const [listening, setListening] = useState(false);
+  // listening is true until something else on the page starts a sound (`quiet` counts up), which ends it
+  const [heardAt, setHeardAt] = useState<{ on: boolean; quiet: number }>({ on: false, quiet });
+  const listening = heardAt.on && heardAt.quiet === quiet;
+  const setListening = useCallback((on: boolean) => setHeardAt({ on, quiet }), [quiet]);
   const [publishing, setPublishing] = useState(false);
   const [sourceId, setSourceId] = useState<string | null>(null);
   const [publishingSource, setPublishingSource] = useState(false);
   const [basis, setBasis] = useState<Basis>("own_recording");
   const [confirmed, setConfirmed] = useState(false);
-  const flipParent = own ? sourceId : parentId;
+  const flipParent = own ? sourceId : sketchParent ? publishedParent(sketchParent) : parentId;
   const closedWhy =
     !own || features.status !== "ready"
       ? null
@@ -372,17 +645,6 @@ function Editor({
         : !features.value.uploads
           ? copy.own.off
           : null;
-  const [previewer] = useState(
-    () =>
-      new Previewer(
-        () =>
-          (window.AudioContext ??
-            (window as unknown as { webkitAudioContext?: typeof AudioContext })
-              .webkitAudioContext) as
-            (new (options?: { sampleRate?: number }) => never) | undefined,
-      ),
-  );
-
   const { p, q, cents } = speedOf(editing);
   const sameAsOpened =
     opened !== null &&
@@ -412,15 +674,14 @@ function Editor({
   useEffect(() => {
     if (listening && ready) void previewer.play(ready.samples).catch(() => setListening(false));
     else previewer.stop();
-  }, [previewer, listening, ready]);
-  useEffect(() => () => previewer.close(), [previewer]);
+  }, [previewer, listening, ready, setListening]);
 
   // Any gesture on a control starts the preview and keeps it going as the control moves.
   const touch = useCallback(() => {
     void previewer.unlock().catch(() => undefined);
     setListening(true);
     onGuide("heard");
-  }, [previewer, onGuide]);
+  }, [previewer, onGuide, setListening]);
 
   const direction = cents > 0 ? "up" : cents < 0 ? "down" : "src";
   const interval = speed.approximate
@@ -594,11 +855,33 @@ function Editor({
           </details>
         ) : null}
         <KeepSketch
-          parent={flipParent === null ? null : { kind: "stage", id: flipParent }}
+          parent={
+            sketchParent
+              ? { kind: "sketch", id: sketchParent.id }
+              : flipParent === null
+                ? null
+                : { kind: "stage", id: flipParent }
+          }
           value={valueOf(editing)}
           enabled={problem === null}
           wholeFrames={frames}
+          label={opened ? copy.sketch.another : copy.sketch.keep}
         />
+        {opened && !sameAsOpened ? (
+          <div className="actions">
+            <button
+              type="button"
+              className="pill"
+              onClick={() => setEditing(editingFor({ cut: opened.cut, p: opened.p, q: opened.q }))}
+            >
+              {fill(copy.sketch.backTo, { title: opened.title })}
+            </button>
+          </div>
+        ) : null}
+        {own ? null : <p className="hint sketch-budget">{budgetLine}</p>}
+        {sketchParent && flipParent === null ? (
+          <p className="hint">{copy.sketch.parentUnpublished}</p>
+        ) : null}
         {opened && flipParent !== null ? (
           <OpenedNotes opened={opened} apiUrl={apiUrl} parentId={flipParent} />
         ) : null}

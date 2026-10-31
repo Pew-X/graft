@@ -19,6 +19,7 @@ export function KeepSketch({
   value,
   enabled,
   wholeFrames,
+  label,
   onKept,
 }: {
   /** What the sketch starts from; null while there is nothing published to start from (an own sound not yet published). */
@@ -28,6 +29,8 @@ export function KeepSketch({
   enabled: boolean;
   /** How long the sound being cut is, in frames: the default name mentions the cut unless it is all of it. */
   wholeFrames: number;
+  /** The button's words: "keep as sketch", or "keep as another try" while a sketch is open. */
+  label?: string;
   onKept?: (sketch: Sketch) => void;
 }) {
   const uid = useId();
@@ -107,7 +110,7 @@ export function KeepSketch({
           aria-describedby={`${uid}-said`}
           onClick={press}
         >
-          {c.keep}
+          {label ?? c.keep}
         </button>
       </div>
       <p id={`${uid}-said`} role="status" className="hint">

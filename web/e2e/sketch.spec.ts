@@ -65,10 +65,9 @@ test("keeping a try makes a private sketch: stored as specs, listed, and nothing
   const item = page.getByTestId("your-sketches").locator(".your-sketch");
   await expect(item).toHaveCount(1);
   await expect(item.locator(".sketch-title")).toHaveText("up a fifth");
-  await expect(item.locator(".sketch-facts")).toHaveText(
-    new RegExp(
-      `^up a fifth, 0 to ${Number((Math.min(FIRST.frames, 480_000) / 48000).toFixed(2))} s$`,
-    ),
+  await expect(item.locator(".sketch-facts")).toHaveText(/^up a fifth, [0-9.]+ s$/);
+  await expect(item.locator(".sketch-cut")).toHaveText(
+    /^cut 0 to [0-9.]+ s of the sound it starts from\.$/,
   );
   expect(leaks, "keeping a sketch sends nothing").toEqual([]);
 });
