@@ -6,12 +6,14 @@ import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react
 import { createApi, fetchChain } from "../lib/api/chain.ts";
 import { copy, fill } from "../lib/copy.ts";
 import { checkFlip, renderFlip } from "../lib/make/flip.ts";
-import { type Cut, LIMITS, outputFrames, refusal, seconds } from "../lib/make/cut.ts";
+import { outputFrames, refusal, seconds } from "../lib/make/cut.ts";
 import { Previewer } from "../lib/make/preview.ts";
 import { browserRenderer } from "../lib/make/browser-renderer.ts";
 import type { Renderer } from "../lib/make/renderer.ts";
 import type { Sound } from "../lib/make/sounds.ts";
-import { entryAt, indexOf, parseSpeed, step, STOPS } from "../lib/make/speed.ts";
+import { STOPS } from "../lib/make/speed.ts";
+import { nudge, speedOf, startEditing, withCut, withStop } from "../lib/make/editing.ts";
+import type { Start } from "../lib/make/editing.ts";
 import { next as nextGuide, replayAt, type MakeEvent, type MakePhase } from "../lib/coach/make.ts";
 import { readMade, writeMade } from "../lib/coach/seen.ts";
 import { type Async, useAsync } from "../lib/make/use-async.ts";
@@ -29,18 +31,8 @@ import { TrimStep } from "./TrimStep.tsx";
 import { SoundPicker } from "./SoundPicker.tsx";
 import { Steps } from "./Steps.tsx";
 
-/** The first thing heard is a flip, not the sound unchanged: up a fifth. */
-const DEFAULT_SPEED = { p: 3, q: 2 };
-
 /** Where the audio of the sound being flipped comes from. */
 type Origin = { kind: "shipped"; sound: Sound } | { kind: "live"; id: string };
-
-type Start = { cut: string | null; speed: string | null };
-
-function parseCut(text: string | null): Cut | null {
-  const m = text?.match(/^(\d{1,7})-(\d{1,7})$/);
-  return m ? { start: Number(m[1]), end: Number(m[2]) } : null;
-}
 
 // One renderer for the page: fetched once and instantiated once.
 const wait = (ms: number, signal: AbortSignal) =>
@@ -306,13 +298,9 @@ function Editor({
   onChange: () => void;
 }) {
   const frames = samples.length;
-  const [cut, setCut] = useState<Cut>(
-    () => parseCut(start.cut) ?? { start: 0, end: Math.min(frames, LIMITS.maxCutFrames) },
-  );
-  const [stop, setStop] = useState<number>(() => {
-    const given = parseSpeed(start.speed);
-    return indexOf((given ?? DEFAULT_SPEED).p, (given ?? DEFAULT_SPEED).q);
-  });
+  // what is being edited is one plain value (lib/make/editing.ts): a cut and a stop of the speed table
+  const [editing, setEditing] = useState(() => startEditing(frames, start));
+  const { cut, stop } = editing;
   const [listening, setListening] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [sourceId, setSourceId] = useState<string | null>(null);
@@ -339,7 +327,7 @@ function Editor({
       ),
   );
 
-  const { p, q, cents } = entryAt(stop);
+  const { p, q, cents } = speedOf(editing);
   const speed = describeSpeed(p, q);
   const problem = checkFlip(samples, { cut, p, q });
   const outLength = problem ? null : outputFrames(cut.end - cut.start, p, q);
@@ -399,7 +387,7 @@ function Editor({
           samples={samples}
           cut={cut}
           onChange={(c) => {
-            setCut(c);
+            setEditing((e) => withCut(e, c));
             onGuide("changed");
           }}
           onTouch={touch}
@@ -421,7 +409,7 @@ function Editor({
             aria-label={copy.make.speed.slower}
             onClick={() => {
               touch();
-              setStop((i) => step(i, -1));
+              setEditing((e) => nudge(e, -1));
               onGuide("changed");
             }}
           >
@@ -440,7 +428,8 @@ function Editor({
             })}
             onChange={(e) => {
               touch();
-              setStop(Number(e.target.value));
+              const chosen = Number(e.target.value);
+              setEditing((was) => withStop(was, chosen));
               onGuide("changed");
             }}
           />
@@ -450,7 +439,7 @@ function Editor({
             aria-label={copy.make.speed.faster}
             onClick={() => {
               touch();
-              setStop((i) => step(i, 1));
+              setEditing((e) => nudge(e, 1));
               onGuide("changed");
             }}
           >
