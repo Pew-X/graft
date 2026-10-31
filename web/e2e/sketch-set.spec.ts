@@ -159,6 +159,12 @@ test("the set is published in order, each with its own key, from its parent's pu
   expect(Object.keys(kept).sort()).toEqual([idFor(1), idFor(2), idFor(3)]);
   const book = (await stored(page, KEY)) as { sketches: Array<{ publishedAs?: string }> };
   expect(book.sketches.map((s) => s.publishedAs)).toEqual([idFor(1), idFor(2), idFor(3)]);
+  // each flip has its own flip this next, in this tab
+  await expect(page.getByRole("link", { name: "flip this next" })).toHaveCount(3);
+  await expect(page.getByRole("link", { name: "flip this next" }).first()).toHaveAttribute(
+    "href",
+    `/make?from=${idFor(1)}`,
+  );
   // a key is shown on press, copied as plain text, and never in an address
   await page.getByRole("button", { name: "show key" }).first().click();
   await expect(page.locator(".set-links code").first()).toHaveText(/^manage-key-number-1-/);
@@ -345,4 +351,21 @@ test("the set panel and result pass an accessibility scan at laptop and phone wi
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth - innerWidth),
   ).toBeLessThanOrEqual(0);
+});
+
+test("flip this next on the set's screen warns once when the keys are neither kept nor copied", async ({
+  page,
+}) => {
+  await seed(page);
+  await service(page, (n) => created(n + 1));
+  await page.goto("/make");
+  await chooseAll(page, ["low"]);
+  await start(page);
+  await expect(page.getByTestId("set-summary")).toContainText("1 published, 0 waiting.");
+  await page.getByLabel(/keep these keys in this browser/).uncheck();
+  await page.getByRole("link", { name: "flip this next" }).click();
+  await expect(page.getByText(/not kept in this browser and not copied/)).toBeVisible();
+  await expect(page).toHaveURL(/\/make$/);
+  await page.getByRole("link", { name: "flip this next" }).click();
+  await expect(page).toHaveURL(new RegExp(`/make\\?from=${idFor(1)}$`));
 });

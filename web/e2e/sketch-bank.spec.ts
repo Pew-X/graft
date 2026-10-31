@@ -268,3 +268,70 @@ test("pressing the pads fast keeps every press sounding, with no error in the co
   expect(await page.evaluate(() => window.__contexts)).toBe(1);
   expect(errors).toEqual([]);
 });
+
+test("eight presses a second on twelve pads of the make page at 4x CPU slowdown: the page keeps answering, and the frame numbers are recorded", async ({
+  page,
+  browserName,
+}) => {
+  test.skip(browserName !== "chromium", "CPU throttling is a Chromium protocol feature");
+  await seed(page, 12);
+  const cdp = await page.context().newCDPSession(page);
+  await page.goto("/make");
+  for (let n = 1; n <= 12; n++)
+    await row(page, `try ${n}`).getByRole("button", { name: "put on the bank" }).click();
+  await expect(page.locator(".sketch-bank .pad")).toHaveCount(12);
+  await expect(
+    page.locator(".sketch-bank .pad-t", { hasText: "getting the sound ready" }),
+  ).toHaveCount(0, {
+    timeout: 30_000,
+  });
+  await page.getByRole("button", { name: "overlap" }).click();
+  await page.getByRole("button", { name: "number keys: off" }).click();
+  await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+  const gaps = await page.evaluate(
+    () =>
+      new Promise<number[]>((resolve) => {
+        const out: number[] = [];
+        let last = performance.now();
+        let n = 0;
+        const codes = [
+          "Digit1",
+          "Digit2",
+          "Digit3",
+          "Digit4",
+          "Digit5",
+          "Digit6",
+          "Digit7",
+          "Digit8",
+        ];
+        const press = window.setInterval(() => {
+          window.dispatchEvent(
+            new KeyboardEvent("keydown", { code: codes[n++ % 8]!, bubbles: true }),
+          );
+        }, 125);
+        const tick = (t: number): void => {
+          out.push(t - last);
+          last = t;
+          if (out.length < 120) requestAnimationFrame(tick);
+          else {
+            window.clearInterval(press);
+            resolve(out);
+          }
+        };
+        requestAnimationFrame(tick);
+      }),
+  );
+  const sorted = [...gaps].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)]!;
+  const p95 = sorted[Math.floor(sorted.length * 0.95)]!;
+  test.info().annotations.push({
+    type: "frame pacing on the make page with a bank at 4x (ms)",
+    description: `median ${median.toFixed(1)}, p95 ${p95.toFixed(1)}`,
+  });
+  // the numbers are gates only on a quiet machine, as for the roll
+  if (process.env["GRAFT_FRAME_BUDGET"] === "strict") {
+    expect(median).toBeLessThan(20);
+    expect(p95).toBeLessThan(34);
+  }
+  expect((await started(page)).length).toBeGreaterThan(8);
+});

@@ -1,8 +1,9 @@
 /**
  * What graft may keep in a browser about a maker's publications, and only when the maker chooses: the
  * manage keys of their own publications, by id. (The only other things it keeps are the light or dark
- * choice and a note that the first-visit guide was seen.) Every call tolerates storage that is
- * missing, blocked or full.
+ * choice, notes of how far the first-visit guide and the make-a-flip hints have got, and the maker's sketches
+ * with the choice of which to publish: see lib/sketch.) Every call tolerates storage that is missing,
+ * blocked or full.
  */
 export const STORAGE_KEY = "graft.manage-keys";
 

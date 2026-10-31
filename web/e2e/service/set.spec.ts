@@ -76,7 +76,7 @@ test("four sketches, one going on from another, publish as a set: the right numb
   await expect(page.locator(".set-links li")).toHaveCount(4);
   // the child's parent is the first flip, as published
   const links = await page
-    .locator(".set-links a")
+    .locator(".set-links a.link")
     .evaluateAll((as) => as.map((a) => (a as HTMLAnchorElement).pathname));
   const firstId = links[0]!.replace("/p/", "");
   const childId = links[3]!.replace("/p/", "");

@@ -235,6 +235,9 @@ export const copy = {
       forgotten: "forgotten. this browser no longer holds these keys.",
       none: "nothing was chosen.",
       open: "open",
+      flipNext: "flip this next",
+      leaveWarn:
+        "the keys of these flips are not kept in this browser and not copied. they are shown once. press flip this next again to leave anyway.",
     },
     publishedAlready: "this sketch is published, and a published sketch is not published again.",
     empty: "no sketches yet. press keep as sketch after you hear a try you like.",
@@ -289,7 +292,7 @@ export const copy = {
   stageFlips: {
     line: "flips of this stage ({n})",
     label: "the flips of this stage",
-    none: "nobody has flipped this stage yet. press flip this to make the first.",
+    none: "there are no flips of this stage yet.",
     by: "by {author}",
     more: "show more",
     newest:
@@ -721,7 +724,7 @@ export const copy = {
         tracker:
           "where error tracking is switched on, it runs without ip addresses, without session replay and with a scrubber.",
         browser:
-          "the only things graft can keep in your browser are your choice of light or dark, a note of how far you have got with the first-visit guide and the make-a-flip hints (one short word), and the manage key of each flip you publish from it, so that your flips can be listed here. you can untick the box when you publish, or forget a key on the your flips page.",
+          "the only things graft can keep in your browser are your choice of light or dark, a note of how far you have got with the first-visit guide and the make-a-flip hints (a short word each), the manage key of each flip you publish from it, so that your flips can be listed here, and your sketches (the tries you keep before you publish anything) with the choice of which to publish next. sketches never leave your browser unless you publish them. you can untick the box when you publish, forget a key on the your flips page, or discard any sketch.",
       },
     },
     takedown: {

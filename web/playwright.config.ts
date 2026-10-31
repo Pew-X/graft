@@ -51,6 +51,11 @@ export default defineConfig({
         "**/core-loop.spec.ts",
         "**/perform.spec.ts",
         "**/phrase.spec.ts",
+        // sketches keep their specs in storage and play real Web Audio: the two things the engines differ in
+        "**/sketch.spec.ts",
+        "**/sketch-move.spec.ts",
+        "**/sketch-bank.spec.ts",
+        "**/sketch-set.spec.ts",
       ],
       use: { browserName: "webkit", baseURL: "http://127.0.0.1:3100" },
     },
@@ -60,7 +65,10 @@ export default defineConfig({
     command: built ? "pnpm start --port 3100" : "pnpm build && pnpm start --port 3100",
     url: "http://127.0.0.1:3100",
     // A server left running from an earlier run would not know where the service is.
-    reuseExistingServer: !process.env["CI"] && !process.env["GRAFT_SERVICE_E2E"],
+    // (GRAFT_REUSE_SERVER=1 lets a hand-run against `scripts/dev-local.sh` use the site already on this port)
+    reuseExistingServer:
+      !process.env["CI"] &&
+      (!process.env["GRAFT_SERVICE_E2E"] || process.env["GRAFT_REUSE_SERVER"] === "1"),
     timeout: 240_000,
   },
 });

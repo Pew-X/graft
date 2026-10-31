@@ -82,9 +82,11 @@ test("publishing makes one flip: the link opens the chain with it last, and the 
     session: JSON.stringify({ ...sessionStorage }),
   }));
   expect(held.session).not.toContain(key);
-  expect(Object.keys(JSON.parse(held.keys) as object).filter((k) => k !== "graft.coach")).toEqual([
-    "graft.manage-keys",
-  ]);
+  expect(
+    Object.keys(JSON.parse(held.keys) as object).filter(
+      (k) => k !== "graft.coach" && k !== "graft.coach.sketch",
+    ),
+  ).toEqual(["graft.manage-keys"]);
 });
 
 test("an answer lost on the way back is retried with the same key and makes exactly one flip", async ({
@@ -345,7 +347,11 @@ test("the key is kept in this browser by default, and it is the only thing store
   await open(page, parent);
   await fill(page);
   expect(
-    await page.evaluate(() => Object.keys(localStorage).filter((k) => k !== "graft.coach").length),
+    await page.evaluate(
+      () =>
+        Object.keys(localStorage).filter((k) => k !== "graft.coach" && k !== "graft.coach.sketch")
+          .length,
+    ),
     "nothing is stored before publishing",
   ).toBe(0);
   await page.getByRole("button", { name: "publish", exact: true }).click();
@@ -357,7 +363,11 @@ test("the key is kept in this browser by default, and it is the only thing store
   await expect(page.getByLabel(/keep this key in this browser/)).toBeChecked();
   await expect(page.getByText("kept in this browser.")).toBeVisible();
   const stored = await page.evaluate(() =>
-    Object.fromEntries(Object.entries(localStorage).filter(([k]) => k !== "graft.coach")),
+    Object.fromEntries(
+      Object.entries(localStorage).filter(
+        ([k]) => k !== "graft.coach" && k !== "graft.coach.sketch",
+      ),
+    ),
   );
   expect(Object.keys(stored)).toEqual(["graft.manage-keys"]);
   expect(JSON.parse(stored["graft.manage-keys"]!) as Record<string, string>).toEqual({

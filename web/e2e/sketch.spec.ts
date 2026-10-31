@@ -333,7 +333,8 @@ test("the sketch controls are reachable by keyboard and pass an accessibility sc
     .getByLabel(/^name of this try/)
     .first()
     .fill("by keyboard");
-  await page.keyboard.press("Tab");
+  // (WebKit's Tab skips buttons unless the system is set to reach them, so the button is focused directly)
+  await page.getByRole("button", { name: "keep as sketch" }).focus();
   await expect(page.getByRole("button", { name: "keep as sketch" })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByText(/kept as a sketch: by keyboard/)).toBeVisible();

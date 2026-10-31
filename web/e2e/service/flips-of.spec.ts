@@ -44,12 +44,16 @@ test("three flips of a stage: the stage shows three, the list opens, and one ope
   await expect(page.getByTestId("flips-of")).toHaveCount(0);
 });
 
-test("a stage with no flips shows nothing, not an empty heading", async ({ page, request }) => {
+test("a stage with no flips shows one neutral line, no heading and no list", async ({
+  page,
+  request,
+}) => {
   const lone = (await publishFlip(request, SEEDED_LAST, "lone")).id;
   await page.goto(`/p/${lone}`);
   await expect(page.locator(".roll")).toHaveAttribute("data-audio", "ready");
+  await expect(page.getByText("there are no flips of this stage yet.")).toBeVisible();
   await expect(page.getByTestId("flips-of")).toHaveCount(0);
-  await expect(page.getByText(/flips of this stage/)).toHaveCount(0);
+  await expect(toggle(page)).toHaveCount(0);
 });
 
 test("a withdrawn flip is not listed, and the count says so", async ({ page, request }) => {

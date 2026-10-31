@@ -83,6 +83,8 @@ export function SetPublisher({
   const [shown, setShown] = useState<ReadonlySet<string>>(new Set());
   const [copied, setCopied] = useState("");
   const [keepAll, setKeepAll] = useState(true);
+  const [leaveWarned, setLeaveWarned] = useState(false);
+  const [keysCopied, setKeysCopied] = useState(false);
   const [elsewhere, setElsewhere] = useState(false);
   const [title, setTitle] = useState("");
   const [titleProblem, setTitleProblem] = useState("");
@@ -365,6 +367,20 @@ export function SetPublisher({
                   <a className="link" href={`/p/${id}`}>
                     {new URL(`/p/${id}`, window.location.href).href}
                   </a>
+                  <a
+                    className="pill"
+                    href={`/make?from=${id}`}
+                    onClick={(e) => {
+                      // the next stage is made from this one, in this tab; the keys are shown once, so a set whose
+                      // keys are neither kept nor copied warns once before the screen is left
+                      if (!keepAll && !keysCopied && !leaveWarned) {
+                        e.preventDefault();
+                        setLeaveWarned(true);
+                      }
+                    }}
+                  >
+                    {set.flipNext}
+                  </a>
                   {key !== null ? (
                     <>
                       <button
@@ -404,7 +420,10 @@ export function SetPublisher({
                   return key ? [`${titleOf(sketchId)}\t/p/${id}\t${key}`] : [];
                 });
                 navigator.clipboard.writeText(lines.join("\n")).then(
-                  () => setCopied(set.keysCopied),
+                  () => {
+                    setKeysCopied(true);
+                    setCopied(set.keysCopied);
+                  },
                   () => setCopied(set.keysCopyFailed),
                 );
               }}
@@ -438,6 +457,11 @@ export function SetPublisher({
           <p role="status" className="hint">
             {copied}
           </p>
+          {leaveWarned ? (
+            <p className="notice" role="alert">
+              {set.leaveWarn}
+            </p>
+          ) : null}
         </div>
       ) : null}
     </section>
