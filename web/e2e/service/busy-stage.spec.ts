@@ -53,7 +53,7 @@ async function profile(browser: Browser, who: number): Promise<Page> {
 
 async function publishSet(page: Page, name: string): Promise<void> {
   await page.goto("/make");
-  for (const box of await page.getByLabel("choose for publish these").all()) await box.check();
+  for (const box of await page.getByLabel("publish this one").all()) await box.check();
   await page.getByLabel(/^your name/).fill(name);
   await page.getByRole("button", { name: "publish these (4)" }).click();
 }
