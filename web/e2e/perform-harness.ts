@@ -43,7 +43,7 @@ async function viaPad(stages: Stages, stage: number, seconds: number) {
   return { peak: peakOf(out), rms: rmsOf(out) };
 }
 
-/** Every stage at once, in layer mode as far as it goes, and the loudest sample of the mix. */
+/** Every stage at once, under the overlap rule as far as it goes, and the loudest sample of the mix. */
 async function allAtOnce(stages: Stages, seconds: number) {
   const ctx = offline(seconds);
   const { graph, bus } = performAudio(graphOf(ctx, stages), ctx as unknown as AudioContextLike);
@@ -55,7 +55,7 @@ async function allAtOnce(stages: Stages, seconds: number) {
 }
 
 /**
- * Press one stage, then another at `at` seconds, in cut mode, and report the largest step between
+ * Press one stage, then another at `at` seconds, one at a time, and report the largest step between
  * neighbouring samples near the cut and over the whole render (a click is a step far beyond the tone's).
  */
 async function cutClick(

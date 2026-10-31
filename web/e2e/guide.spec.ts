@@ -27,7 +27,10 @@ const NARRATION = [
   ["stage:1", "then a piece was cut out and sped up."],
   ["stage:2", "then a piece was cut out and slowed down."],
   ["stage:3", "then a piece was cut out and slowed down."],
-  ["rest:3", "that is how it was made. tap any ring to hear that step."],
+  [
+    "rest:3",
+    "that is how it was made. tap any ring to hear that step, or press make a flip to make the next one.",
+  ],
 ] as const;
 
 async function arrive(page: Page): Promise<void> {

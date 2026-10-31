@@ -69,7 +69,7 @@ export function usePerform({
   const [on, setOn] = useState(false);
   /** Whether any performed voice sounds now (a change of this re-renders; a press that keeps it does not). */
   const [sounding, setSounding] = useState(false);
-  const [mode, setModeState] = useState<Rule>("cut");
+  const [mode, setModeState] = useState<Rule>("single");
   const performer = useRef<Performer | null>(null);
   const made = useRef<PerformAudio | null>(null);
   const onRef = useRef(false);
@@ -79,7 +79,7 @@ export function usePerform({
   const ready = useRef<Promise<boolean> | null>(null);
   /** The audio session type before perform set it to playback, to put back on leaving. */
   const savedSession = useRef<string | null>(null);
-  const modeRef = useRef<Rule>("cut");
+  const modeRef = useRef<Rule>("single");
   const [marks, setMarks] = useState<Record<number, string> | null>(null);
   const latest = useRef({ playable, reasons, lengths, stages });
   useEffect(() => {
@@ -461,6 +461,7 @@ export function usePerform({
       recording,
       playing: phraseSounding,
       loop,
+      canLink: true,
       record,
       play: playPhrase,
       stop: stopAll,
@@ -526,7 +527,7 @@ function writePhrase(fragment: string | null): boolean {
 }
 
 /** What the pad bank and the invitation need of the phrase. */
-export type PhraseControls = ReturnType<typeof usePerform>["phrase"];
+export type { PhraseControls } from "./phrase-controls.ts";
 
 /** The ring's matching pad, if it is drawn, shows that it was pressed (a short light from within). */
 function flash(stage: number): void {

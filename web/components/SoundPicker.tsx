@@ -31,12 +31,15 @@ export function SoundPicker({
   flips,
   onChoose,
   children,
+  after,
 }: {
   curated: readonly Sound[];
   flips: readonly Sound[];
   onChoose: (sound: Sound) => void;
   /** Further ways to start, shown first: below thirteen rows a visitor never scrolls to them. */
   children?: ReactNode;
+  /** Sections that come after the shipped ones (the maker's own flips). */
+  after?: ReactNode;
 }) {
   return (
     <div className="picker">
@@ -64,6 +67,7 @@ export function SoundPicker({
           </ul>
         </section>
       )}
+      {after}
     </div>
   );
 }

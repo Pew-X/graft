@@ -1,6 +1,8 @@
 import { memo } from "react";
 import { copy, fill } from "../lib/copy.ts";
 import type { Block, DetailRow, FaceLine } from "../lib/roll/view.ts";
+import type { FlipsAudio } from "./FlipsBank.tsx";
+import { FlipsOfStage } from "./FlipsOfStage.tsx";
 import { Trace } from "./Trace.tsx";
 
 /** The honesty state in words (colour is never the only carrier of it). */
@@ -91,6 +93,10 @@ interface Props {
   /** Mark a part of this stage on the record to flip; absent where the roll has no way to make. */
   onMark?: (() => void) | undefined;
   marking?: boolean;
+  /** Where the service is, to list this stage's flips under it; absent where the roll has no service (the home page). */
+  flipsFrom?: string | undefined;
+  /** What the roll lends a bank of this stage's flips (its audio context, a pause, the page's stages). */
+  flipsAudio?: FlipsAudio | undefined;
   register: (index: number, node: HTMLLIElement | null) => void;
   onFocusBlock: (index: number) => void;
 }
@@ -114,6 +120,8 @@ export const CreditBlock = memo(function CreditBlock({
   onReport,
   onMark,
   marking = false,
+  flipsFrom,
+  flipsAudio,
 }: Props) {
   const heading = `stage-${block.id}`;
   return (
@@ -190,6 +198,9 @@ export const CreditBlock = memo(function CreditBlock({
           ))}
         </dl>
         {block.flipped ? <p className="flipped">{block.flipped}</p> : null}
+        {flipsFrom && hero && block.state === "available" ? (
+          <FlipsOfStage key={block.id} id={block.id} apiUrl={flipsFrom} audio={flipsAudio} />
+        ) : null}
         {block.details.length === 0 ? null : (
           <details className="details">
             <summary>{copy.details.summary}</summary>

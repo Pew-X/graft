@@ -12,12 +12,12 @@
 import { ATTACK, RELEASE } from "../playback/config.ts";
 import type { Voice } from "../playback/engine.ts";
 
-/** The most voices that overlap in layer mode. */
+/** The most voices that overlap in the overlap rule. */
 export const MOST_VOICES = 6;
 /** Release when a voice is stolen for a seventh: a little longer than a cut, so it is not heard as a click. */
 export const STEAL_RELEASE = 0.03;
 
-export type Rule = "cut" | "layer";
+export type Rule = "single" | "overlap";
 
 /** What the performer needs of the audio side. */
 export interface PerformGraph {
@@ -50,7 +50,7 @@ export class Performer {
   #last: { stage: number; at: number } | null = null;
   #now: () => number;
 
-  mode: Rule = "cut";
+  mode: Rule = "single";
 
   constructor(options: PerformerOptions & { now?: () => number }) {
     this.#graph = options.graph;
@@ -79,7 +79,7 @@ export class Performer {
       return false;
     }
     // what makes room goes first, so the new voice never starts on top of a full house
-    if (this.mode === "cut") {
+    if (this.mode === "single") {
       for (const old of this.#live) old.voice.stop(RELEASE);
       this.#live = [];
     } else {

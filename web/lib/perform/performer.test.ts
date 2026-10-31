@@ -60,7 +60,7 @@ test("a stage that does not exist makes no voice", () => {
   assert.equal(made.length, 0);
 });
 
-test("in cut mode a new press releases what sounds, over about twenty milliseconds", () => {
+test("under the one-at-a-time rule a new press releases what sounds, over about twenty milliseconds", () => {
   const { performer, made } = setup();
   performer.press(0);
   performer.press(1);
@@ -79,9 +79,9 @@ test("pressing the pad that sounds restarts it: the old voice is released, a new
   assert.deepEqual(performer.sounding, [3]);
 });
 
-test("in layer mode voices overlap, and the same pad still restarts", () => {
+test("under the overlap rule voices overlap, and the same pad still restarts", () => {
   const { performer, made } = setup();
-  performer.mode = "layer";
+  performer.mode = "overlap";
   performer.press(0);
   performer.press(1);
   performer.press(2);
@@ -95,9 +95,9 @@ test("in layer mode voices overlap, and the same pad still restarts", () => {
   assert.deepEqual(performer.sounding, [0, 2, 1]);
 });
 
-test("layer mode holds at most six voices: a seventh releases the oldest over about thirty milliseconds", () => {
+test("the overlap rule holds at most six voices: a seventh releases the oldest over about thirty milliseconds", () => {
   const { performer, made } = setup();
-  performer.mode = "layer";
+  performer.mode = "overlap";
   for (let stage = 0; stage < MOST_VOICES; stage++) performer.press(stage);
   assert.equal(performer.sounding.length, 6);
   performer.press(6);
@@ -108,7 +108,7 @@ test("layer mode holds at most six voices: a seventh releases the oldest over ab
 
 test("a voice that ends by itself leaves the list, and an old voice's end never removes a newer one", () => {
   const { performer, made } = setup();
-  performer.mode = "layer";
+  performer.mode = "overlap";
   performer.press(0);
   performer.press(0);
   // the first voice was released and replaced; its end arrives late
@@ -120,7 +120,7 @@ test("a voice that ends by itself leaves the list, and an old voice's end never 
 
 test("silence releases everything, says whether anything sounded, and is quiet when nothing did", () => {
   const { performer, made } = setup();
-  performer.mode = "layer";
+  performer.mode = "overlap";
   performer.press(0);
   performer.press(1);
   assert.equal(performer.silence(), true);
@@ -134,7 +134,7 @@ test("silence releases everything, says whether anything sounded, and is quiet w
 
 test("the mix bus is told how many voices sound after every change", () => {
   const { performer, made, counts } = setup();
-  performer.mode = "layer";
+  performer.mode = "overlap";
   performer.press(0);
   performer.press(1);
   made[0]?.finish();

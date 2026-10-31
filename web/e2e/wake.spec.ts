@@ -48,7 +48,9 @@ test("the wake call carries nothing about the visitor and the browser keeps noth
     ...Object.keys(localStorage),
     ...Object.keys(sessionStorage),
   ]);
-  expect(keys.filter((k) => k !== "graft.coach" && k !== "graft.theme")).toEqual([]);
+  expect(
+    keys.filter((k) => k !== "graft.coach" && k !== "graft.coach.sketch" && k !== "graft.theme"),
+  ).toEqual([]);
 });
 
 test("the route answers at once with nothing in the body, so a browser learns nothing from it", async ({

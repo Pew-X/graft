@@ -118,6 +118,8 @@
 }
 .sound-title {
   justify-self: start;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   padding: 0.05em 0.35em 0.12em;
   margin-bottom: 0.35rem;
   background: var(--dye);
@@ -148,8 +150,13 @@
   --dye: #c2307a;
   --dye-text: #ffffff;
 }
+.sound button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
 .sound-by,
 .sound-licence {
+  overflow-wrap: anywhere;
   font:
     400 12px/1.4 var(--f-mono),
     ui-monospace,
@@ -1359,4 +1366,328 @@
     monospace;
   letter-spacing: 0.02em;
   color: var(--muted);
+}
+
+/* sketches: private tries, listed under the editor and in the picker */
+.your-sketches {
+  margin: 1.5rem 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--hair);
+}
+.sketch-list {
+  list-style: none;
+  margin: 0.5rem 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.your-sketch {
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.your-sketch[data-open="true"] {
+  border-color: var(--ink);
+}
+.sketch-title {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+.your-sketch .hint {
+  margin: 0.15rem 0;
+  overflow-wrap: anywhere;
+}
+.sketch-ask,
+.sketch-rename {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+.sketch-rename input {
+  flex: 1 1 12rem;
+  min-height: 44px;
+}
+.keep-sketch {
+  margin-top: 1rem;
+}
+.opened-notes {
+  margin-top: 0.75rem;
+}
+.keep-sketch .field {
+  margin: 0 0 0.75rem;
+}
+.keep-sketch label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font:
+    500 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.keep-sketch input[type="text"],
+.sketch-rename input[type="text"] {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.25rem 0.6rem;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 1rem;
+}
+.keep-sketch .hint,
+.your-sketches .hint,
+.opened-notes .hint {
+  min-height: 1.5em;
+  margin: 0.25rem 0 0;
+  overflow-wrap: anywhere;
+  font:
+    400 12px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+  color: var(--muted);
+}
+.keep-sketch .hint,
+.opened-notes .notice {
+  overflow-wrap: anywhere;
+}
+
+/* a sketchbook link or file asking to be added: fixed to the bottom, over the page, never over the editor's controls' focus */
+.sketch-arrival {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  z-index: 40;
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 32px));
+  max-height: 60vh;
+  overflow: auto;
+  padding: 0.9rem 1rem;
+  border: 2px solid var(--ink);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.25);
+}
+.sketch-arrival p {
+  margin: 0 0 0.4rem;
+  overflow-wrap: anywhere;
+}
+.sketch-arrival ul {
+  margin: 0 0 0.5rem;
+  padding-left: 1.2rem;
+  overflow-wrap: anywhere;
+}
+.move-sketches {
+  margin: 1.5rem 0;
+}
+.move-sketches summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  cursor: pointer;
+  font:
+    500 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.move-sketches .hint {
+  overflow-wrap: anywhere;
+  font:
+    400 12px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+  color: var(--muted);
+}
+/* on a page that has its own controls along the bottom (the roll), the offer sits under the header instead */
+.sketch-arrival.aside {
+  top: 64px;
+  bottom: auto;
+  left: auto;
+  right: 12px;
+  transform: none;
+  width: min(340px, calc(100vw - 24px));
+}
+@media (max-width: 480px) {
+  .sketch-arrival.aside {
+    left: 12px;
+    right: 12px;
+    width: auto;
+  }
+}
+
+/* a sketch in the strip: its hand-drawn trace beside what it is, in computed facts */
+.sketch-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.sketch-trace {
+  flex: none;
+  width: 72px;
+}
+.sketch-trace .trace {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 300 / 84;
+}
+.sketch-text {
+  min-width: 0;
+  flex: 1;
+}
+.sketch-marks {
+  display: inline-flex;
+  gap: 0.35rem;
+}
+.sketch-marks .mark {
+  min-width: 44px;
+  padding: 0;
+  justify-content: center;
+}
+.sketch-marks .mark[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--bg);
+}
+.compare {
+  margin: 0.5rem 0 1rem;
+}
+/* the sketch bank */
+.sketch-bank-panel {
+  margin: 1.5rem 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--hair);
+}
+.sketch-bank-panel .hint {
+  overflow-wrap: anywhere;
+  font:
+    400 12px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+  color: var(--muted);
+}
+.sketch-bank {
+  display: flex;
+  justify-content: center;
+  margin: 0.75rem 0;
+}
+.bank-order {
+  list-style: none;
+  margin: 0.75rem 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.bank-order li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.bank-n {
+  min-width: 1.5rem;
+  font-weight: 700;
+}
+.bank-title {
+  flex: 1 1 10rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* publish these: the plan, the progress of each sketch, and the one screen of links and keys */
+.set-publisher {
+  margin: 1.5rem 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--hair);
+}
+.set-publisher .field {
+  margin: 0 0 0.75rem;
+}
+.set-publisher label:not(.check) {
+  display: block;
+  margin-bottom: 0.25rem;
+  font:
+    500 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.set-publisher input[type="text"] {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.25rem 0.6rem;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 1rem;
+}
+.set-publisher .hint,
+.set-publisher .progress {
+  margin: 0.25rem 0 0;
+  overflow-wrap: anywhere;
+  font:
+    400 12px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+  color: var(--muted);
+}
+.set-plan,
+.set-progress,
+.set-links {
+  margin: 0.5rem 0 1rem;
+  padding-left: 1.2rem;
+}
+.set-progress,
+.set-links {
+  list-style: none;
+  padding-left: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.set-progress li,
+.set-links li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.set-title {
+  flex: 1 1 10rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+.set-state {
+  font:
+    400 12px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+  color: var(--muted);
+}
+.set-progress li[data-status="published"] .set-state {
+  color: var(--ink);
+}
+.set-links a {
+  overflow-wrap: anywhere;
+}
+.set-links code {
+  flex: 1 1 100%;
+  overflow-wrap: anywhere;
+  padding: 0.4rem 0.6rem;
+  background: var(--ink);
+  color: var(--bg);
+}
+.set-publisher .problem {
+  margin-top: 0.75rem;
 }

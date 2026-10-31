@@ -16,11 +16,12 @@ test("the roll's sheet lists perform when this build has it, and not otherwise",
 test("a sheet that holds perform back never says the word in what it lists", () => {
   const text = JSON.stringify(sheetFor("roll", false));
   assert.equal(/perform|pad/i.test(text), false);
-  assert.equal(/\bpads?\b/i.test(JSON.stringify(sheetFor("make", true))), false);
+  assert.equal(/perform|\bpads?\b/i.test(JSON.stringify(sheetFor("make", false))), false);
 });
 
-test("the make sheet is the same either way", () => {
-  assert.deepEqual(sheetFor("make", true), sheetFor("make", false));
+test("the make sheet lists the sketch bank's keys only when perform is on", () => {
+  assert.match(JSON.stringify(sheetFor("make", true)), /number keys: off, on/);
+  assert.equal(/number keys/.test(JSON.stringify(sheetFor("make", false))), false);
 });
 
 test("the phrase controls are listed with perform and go with it", () => {

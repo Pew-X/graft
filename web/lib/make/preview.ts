@@ -99,6 +99,44 @@ export class Previewer {
     };
   }
 
+  /**
+   * Play `samples` once, from the start, replacing whatever was playing, and resolve when it ends or is
+   * stopped. Used to hear one sketch after another; the loop above is for moving a control.
+   */
+  async playOnce(samples: Int16Array): Promise<void> {
+    const wanted = this.#generation;
+    const context = await this.unlock();
+    if (wanted !== this.#generation) return;
+    this.stop();
+    const wantedNow = this.#generation;
+    const buffer = context.createBuffer(1, samples.length, SAMPLE_RATE);
+    buffer.copyToChannel(pcmToFloat(samples), 0);
+    const source = context.createBufferSource();
+    const gain = context.createGain();
+    source.buffer = buffer;
+    source.loop = false;
+    source.connect(gain);
+    gain.connect(context.destination);
+    await new Promise<void>((resolve) => {
+      source.onended = () => resolve();
+      this.#stopLoop = () => {
+        const now = context.currentTime;
+        const level = gain.gain.value;
+        gain.gain.cancelScheduledValues(now);
+        gain.gain.setValueAtTime(level, now);
+        gain.gain.setTargetAtTime(0, now, RELEASE / 4);
+        try {
+          source.stop(now + RELEASE);
+        } catch {
+          /* already stopped */
+        }
+        resolve();
+      };
+      source.start();
+    });
+    if (this.#generation === wantedNow) this.#stopLoop = null;
+  }
+
   stop(): void {
     this.#generation += 1;
     this.#stopLoop?.();

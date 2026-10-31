@@ -128,7 +128,11 @@ test("a key kept in this browser can be used from there, and forgotten", async (
   await expect(page.getByText("closed to new flips.")).toBeVisible();
   await page.getByRole("button", { name: "forget the key kept in this browser" }).click();
   expect(
-    await page.evaluate(() => Object.keys(localStorage).filter((k) => k !== "graft.coach").length),
+    await page.evaluate(
+      () =>
+        Object.keys(localStorage).filter((k) => k !== "graft.coach" && k !== "graft.coach.sketch")
+          .length,
+    ),
   ).toBe(0);
 });
 
@@ -164,7 +168,11 @@ test("a flip this browser holds a key for is listed, managed from the list, show
   await row.getByRole("button", { name: "yes, forget it" }).click();
   await expect(page.getByText("no flips here yet")).toBeVisible();
   expect(
-    await page.evaluate(() => Object.keys(localStorage).filter((k) => k !== "graft.coach").length),
+    await page.evaluate(
+      () =>
+        Object.keys(localStorage).filter((k) => k !== "graft.coach" && k !== "graft.coach.sketch")
+          .length,
+    ),
   ).toBe(0);
 });
 
@@ -261,7 +269,7 @@ test("the about page says what graft is and is not, lists the sounds, and the fo
 }) => {
   await page.goto("/about");
   await expect(page.getByRole("heading", { name: "what graft is" })).toBeVisible();
-  await expect(page.getByText("not a sampler")).toBeVisible();
+  await expect(page.getByText("a flip is one cut and one speed")).toBeVisible();
   await expect(page.getByText("no ip address in its own records")).toBeVisible();
   await expect(page.getByText("cannot be recalled")).toBeVisible();
   await expect(page.locator("main li").filter({ hasText: "dm9 chord" })).toBeVisible();

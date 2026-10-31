@@ -4,6 +4,14 @@
  * with `fill`. A test walks this object, so a word the project does not use cannot get in unnoticed.
  */
 
+/** The pad rule is told in one place: the pads, the keys sheet and the about page all read these. */
+const PAD_RULE = {
+  single: "cut",
+  overlap: "overlap",
+  singleSays: "a new pad cuts off the one still sounding.",
+  overlapSays: "pads keep sounding together, up to six.",
+} as const;
+
 export const copy = {
   site: {
     name: "graft",
@@ -60,11 +68,266 @@ export const copy = {
       unavailable: "not read",
       silent: "no sound",
     },
-    /** The rule for a new press while something sounds. */
-    rule: "a new press",
-    cut: "cut",
-    layer: "layer",
+    /** The rule for a press on another pad while something sounds: two names, each with what it does. */
+    rule: "when you press another pad",
+    ...PAD_RULE,
     stop: "stop",
+  },
+  /** Sketches: private tries, held in this browser only. */
+  sketch: {
+    heading: "your sketches",
+    intro: "a sketch is a try only you can hear. nothing is published until you press publish.",
+    where:
+      "sketches are kept in this browser only: closing the tab keeps them, and a private window loses them when it closes.",
+    noAutosave: "the editor is not saved by itself. press keep as sketch to keep a try.",
+    keep: "keep as sketch",
+    titleLabel: "name of this try",
+    titleGloss: "optional: left empty, it is named from the speed",
+    kept: "kept as a sketch: {title}. nothing is published.",
+    keptAdjusted:
+      "kept as a sketch: {title}. a link or a handle in the title was removed, as it would be when published.",
+    titleWhy: {
+      empty: "the title is empty once links and handles are removed.",
+      too_long: "the title is longer than {limit} characters.",
+      character: "the title has a character that is not allowed: {detail}",
+      mixed_scripts: "a word in the title mixes letters from different scripts.",
+      denied_word: "the word {detail} cannot be used in a title.",
+    },
+    needSource: "publish your sound first: a sketch starts from a published sound.",
+    failed: {
+      storage:
+        "this browser would not keep it. nothing was kept, and the editor is as you left it.",
+      newer:
+        "this browser holds sketches from a newer version of graft. they are left as they are, and nothing new can be kept here.",
+      limit: "this browser keeps at most {max} sketches. discard one to keep another.",
+      invalid: "this try could not be kept.",
+    },
+    offerDiscard: "make room by discarding {title}, the oldest sketch nothing goes on from?",
+    open: "open",
+    rename: "rename",
+    renameSave: "save the name",
+    renameLabel: "new title",
+    discard: "discard",
+    discardAsk: "discard this sketch?",
+    discardAskMany: "discard this and the {n} that go on from it?",
+    discardYes: "yes, discard",
+    discardNo: "keep it",
+    discarded: "discarded.",
+    discardedOthers: "discarded, with {n} that went on from it.",
+    cutLine: "cut {from} to {to} s of the sound it starts from.",
+    twin: "same as {title}",
+    published: "published",
+    openPublished: "open the published flip",
+    noFit: "this try no longer fits: {why}",
+    elsewhere: "this sketch was discarded in another tab. the editor keeps its values.",
+    cannot: {
+      prefix: "cannot be published: {why}",
+      withdrawn: "the sound it was cut from was withdrawn",
+      held: "the sound it was cut from is held",
+      closed: "the sound it was cut from is closed to new flips",
+      missing: "the sound it was cut from is not found",
+    },
+    budget: {
+      room: "{n} more stages fit after this one.",
+      roomOne: "one more stage fits after this one.",
+      none: "no more stages fit: the chain is as long as the service allows.",
+      checking: "checking how many stages fit.",
+      failed: "could not check how many stages fit. the service will tell you when you publish.",
+    },
+    from: {
+      stage: "from stage {n}",
+      stageUnknown: "from a published stage",
+      sketch: "from sketch '{title}'",
+    },
+    goOn: "go on from this",
+    goOnWhy: "cannot go on from this: {why}",
+    another: "keep as another try",
+    backTo: "back to sketch '{title}'",
+    parentUnpublished:
+      "this goes on from a sketch that is not published yet, so it cannot be published alone.",
+    compare: {
+      marked: "marked {side}",
+      group: "compare two sketches",
+      playBoth: "play {first} then {second}",
+      playOne: "play one: {side}",
+      stop: "stop",
+      cannotPlay: "{side} cannot be played: {why}",
+      reset: "clear {first} and {second}",
+    },
+    bank: {
+      heading: "your sketch bank",
+      intro:
+        "play your tries together. up to twelve sketches sit on pads. nothing is published and nothing is sent.",
+      add: "put on the bank",
+      onIt: "on the bank",
+      remove: "remove from the bank",
+      earlier: "move earlier",
+      later: "move later",
+      full: "the bank holds at most {max} sketches.",
+      empty: "nothing on the bank yet. press put on the bank on a sketch above.",
+      preparing: "getting the sound ready",
+      keysOff: "number keys: off",
+      keysOn: "number keys: on",
+      keysWhy:
+        "the number keys play the pads only while this is on, so typing a number anywhere else never makes a sound. escape turns it off.",
+      once: "one pad is a bank too: it plays that sketch.",
+      pads: "the sketches on the bank, as pads",
+      pad: "pad {n}, {title}",
+      recording: "recording: press the pads. sixteen seconds or sixty-four presses at most.",
+      phraseKept:
+        "phrase kept: {n} presses, for this visit only. sketches are private, so the link cannot carry it.",
+      padRemoved: "this pad was removed from the bank, so it does not sound in the phrase.",
+      phraseLocal:
+        "a phrase on this bank is kept for this visit only and cannot be sent as a link.",
+    },
+    set: {
+      heading: "publish these",
+      choose: "choose for publish these",
+      intro:
+        "tick the sketches to publish, then press publish these. they go out in order, and the links and keys end up on one screen.",
+      plan: "{n} will be published, in this order:",
+      pulledIn:
+        "also published, because a sketch you chose goes on from them and they are not published yet: {titles}.",
+      leftOut: "at most {max} are sent in one press. {n} wait for the next one.",
+      already: "{n} of the sketches you chose are already published and are not published again.",
+      author: "your name",
+      go: "publish these ({n})",
+      running: "publishing {done} of {total}.",
+      stop: "stop after this one",
+      continue: "continue",
+      nothingLost:
+        "nothing is lost: what is published stays published, and the rest wait here, in this browser.",
+      elsewhere: "this set is being published in another tab.",
+      summary: "{published} published, {waiting} waiting.",
+      state: {
+        waiting: "waiting",
+        publishing: "publishing",
+        trying: "trying again ({n} of {of})",
+        published: "published",
+        already: "already published: an earlier try made it, so nothing was made twice",
+        skippedParent: "skipped: the sketch it goes on from was not published",
+        stopped: "stopped here",
+      },
+      stoppedBecause: {
+        gaveUp: "the service did not answer: {why}. nothing was lost; press continue to try again.",
+        mismatch:
+          "stopped here. the service made the last flip a little differently from this page, so anything built on it would not match. the rest was not published.",
+        render: "this sketch could not be made here: {why}",
+        cancelled: "stopped. press continue to go on.",
+      },
+      keyLost:
+        "the service made this flip on an earlier try, and its answer never reached this page, so its key was never shown. this flip cannot be changed or withdrawn from here.",
+      keyNotKept:
+        "this browser would not keep the key. copy it from here now: it is not shown again.",
+      editTitle: "change the title of {title}",
+      saveAndContinue: "save and continue",
+      result: "published: your links and keys",
+      resultIntro:
+        "each flip has its own link and its own key. a key is how you withdraw or close a flip later, and it is shown once.",
+      showKey: "show key",
+      hideKey: "hide key",
+      keyLabel: "key for {title}",
+      copyKeys: "copy all keys",
+      keysCopied: "copied. the keys are plain text: keep them somewhere safe.",
+      keysCopyFailed: "the keys could not be copied here. show a key and select it instead.",
+      keep: "keep these keys in this browser",
+      keepGloss: "so these flips are listed under your flips and you can manage them later",
+      forgotten: "forgotten. this browser no longer holds these keys.",
+      none: "nothing was chosen.",
+      open: "open",
+      flipNext: "flip this next",
+      leaveWarn:
+        "the keys of these flips are not kept in this browser and not copied. they are shown once. press flip this next again to leave anyway.",
+    },
+    publishedAlready: "this sketch is published, and a published sketch is not published again.",
+    empty: "no sketches yet. press keep as sketch after you hear a try you like.",
+    move: {
+      summary: "move my sketches",
+      copyLink: "copy my sketchbook link",
+      linkCopied:
+        "link copied. this link carries your sketches, and anyone you send it to can read them. it carries no keys and nothing that publishes anything.",
+      copyFailed: "the link could not be copied. nothing was changed.",
+      longLink:
+        "this link is long ({n} characters), and a messenger may cut it short. a file is the safer way.",
+      saveFile: "save my sketches to a file",
+      fileSaved:
+        "saved. the file carries your sketches in plain text, and no keys. anyone who has it can read them.",
+      addFile: "add sketches from a file",
+      fileBad:
+        "that is not a sketchbook file. it is a small text file made by save my sketches, at most 64 kilobytes.",
+      nothing: "keep a sketch first: there is nothing to move yet.",
+      question: "this carries {what}. add them to this browser?",
+      one: "1 sketch",
+      many: "{n} sketches",
+      moreTitles: "and {n} more",
+      yes: "add them",
+      no: "not now",
+      elsewhere: "this link carries sketches. they are added on the make page.",
+      goMake: "open the make page",
+      added: "added {n}.",
+      already: "{n} were already here.",
+      leftOut: "did not fit in the limit of {max}: {titles}.",
+      refused: {
+        tooLong: "this is too long to be a sketchbook link, so none of it was added.",
+        format: "this is not a sketchbook link, so none of it was added.",
+        version: "this was made by a newer version of graft and cannot be read here.",
+        cutShort:
+          "this link looks cut short, so none of it was added. ask for it again, or use a file.",
+        checksum: "this link was changed or damaged, so none of it was added.",
+        number: "this link has a number that is out of range, so none of it was added.",
+        title: "a title in this link breaks the rules for titles, so none of it was added.",
+        parent:
+          "a sketch in this link goes on from one that is not in it, so none of it was added.",
+        cycle:
+          "the sketches in this link go on from each other in a circle, so none of it was added.",
+        depth:
+          "the sketches in this link go on from each other too many times, so none of it was added.",
+        many: "this link carries more than {max} sketches, so none of it was added.",
+      },
+      storageFailed: "this browser would not keep them. nothing was added.",
+      newer: "this browser holds sketches from a newer version of graft, so nothing was added.",
+    },
+  },
+  /** The flips made from a stage, listed under it on a chain page. */
+  stageFlips: {
+    line: "flips of this stage ({n})",
+    label: "the flips of this stage",
+    none: "there are no flips of this stage yet.",
+    by: "by {author}",
+    more: "show more",
+    newest:
+      "newest first. titles and names are typed by the people who made them, and graft does not check them.",
+    failed: "the flips of this stage could not be read. the service may be waking up.",
+    moreFailed: "the next flips could not be read. the ones above are still here.",
+    tryAgain: "try again",
+    bank: {
+      open: "play these flips as pads",
+      close: "put the pads away",
+      heading: "the flips of this stage, as pads",
+      honesty:
+        "these are other people's flips of this stage. titles and names are shown as typed and are not checked. nothing here publishes anything.",
+      newest: "the newest {n} of {total} are on the pads.",
+      once: "there is one flip of this stage, so there is one pad.",
+      pad: "pad {n}, {title}",
+      preparing: "getting the sound ready",
+      goneHere: "no longer here",
+      held: "held",
+      unreadable: "could not be read",
+      retry: "try again: {title}",
+      keysOff: "number keys: off",
+      keysOn: "number keys: on",
+      keysWhy:
+        "the number keys play the pads only while this is on. escape turns it off. a screen reader keeps the digit keys for itself, so use the pads.",
+      recording: "recording: press the pads. sixteen seconds or sixty-four presses at most.",
+      phraseKeptLinked:
+        "phrase kept: {n} presses. the address of this page carries it, with the flips it was played on.",
+      phraseKept:
+        "phrase kept: {n} presses, for this visit. this page's link cannot carry it (another address part is in use).",
+      padRemoved: "this pad is no longer here, so it does not sound in the phrase.",
+      invite: "a run of pads came with this link, on these flips. no sound with it.",
+      linkCopied: "link copied. it carries the presses and the ids of the flips, and no sound.",
+      linkFailed: "the link could not be copied. the address bar has it.",
+    },
   },
   /** A phrase: the presses made in perform, kept in the page's address. */
   phrase: {
@@ -77,6 +340,16 @@ export const copy = {
     copyShort: "link",
     loop: "loop",
     clear: "clear",
+    /** Read when a button is hovered or focused: what each of the five does, in plain words. */
+    recTitle: "keep the pads you press, up to sixteen seconds",
+    playTitle: "play the pads you kept, once",
+    loopTitle: "repeat your phrase until you stop it",
+    copyTitle: "copy a link to this phrase: it holds the presses and no sound",
+    clearTitle: "remove this phrase",
+    /** Shown until there is a phrase: the five steps, in order. */
+    howTo: "press rec, tap pads, press stop rec, then play.",
+    /** Shown once there is one: the words that need a sentence. */
+    after: "play runs it once. loop repeats it until you stop it.",
     copy: "copy link",
     recording: "recording: press the pads. sixteen seconds or sixty-four presses at most.",
     empty: "nothing was pressed, so there is no phrase.",
@@ -227,10 +500,12 @@ export const copy = {
         "publishing is switched off for now. your flip is still here: you can keep making and try again later.",
       storageFull:
         "graft has reached the storage it keeps for sounds, so nothing new can be published for now. try again later.",
-      rateLimited: "you have published a lot in a short time. try again {when}.",
+      rateLimited:
+        "you have published a lot in a short time. nothing you made is lost, so please try again {when}.",
       publishCap:
-        "everyone together has published as much as is allowed for now. try again {when}.",
-      forkCap: "this stage has been flipped as often as is allowed this hour. try again {when}.",
+        "everyone together has published as much as is allowed for now. nothing you made is lost, so please try again {when}.",
+      forkCap:
+        "this stage has been flipped as often as is allowed this hour. nothing you made is lost, so please try again {when}.",
       forkClosed: "the maker of this stage has closed it to new flips.",
       depthCap: "this chain is as long as chains can be, so it cannot hold another stage.",
       parentHeld:
@@ -269,6 +544,11 @@ export const copy = {
     done: {
       heading: "published",
       link: "the link to your flip",
+      /** The main button: the next stage is made from this one, in this tab. */
+      next: "flip this next",
+      /** Shown when the key is neither kept in this browser nor copied and "flip this next" is pressed. */
+      leaveWarn:
+        "the key for this flip is not kept in this browser and not copied. it is shown once. press again to leave anyway.",
       open: "open it in a new tab",
       copy: "copy the link",
       copied: "copied.",
@@ -408,9 +688,9 @@ export const copy = {
     /** The keys and the pads: what perform is, and the page that lists every key. */
     perform: {
       heading: "playing it",
-      body: "turn on perform and the number keys play the stages of a chain: 1 to 9, 0, minus and equal are stages 1 to 12, by where the key is, so any keyboard works. every stage is also a pad you can touch. a press plays that stage whole, and nothing is cut or changed.",
+      body: `turn on perform and the number keys play the stages of a chain: 1 to 9, 0, minus and equal are stages 1 to 12, by where the key is, so any keyboard works. every stage is also a pad you can touch. a press plays that stage whole, and nothing is cut or changed. two rules decide what a press on another pad does: ${PAD_RULE.single} (${PAD_RULE.singleSays.replace(/\.$/, "")}) and ${PAD_RULE.overlap} (${PAD_RULE.overlapSays.replace(/\.$/, "")}).`,
       phrase:
-        "rec keeps your presses as a phrase: which pad, and when, up to sixteen seconds. play runs it again, once or round and round. the phrase lives in the address of the page, so copying the link sends it. it holds no sound and no name; a link you open only offers it, and it plays when you press play.",
+        "rec keeps your presses as a phrase: which pad, and when, up to sixteen seconds. play runs it again, once, and loop repeats it until you stop it. the phrase lives in the address of the page, so copying the link sends it. it holds no sound and no name; a link you open only offers it, and it plays when you press play.",
       keys: "the keys button lists every keyboard control of the page you are on. a screen reader keeps the digit keys for itself, so the pads are plain buttons.",
     },
     /** Own sounds are switched on or off by the service, so the page says it with a condition. */
@@ -418,12 +698,12 @@ export const copy = {
       heading: "your own sound",
       body: "when own sounds are switched on, the make page can start from your own recording or an audio file. the microphone asks your browser for permission first. the sound stays on your device until you publish it, and what is published is the sound as your browser read it. publish only sounds you made or may share: graft cannot check that for you.",
     },
-    isNot: {
-      heading: "what it is not",
-      body: "not a sampler: perform plays whole stages, with no slicing, no grid, no tempo, no effects and no export of sound. an independent experiment, not affiliated with or endorsed by any product named.",
+    whatItIs: {
+      heading: "what a flip is",
+      body: "a flip is one cut and one speed of one parent sound, and every pad plays exactly that, with its lineage kept. an independent experiment, not affiliated with or endorsed by any product named.",
       /** The same, for a build that holds perform back. */
       bodyWithoutPerform:
-        "not a sampler: one cut and one speed, with no pads, layers, effects or export. an independent experiment, not affiliated with or endorsed by any product named.",
+        "a flip is one cut and one speed of one parent sound, with its lineage kept. an independent experiment, not affiliated with or endorsed by any product named.",
     },
     states: {
       heading: "declared, computed, unknown",
@@ -446,7 +726,7 @@ export const copy = {
         tracker:
           "where error tracking is switched on, it runs without ip addresses, without session replay and with a scrubber.",
         browser:
-          "the only things graft can keep in your browser are your choice of light or dark, a note of how far you have got with the first-visit guide and the make-a-flip hints (one short word), and the manage key of each flip you publish from it, so that your flips can be listed here. you can untick the box when you publish, or forget a key on the your flips page.",
+          "the only things graft can keep in your browser are your choice of light or dark, a note of how far you have got with the first-visit guide and the make-a-flip hints (a short word each), the manage key of each flip you publish from it, so that your flips can be listed here, and your sketches (the tries you keep before you publish anything) with the choice of which to publish next. sketches never leave your browser unless you publish them. you can untick the box when you publish, forget a key on the your flips page, or discard any sketch.",
       },
     },
     takedown: {
@@ -516,7 +796,8 @@ export const copy = {
     title: "make a flip",
     kicker: "make a flip",
     home: "← graft",
-    intro: "cut a piece of a sound. play it faster or slower. hear it. share it if you like.",
+    intro:
+      "cut a piece of a sound, play it faster or slower, and hear it. keep the tries you like as sketches, and publish the ones worth sharing.",
     steps: {
       label: "steps",
       pick: "pick",
@@ -524,14 +805,20 @@ export const copy = {
       publish: "share",
     },
     local: "nothing leaves this device until you publish.",
+    /** What a flip is, in one line, above the editor. */
+    one: "a flip is one cut and one speed of one sound.",
     /** One line at a time above the editor, each gone when the visitor does the thing it says. */
     guide: {
-      pick: "pick any sound. you cut a piece of it next.",
-      hear: "this flip is already set up. press hear it.",
+      pick: "pick a sound. you cut a piece of it next.",
+      hear: "this flip plays higher, a fifth up. press hear it.",
       change: "now move a bracket or the speed, and hear it change.",
       /** A second, smaller line under the change hint: what the keyboard does to a bracket. */
       changeKeys: "arrow keys nudge a bracket; shift nudges it ten times more.",
-      share: "like it? publish it with the button below.",
+      keep: "like a try? keep it as a sketch. only you can hear it.",
+      another: "try another, or press go on from this on a sketch.",
+      pads: "put two sketches on the bank, then touch their pads.",
+      publish: "tick the ones worth keeping and press publish these.",
+      next: "after a flip is published, press flip this next.",
       skip: "skip",
       how: "how it works",
       label: "a short guide to making a flip",
@@ -540,6 +827,8 @@ export const copy = {
       heading: "pick a sound to start from",
       curated: "sounds made for graft",
       flips: "flips from the roll",
+      own: "your flips",
+      ownOlder: "{n} older flips are also kept in this browser.",
       by: "by {author}",
       choose: "flip this sound",
       change: "pick another sound",
@@ -657,8 +946,9 @@ export const copy = {
     wholeDown: "then it was slowed down.",
     wholeSame: "then it was kept as it was.",
     missing: "this step is no longer here. its credit stays.",
-    rest: "that is how it was made. tap any ring to hear that step.",
-    restOne: "that is all of it so far. tap the ring to hear it.",
+    rest: "that is how it was made. tap any ring to hear that step, or press make a flip to make the next one.",
+    restOne:
+      "that is all of it so far. tap the ring to hear it, or press make a flip to make the next one.",
     skip: "skip",
   },
   /** Two small hints after the first play, each shown once. */
@@ -706,8 +996,8 @@ export const copy = {
             "every stage is also a pad: touch it, or tab to it and press enter or space. a chain longer than twelve has pads that no key reaches.",
           ],
           [
-            "cut, layer",
-            "cut: a new press ends what sounds. layer: pads sound together, six at most.",
+            `${PAD_RULE.single}, ${PAD_RULE.overlap}`,
+            `${PAD_RULE.single}: ${PAD_RULE.singleSays} ${PAD_RULE.overlap}: ${PAD_RULE.overlapSays}`,
           ],
           [
             "rec, play phrase, loop",
@@ -747,6 +1037,34 @@ export const copy = {
           [
             "tab",
             "goes in the order of the page: pick, hear it, the brackets, the speed, publish.",
+          ],
+        ],
+        note: null,
+      },
+      {
+        // the bank is perform for sketches: a build that holds perform back holds it back too
+        id: "perform",
+        heading: "the sketch bank",
+        rows: [
+          [
+            "number keys: off, on",
+            "the button under the pads turns the number keys on. while it is off a digit never makes a sound. 1 to 9, 0, minus and equal play pads 1 to 12, by where the key is.",
+          ],
+          [
+            "typing in a field",
+            "a digit typed in the title field, the rename field or the publish form is typed, never played, and so is every other letter and symbol.",
+          ],
+          [
+            "escape",
+            "the first press ends a recording, or silences the sound and a phrase playing. the next turns the number keys off.",
+          ],
+          [
+            "the pads",
+            "each pad is a button: tab to it and press enter or space. move earlier, move later and remove from the bank change the order from the keyboard.",
+          ],
+          [
+            "the silent switch",
+            "on a phone with the ring switch set to silent, a pad may stay quiet: turn the switch off, or turn the volume up, and press again.",
           ],
         ],
         note: null,

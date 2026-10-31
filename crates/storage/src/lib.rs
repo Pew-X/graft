@@ -22,7 +22,7 @@ pub use gate::{Gate, NoGate};
 pub use guardrails::PublishToken;
 pub use maker::StageFlags;
 pub use orphans::{CleanupError, CleanupReport, remove_orphans};
-pub use postgres::{ForkFlags, NewPublication, Outcome, Store, StoreError};
+pub use postgres::{FlipsAfter, FlipsPage, ForkFlags, NewPublication, Outcome, Store, StoreError};
 pub use reports::{ReportCategory, ReportRow};
 pub use rollups::{Applied, Lag, Rebuilt, RollupRow};
 pub use s3::{S3BlobStore, S3Config, S3Credentials};

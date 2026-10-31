@@ -155,6 +155,8 @@ for (const [name, init] of [
       (u) =>
         !/^http:\/\/127\.0\.0\.1:(3100|59000)\//.test(u) &&
         !u.startsWith(`${API}/v1/chains/`) &&
+        // the list of a stage's flips is a read of the same kind as the chain read
+        !/^http:\/\/127\.0\.0\.1:\d+\/v1\/publications\/[0-9a-z]{12}\/flips\?/.test(u) &&
         u !== "about:blank",
     );
     expect(others).toEqual([]);
@@ -180,7 +182,11 @@ test("after a full session the browser holds no session id, no event and no cook
   expect(await context.cookies()).toEqual([]);
   const stored = await page.evaluate(async () => ({
     // the first-visit guide's note is a courtesy the page may keep; telemetry itself keeps nothing
-    local: Object.fromEntries(Object.entries(localStorage).filter(([k]) => k !== "graft.coach")),
+    local: Object.fromEntries(
+      Object.entries(localStorage).filter(
+        ([k]) => k !== "graft.coach" && k !== "graft.coach.sketch",
+      ),
+    ),
     session: { ...sessionStorage },
     databases: (await indexedDB.databases()).map((d) => d.name),
     cacheNames: await caches.keys(),

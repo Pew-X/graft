@@ -28,6 +28,7 @@ import { levelAt, liveDye } from "../lib/thread/live.ts";
 import { dyes } from "../lib/theme/tokens.ts";
 import { type Rect } from "../lib/coach/marks.ts";
 import { SAMPLE_RATE } from "../lib/playback/config.ts";
+import type { AudioContextLike } from "../lib/playback/webaudio.ts";
 import { usePerform } from "./usePerform.ts";
 import {
   type Event,
@@ -59,6 +60,8 @@ import { Footer } from "./Footer.tsx";
 import { Hint } from "./Hint.tsx";
 import { KeysSheet } from "./KeysSheet.tsx";
 import { PadBank } from "./PadBank.tsx";
+import { useNarrow } from "./useNarrow.ts";
+import type { FlipsAudio } from "./FlipsBank.tsx";
 import { Thread } from "./Thread.tsx";
 import { useHeld } from "./useHeld.ts";
 import { MOST_PADS_BY_KEY } from "../lib/perform/keys.ts";
@@ -117,6 +120,7 @@ export function RollPlayer({
   makeHref,
   apiUrl,
   flipsHref,
+  flipsFrom,
 }: {
   blocks: readonly Block[];
   load: Loader;
@@ -130,6 +134,8 @@ export function RollPlayer({
     | undefined;
   /** Where the bar's make a flip link goes; none, no link. */
   makeHref?: string | undefined;
+  /** Where the service is, to list the flips of the stage in view: only a chain read from the service has any. */
+  flipsFrom?: string | undefined;
   /** Where the service is, for reports. Without it there is nowhere to send one, so no report control is shown. */
   apiUrl?: string | undefined;
   /** The list of the flips this browser holds a key for, when it holds any: the footer links to it. */
@@ -528,9 +534,30 @@ export function RollPlayer({
           n: markSeconds(mark, (lengths[mark.stage] ?? 0) * 48_000).toFixed(2),
         })
       : undefined;
+  const narrow = useNarrow();
+  // what a bank of the stage's flips borrows from the roll: its one audio context, a pause, and the stages it shows
+  const flipsAudio = useMemo<FlipsAudio | undefined>(
+    () =>
+      flipsFrom
+        ? {
+            context: async () => {
+              await ensure();
+              const lazy = audio.current;
+              await lazy?.unlock();
+              if (!lazy?.context) throw new Error("no audio");
+              return lazy.context as unknown as AudioContextLike;
+            },
+            beforeSound: () => later((e) => e.pause()),
+            stageIds: new Set(blocks.map((b) => b.id)),
+            ready: toolsShown(phase) && load === "ready",
+          }
+        : undefined,
+    [flipsFrom, ensure, later, blocks, phase, load],
+  );
   const status =
     notice ||
     (marking && !markCut ? copy.mark.drag : "") ||
+    (performing && narrow ? copy.perform[`${perform.mode}Says`] : "") ||
     (performing
       ? fill(
           stages === 1
@@ -840,6 +867,8 @@ export function RollPlayer({
                 onReport={apiUrl ? onReport : undefined}
                 onMark={openMake ? toggleMarking : undefined}
                 marking={marking}
+                flipsFrom={flipsFrom}
+                flipsAudio={flipsAudio}
                 register={register}
                 onFocusBlock={onFocusBlock}
               />
@@ -872,7 +901,7 @@ export function RollPlayer({
       >
         {performing ? (
           <PadBank
-            blocks={blocks}
+            pads={blocks}
             playable={playable}
             reasons={reasons}
             marks={perform.marks}

@@ -137,6 +137,18 @@ pub fn availability(chain: &Chain) -> Vec<Option<Availability>> {
         .collect()
 }
 
+/// Whether every flip made from the last stage of `chain` is held: a rights hide stands on that
+/// stage or on one above it. This is the same rule as [`availability`] read from the parent's side
+/// (a flip is held exactly when a rights hide stands on an ancestor), so a list of a stage's flips
+/// and the chain read of any one of them never disagree. A withdrawn ancestor holds nothing, and a
+/// parent that could not be read holds nobody.
+#[must_use]
+pub fn holds_flips(chain: &Chain) -> bool {
+    chain.entries.iter().any(
+        |entry| matches!(entry, Entry::Present(stage) if stage.hidden == Some(HideReason::Rights)),
+    )
+}
+
 /// What a chain position holds.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Entry {
@@ -485,6 +497,33 @@ mod tests {
             ],
             "the rights hide at the top still holds everything below it"
         );
+    }
+
+    #[test]
+    fn the_flips_of_a_stage_are_held_exactly_when_the_chain_read_of_one_of_them_says_held() {
+        // Every combination of hides on a chain of up to four stages: extend it with a visible
+        // flip and the new stage is held exactly when `holds_flips` says its parent chain holds.
+        let options = [None, Some(HideReason::Withdrawn), Some(HideReason::Rights)];
+        for length in 1..=4usize {
+            for code in 0..options.len().pow(length as u32) {
+                let flags: Vec<Option<HideReason>> = (0..length)
+                    .map(|i| options[(code / options.len().pow(i as u32)) % options.len()])
+                    .collect();
+                let parent = chain_with(&flags);
+                let mut extended = flags.clone();
+                extended.push(None);
+                let child = chain_with(&extended);
+                let held =
+                    availability(&child).last().copied().flatten() == Some(Availability::Held);
+                assert_eq!(holds_flips(&parent), held, "hides {flags:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn an_unreadable_parent_holds_no_flips() {
+        let chain = assemble(&id(3), vec![flip(3, 2)], 12).expect("leaf present");
+        assert!(!holds_flips(&chain));
     }
 
     #[test]

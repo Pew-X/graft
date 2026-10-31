@@ -22,7 +22,7 @@ export function MakeGuide({
   onFaded: () => void;
 }) {
   useEffect(() => {
-    if (line !== "share") return;
+    if (line !== "next") return;
     const t = setTimeout(onFaded, LAST_STAYS_MS);
     return () => clearTimeout(t);
   }, [line, onFaded]);

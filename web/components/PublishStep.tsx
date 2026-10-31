@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { copy, fill } from "../lib/copy.ts";
 import {
@@ -86,6 +87,7 @@ export function PublishStep({
   apiUrl,
   onClose,
   onPublished,
+  retryKey: given,
   children,
 }: {
   /** What is being published, as a string: a different thing is a different attempt, with its own key. */
@@ -105,10 +107,14 @@ export function PublishStep({
   apiUrl: string;
   onClose: () => void;
   onPublished?: (id: string) => void;
+  /** A key made earlier for exactly this flip (a sketch's own), used instead of a fresh one for the first attempt. */
+  retryKey?: string;
   /** Extra fields between the name and the button. */
   children?: ReactNode;
 }) {
   const uid = useId();
+  const router = useRouter();
+  const [warned, setWarned] = useState(false);
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
   const [phase, setPhase] = useState<Phase>({ name: "form" });
@@ -139,7 +145,7 @@ export function PublishStep({
   async function submit(fresh = false) {
     if (busy.current) return; // a second tap while one is in flight does nothing
     if (fresh || attempt.current === null || attempt.current.signature !== signature) {
-      attempt.current = { signature, key: newRetryKey() };
+      attempt.current = { signature, key: !fresh && given !== undefined ? given : newRetryKey() };
     }
     busy.current = true;
     setPhase({ name: "publishing", attempt: 1, of: 1 });
@@ -185,7 +191,24 @@ export function PublishStep({
           </a>
         </p>
         <div className="actions">
-          {/* a new tab, so this screen (the ticket below is shown once) is still here when they come back */}
+          {/* the next stage is made from this one, in this tab. The ticket below is shown once: when it is
+              neither kept in this browser nor copied, the first press warns and the second leaves. */}
+          <button
+            type="button"
+            className="primary"
+            data-testid="flip-next"
+            onClick={() => {
+              const safe = outcome.manageKey === null || kept === "yes" || keyCopied === "yes";
+              if (!safe && !warned) {
+                setWarned(true);
+                return;
+              }
+              router.push(`/make?from=${outcome.id}`);
+            }}
+          >
+            {copy.publish.done.next}
+          </button>
+          {/* a new tab, so this screen is still here when they come back */}
           <a className="pill" href={`/p/${outcome.id}`} target="_blank" rel="noopener">
             {copy.publish.done.open}
           </a>
@@ -215,6 +238,11 @@ export function PublishStep({
                 : ""}
           </span>
         </div>
+        {warned ? (
+          <p className="notice" role="alert">
+            {copy.publish.done.leaveWarn}
+          </p>
+        ) : null}
         {outcome.previewMatches === false ? (
           <p className="notice" role="status">
             {copy.publish.done.mismatch}

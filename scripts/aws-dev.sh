@@ -20,10 +20,11 @@
 #                              the public service (ECS Express Mode): one small task behind /ready
 #   queue                      the event queue and its dead-letter queue (free at this size), and the task role's
 #                              permission to use just those two; nothing reads it until the service is told to
-#   redeploy --image <ref> [--queue-url <url>|off] [--uploads on|off]
+#   redeploy --image <ref> [--queue-url <url>|off] [--uploads on|off] [--limits generous]
 #                              update the running service to a new image and/or switch the event queue on (the
-#                              queue's address) or off; only those settings change; rolls back to the previous
-#                              revision if the new one never becomes ready
+#                              queue's address) or off, uploads on or off, or the publish limits to the generous
+#                              set (300 an hour per address, 1000 per stage, 2000 in all); only those settings
+#                              change; rolls back to the previous revision if the new one never becomes ready
 #   park | unpark              stop the service's task so the database can pause (the load balancer stays and
 #                              still bills), or bring the one task back
 #   warm [--days 7] | cool    keep the service up for a window (default 7 days): it is brought up and a tag the
@@ -523,9 +524,10 @@ EOF
 # finish and for /ready, and put the previous revision back if that never happens. Express rolls
 # blue/green, so two tasks run for ten minutes or more.
 phase_redeploy() {
-  image=$(opt --image "$@"); queue=$(opt --queue-url "$@"); uploads=$(opt --uploads "$@")
-  [ -n "$image" ] || [ -n "$queue" ] || [ -n "$uploads" ] || die "redeploy needs --image <ref>, --queue-url <the queue's address>|off and/or --uploads on|off"
+  image=$(opt --image "$@"); queue=$(opt --queue-url "$@"); uploads=$(opt --uploads "$@"); limits=$(opt --limits "$@")
+  [ -n "$image" ] || [ -n "$queue" ] || [ -n "$uploads" ] || [ -n "$limits" ] || die "redeploy needs --image <ref>, --queue-url <the queue's address>|off, --uploads on|off and/or --limits generous"
   case "$uploads" in ""|on|off) ;; *) die "--uploads is on or off" ;; esac
+  case "$limits" in ""|generous) ;; *) die "--limits is generous" ;; esac
   # only this deployment's own queue may be named: a typo must not point the service at another one
   case "$queue" in ""|off|"$(queue_url "$EVENTS_Q")") ;; *) die "--queue-url must be off or exactly $(queue_url "$EVENTS_Q")" ;; esac
   cost="a second task runs while the roll finishes (ten to fifteen minutes), then one again"
@@ -533,13 +535,18 @@ phase_redeploy() {
   previous=$(lookup ecs describe-services --cluster "$PREFIX" --services "$SVC" --query "services[0].deployments[?status=='PRIMARY'].taskDefinition | [0]")
   def=$(mktmp)
   if [ -n "${DRY_RUN:-}" ]; then
-    printf '{"note":"the running task definition, with image %s, event queue %s and uploads %s"}\n' "${image:-unchanged}" "${queue:-unchanged}" "${uploads:-unchanged}" > "$def"
+    printf '{"note":"the running task definition, with image %s, event queue %s, uploads %s and limits %s"}\n' "${image:-unchanged}" "${queue:-unchanged}" "${uploads:-unchanged}" "${limits:-unchanged}" > "$def"
   else
     [ -n "$previous" ] || die "could not read the running task definition of $SVC"
     command -v jq >/dev/null || die "redeploy needs jq"
     aws ecs describe-task-definition --task-definition "$previous" --query taskDefinition \
-      | jq --arg image "$image" --arg queue "$queue" --arg uploads "$uploads" '
+      | jq --arg image "$image" --arg queue "$queue" --arg uploads "$uploads" --arg limits "$limits" '
           (if $image != "" then .containerDefinitions[0].image = $image else . end)
+          | (if $limits == "" then .
+             else .containerDefinitions[0].environment = ((.containerDefinitions[0].environment // [])
+                  | map(select(.name | IN("GRAFT_PUBLISH_PER_IP","GRAFT_MAX_FORKS_PER_STAGE_PER_HOUR","GRAFT_GLOBAL_PUBLISH_PER_HOUR","GRAFT_GLOBAL_PUBLISH_BURST","GRAFT_REPORT_PER_IP") | not))
+                  + [{"name":"GRAFT_PUBLISH_PER_IP","value":"300"},{"name":"GRAFT_MAX_FORKS_PER_STAGE_PER_HOUR","value":"1000"},{"name":"GRAFT_GLOBAL_PUBLISH_PER_HOUR","value":"2000"},{"name":"GRAFT_GLOBAL_PUBLISH_BURST","value":"200"},{"name":"GRAFT_REPORT_PER_IP","value":"60"}])
+             end)
           | (if $uploads == "" then .
              else .containerDefinitions[0].environment = ((.containerDefinitions[0].environment // [])
                   | map(select(.name != "GRAFT_UPLOADS")) + [{"name":"GRAFT_UPLOADS","value":$uploads}])
@@ -551,7 +558,7 @@ phase_redeploy() {
              end)
           | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' > "$def"
   fi
-  td=$(mut "register the new task definition (only the image, the event queue setting and the uploads setting can differ)" ecs register-task-definition --cli-input-json "file://$def" --query taskDefinition.taskDefinitionArn --output text)
+  td=$(mut "register the new task definition (only the image, the event queue, uploads and the publish limits can differ)" ecs register-task-definition --cli-input-json "file://$def" --query taskDefinition.taskDefinitionArn --output text)
   mut "point the service at the new revision" ecs update-express-gateway-service --service-arn "$arn" --task-definition-arn "$td" --output json >/dev/null
   if [ -n "${DRY_RUN:-}" ]; then
     echo "if it is not ready within 20 minutes it would be rolled back to ${previous:-the revision now running}" >&2

@@ -140,3 +140,31 @@ test("closing the previewer stops the loop and closes its audio context, once", 
   assert.equal(f.sources[0]?.stopped, true);
   assert.equal(closed, 1);
 });
+
+test("playOnce plays from the start without looping, ends when the sound ends, and a stop ends it at once", async () => {
+  const f = fake();
+  const p = new Previewer(() => f.Ctor);
+  const first = p.playOnce(Int16Array.of(1, 2, 3));
+  await new Promise((r) => setTimeout(r, 5));
+  assert.equal(f.sources.at(-1)?.loop, false);
+  // the sound ends by itself
+  (f.sources.at(-1) as unknown as { onended: () => void }).onended();
+  await first;
+  // a second one is stopped by stop(): the wait ends without waiting for the sound
+  const second = p.playOnce(Int16Array.of(4, 5, 6));
+  await new Promise((r) => setTimeout(r, 5));
+  p.stop();
+  await second;
+  assert.equal(p.playing, false);
+});
+
+test("playing one sound once while a loop plays replaces the loop: only one is ever audible", async () => {
+  const f = fake();
+  const p = new Previewer(() => f.Ctor);
+  await p.play(Int16Array.of(1, 2));
+  const once = p.playOnce(Int16Array.of(3, 4));
+  await new Promise((r) => setTimeout(r, 5));
+  assert.equal(f.sources[0]?.stopped, true, "the loop was stopped");
+  p.stop();
+  await once;
+});

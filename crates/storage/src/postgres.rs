@@ -356,6 +356,53 @@ impl Store {
         fetch_stage(&self.pool, id).await
     }
 
+    /// A page of the flips made from `parent` that are not hidden, newest first (ties by id), and how
+    /// many there are in all. The page is found by the parent column's index and a keyset
+    /// comparison, so a page far down costs what the first costs. Whether a rights hide above
+    /// holds every flip is the caller's to decide (`graft_domain::chain::holds_flips`).
+    ///
+    /// The count and the page are two statements: a flip published or withdrawn between them can make
+    /// the total differ by one from the page's contents, and nothing else.
+    pub async fn flips_of(
+        &self,
+        parent: &PublicationId,
+        after: Option<&FlipsAfter>,
+        limit: u32,
+    ) -> Result<FlipsPage, StoreError> {
+        let total: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM content_records c JOIN publications p ON p.content_id = c.id \
+             WHERE c.parent_publication_id = $1 AND p.hidden_reason IS NULL",
+        )
+        .bind(parent.as_str())
+        .fetch_one(&self.pool)
+        .await
+        .map_err(db)?;
+        let sql = format!(
+            "SELECT {STAGE_COLUMNS}, (extract(epoch from p.created_at) * 1000000)::bigint AS created_us \
+             FROM content_records c JOIN publications p ON p.content_id = c.id \
+             WHERE c.parent_publication_id = $1 AND p.hidden_reason IS NULL \
+               AND ($2::bigint IS NULL OR (p.created_at, p.id) < \
+                    (timestamptz 'epoch' + $2::bigint * interval '1 microsecond', $3::text)) \
+             ORDER BY p.created_at DESC, p.id DESC LIMIT $4"
+        );
+        let rows = sqlx::query(sqlx::AssertSqlSafe(sql))
+            .bind(parent.as_str())
+            .bind(after.map(|a| a.created_us))
+            .bind(after.map(|a| a.id.as_str().to_owned()))
+            .bind(i64::from(limit))
+            .fetch_all(&self.pool)
+            .await
+            .map_err(db)?;
+        let flips = rows
+            .iter()
+            .map(|row| Ok((stage_from_row(row)?, row.try_get("created_us").map_err(db)?)))
+            .collect::<Result<Vec<_>, StoreError>>()?;
+        Ok(FlipsPage {
+            total: u64::try_from(total).unwrap_or(0),
+            flips,
+        })
+    }
+
     /// The chain ending at `leaf`, read as one statement and so one consistent snapshot.
     pub async fn chain(
         &self,
@@ -389,6 +436,25 @@ impl Store {
             .collect::<Result<Vec<_>, _>>()?;
         Ok(chain::assemble(leaf, stages, max_depth))
     }
+}
+
+/// Where a page of a stage's flips starts: strictly after this one in the order newest first, ties
+/// by id. The time is the publication's creation time in microseconds since the Unix epoch.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FlipsAfter {
+    /// Creation time of the last flip already seen, in microseconds.
+    pub created_us: i64,
+    /// Public id of that flip.
+    pub id: PublicationId,
+}
+
+/// One page of the flips made from a stage.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FlipsPage {
+    /// How many flips of the stage are visible (not hidden by the maker or the operator).
+    pub total: u64,
+    /// This page, newest first, each with its creation time in microseconds.
+    pub flips: Vec<(StoredStage, i64)>,
 }
 
 /// One publication read through any executor, so a caller that holds a connection (and a lock)

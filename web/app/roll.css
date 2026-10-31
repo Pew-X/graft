@@ -719,6 +719,87 @@ button:disabled {
 .details {
   margin-top: 0.25rem;
 }
+/* the flips made from this stage: one quiet line that opens a list */
+.flips-of {
+  margin-top: 0.25rem;
+}
+.flips-of-toggle {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font:
+    500 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.flips-of-toggle::after {
+  content: "+";
+  margin-left: 0.6em;
+}
+.flips-of-toggle[aria-expanded="true"]::after {
+  content: "\2212";
+}
+.flips-of-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.flips-of-item {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-top: 1px solid var(--hair);
+}
+.flips-of-trace {
+  flex: none;
+  width: 72px;
+}
+.flips-of-trace .trace {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 300 / 84;
+}
+.flips-of-text {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.flips-of-title {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-weight: 600;
+}
+.flips-of-by,
+.flips-of-facts {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font:
+    400 12px/1.4 var(--f-mono),
+    ui-monospace,
+    monospace;
+}
+.flips-of-note {
+  margin: 0.5rem 0 0;
+  color: var(--muted);
+  font:
+    400 12px/1.4 var(--f-mono),
+    ui-monospace,
+    monospace;
+}
+.block:not([data-hero="true"]) .flips-of {
+  opacity: 0.62;
+}
 .details summary {
   display: flex;
   align-items: center;
@@ -1023,7 +1104,7 @@ button:disabled {
   justify-content: center;
   gap: 6px;
 }
-/* cut | layer is one pill with two halves, and stop sits under it */
+/* one at a time | overlap is one pill with two halves, and stop sits under it */
 .bank-side .rule {
   display: flex;
   border: 1px solid rgb(236 230 216 / 0.4);
@@ -1031,7 +1112,8 @@ button:disabled {
   overflow: hidden;
 }
 .bank-side .rule button {
-  flex: 1;
+  flex: 1 1 auto;
+  white-space: nowrap;
   border: 0;
   border-radius: 0;
 }
@@ -1052,6 +1134,36 @@ button:disabled {
 .bank-side button[aria-pressed="true"] {
   background: #ece6d8;
   color: #0a0b0a;
+}
+
+/* one line of plain words under the rule and under the phrase buttons: what they do */
+.bank-help {
+  flex-basis: 100%;
+  margin: 0;
+  text-align: center;
+  color: rgb(236 230 216 / 0.78);
+  font:
+    400 11px/1.4 var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.04em;
+}
+.bank-help:empty {
+  display: none;
+}
+/* how-to sits beside rec while there is no phrase (the row has the room), so it adds no height */
+.bank-phrase .bank-help-how {
+  flex: 1 1 0;
+  text-align: left;
+}
+/* a narrow screen has no room for a line of its own under each group: the rule's sentence moves into the
+   status pill under the bank (where the keys hint, useless without a keyboard, would be), and the
+   line about play and loop goes; the buttons keep their titles */
+@media (max-width: 480px) {
+  .bank-help-rule,
+  .bank-help-after {
+    display: none;
+  }
 }
 
 /* a phrase: rec, play, loop, copy link and clear sit on a second row of the panel */
