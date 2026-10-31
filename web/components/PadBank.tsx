@@ -5,11 +5,18 @@ import { copy, fill } from "../lib/copy.ts";
 import { keyOfPad } from "../lib/perform/keys.ts";
 import { positionHint } from "../lib/perform/layout.ts";
 import type { Rule } from "../lib/perform/performer.ts";
-import type { Block } from "../lib/roll/view.ts";
-import type { PhraseControls } from "./usePerform.ts";
+import type { PhraseControls } from "./phrase-controls.ts";
+
+/** What a pad needs to show: a key for the list, a dye and a title. A roll's credit block and a sketch both fit. */
+export interface PadItem {
+  id: string;
+  dye: 0 | 1 | 2 | 3;
+  title: string;
+}
 
 interface Props {
-  blocks: readonly Block[];
+  /** One pad for each of these, in order. */
+  pads: readonly PadItem[];
   /** Whether each stage can be heard now. */
   playable: readonly boolean[];
   /** For a stage that cannot be heard, why, in words. */
@@ -23,6 +30,8 @@ interface Props {
   onPress: (stage: number) => void;
   onStop: () => void;
   phrase: PhraseControls;
+  /** A pad's name for a reader of the screen, with {n} and {title}; the roll's own words by default. */
+  padLabel?: string;
 }
 
 /**
@@ -33,7 +42,7 @@ interface Props {
  * screen reader's own digit keys are taken by its browse mode, so Tab, Enter and Space are its way in.
  */
 export const PadBank = memo(function PadBank({
-  blocks,
+  pads,
   playable,
   reasons,
   marks,
@@ -43,11 +52,12 @@ export const PadBank = memo(function PadBank({
   onPress,
   onStop,
   phrase,
+  padLabel = copy.perform.pad,
 }: Props) {
   return (
-    <div className="bank" data-count={blocks.length}>
+    <div className="bank" data-count={pads.length}>
       <div className="pads" role="group" aria-label={copy.perform.bank}>
-        {blocks.map((block, i) => {
+        {pads.map((block, i) => {
           const ok = playable[i] === true;
           const key = marks?.[i] ?? keyOfPad(i);
           return (
@@ -62,7 +72,7 @@ export const PadBank = memo(function PadBank({
               aria-disabled={ok ? undefined : "true"}
               aria-keyshortcuts={key ?? undefined}
               title={positionHint(i) ?? undefined}
-              aria-label={fill(copy.perform.pad, { n: i + 1, title: block.title })}
+              aria-label={fill(padLabel, { n: i + 1, title: block.title })}
               // the sound starts on the press itself; a key's Enter or Space arrives as a click with no detail
               onPointerDown={(e: ReactPointerEvent<HTMLButtonElement>) => {
                 if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -155,20 +165,22 @@ export const PadBank = memo(function PadBank({
             >
               {copy.phrase.loop}
             </button>
-            <button
-              type="button"
-              aria-label={copy.phrase.copy}
-              title={copy.phrase.copyTitle}
-              disabled={phrase.recording}
-              onClick={phrase.copyLink}
-            >
-              <span className="long" aria-hidden="true">
-                {copy.phrase.copy}
-              </span>
-              <span className="short" aria-hidden="true">
-                {copy.phrase.copyShort}
-              </span>
-            </button>
+            {phrase.canLink ? (
+              <button
+                type="button"
+                aria-label={copy.phrase.copy}
+                title={copy.phrase.copyTitle}
+                disabled={phrase.recording}
+                onClick={phrase.copyLink}
+              >
+                <span className="long" aria-hidden="true">
+                  {copy.phrase.copy}
+                </span>
+                <span className="short" aria-hidden="true">
+                  {copy.phrase.copyShort}
+                </span>
+              </button>
+            ) : null}
             <button type="button" title={copy.phrase.clearTitle} onClick={phrase.clear}>
               {copy.phrase.clear}
             </button>

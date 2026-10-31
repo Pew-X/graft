@@ -461,6 +461,7 @@ export function usePerform({
       recording,
       playing: phraseSounding,
       loop,
+      canLink: true,
       record,
       play: playPhrase,
       stop: stopAll,
@@ -526,7 +527,7 @@ function writePhrase(fragment: string | null): boolean {
 }
 
 /** What the pad bank and the invitation need of the phrase. */
-export type PhraseControls = ReturnType<typeof usePerform>["phrase"];
+export type { PhraseControls } from "./phrase-controls.ts";
 
 /** The ring's matching pad, if it is drawn, shows that it was pressed (a short light from within). */
 function flash(stage: number): void {

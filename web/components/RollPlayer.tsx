@@ -879,7 +879,7 @@ export function RollPlayer({
       >
         {performing ? (
           <PadBank
-            blocks={blocks}
+            pads={blocks}
             playable={playable}
             reasons={reasons}
             marks={perform.marks}
