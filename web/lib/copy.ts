@@ -76,7 +76,8 @@ export const copy = {
   /** Sketches: private tries, held in this browser only. */
   sketch: {
     heading: "your sketches",
-    intro: "a sketch is a try only you can hear. nothing is published until you press publish.",
+    intro:
+      "a sketch is a try only you can hear. a published flip is public and cannot be changed, so keep as many tries as you like and publish the one you love.",
     where:
       "sketches are kept in this browser only: closing the tab keeps them, and a private window loses them when it closes.",
     noAutosave: "the editor is not saved by itself. press keep as sketch to keep a try.",
@@ -788,8 +789,10 @@ export const copy = {
       "publishing your own sound is switched off in this demo. you can still record or pick a sound and try it here: it stays on this device. the sounds below can be flipped and published.",
     off: "uploading your own sounds is switched off for now. your sound stays here: you can keep cutting and flipping it, and flip the sounds that are here.",
     closed: "publishing is switched off for now. nothing can be published until it is back.",
-    rightsNote:
-      "publish only sounds you made or may share; graft cannot check that for you. anyone can report a sound, and a sound that is reported can be hidden, with the flips built on it held while it is looked at.",
+    rightsNote: "publish only sounds you made or may share; graft cannot check that for you.",
+    moreSummary: "more about recordings",
+    reportNote:
+      "anyone can report a sound, and a sound that is reported can be hidden, with the flips built on it held while it is looked at.",
     sourceDone: "your sound is published. you can now publish the flip you made from it.",
   },
   make: {
@@ -809,17 +812,18 @@ export const copy = {
     one: "a flip is one cut and one speed of one sound.",
     /** One line at a time above the editor, each gone when the visitor does the thing it says. */
     guide: {
-      pick: "pick a sound. you cut a piece of it next.",
+      pick: "pick a sound, or record your own. you cut a piece of it next.",
       hear: "this flip plays higher, a fifth up. press hear it.",
       change: "now move a bracket or the speed, and hear it change.",
       /** A second, smaller line under the change hint: what the keyboard does to a bracket. */
       changeKeys: "arrow keys nudge a bracket; shift nudges it ten times more.",
-      keep: "like a try? keep it as a sketch. only you can hear it.",
+      keep: "keep a try as a sketch. a published flip is permanent; a sketch is not.",
       another: "try another, or press go on from this on a sketch.",
       pads: "put two sketches on the bank, then touch their pads.",
       publish: "tick the ones worth keeping and press publish these.",
       next: "after a flip is published, press flip this next.",
       skip: "skip",
+      show: "show me",
       how: "how it works",
       label: "a short guide to making a flip",
     },

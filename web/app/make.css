@@ -67,7 +67,7 @@
   background: transparent;
   color: var(--ink);
   font:
-    500 11px var(--f-mono),
+    500 12px var(--f-mono),
     ui-monospace,
     monospace;
   letter-spacing: 0.14em;
@@ -168,7 +168,7 @@
   padding: 0 0.4rem;
   border: 1px solid currentColor;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -265,7 +265,7 @@
   background: var(--focus);
   color: var(--bg);
   font:
-    500 11px/1.4 var(--f-mono),
+    500 12px/1.4 var(--f-mono),
     ui-monospace,
     monospace;
   letter-spacing: 0.14em;
@@ -498,7 +498,7 @@
   display: block;
   margin-bottom: 0.25rem;
   font:
-    500 11px var(--f-mono),
+    500 12px var(--f-mono),
     ui-monospace,
     monospace;
   letter-spacing: 0.14em;
@@ -632,7 +632,7 @@
 .report-dialog legend {
   margin-bottom: 0.4rem;
   font:
-    500 11px var(--f-mono),
+    500 12px var(--f-mono),
     ui-monospace,
     monospace;
   letter-spacing: 0.14em;
@@ -769,7 +769,7 @@
 }
 .declaration legend {
   font:
-    500 11px var(--f-mono),
+    500 12px var(--f-mono),
     ui-monospace,
     monospace;
   letter-spacing: 0.14em;
@@ -954,7 +954,7 @@
 .stub-caption {
   margin: 0.5rem 0 0;
   font:
-    400 11px/1.4 var(--f-mono),
+    400 12px/1.4 var(--f-mono),
     ui-monospace,
     monospace;
 }
@@ -1149,11 +1149,9 @@
   transform-origin: left center;
   animation: make-guide-in 0.3s ease-out both;
 }
-@media (max-width: 620px) {
-  /* two lines of room, so a longer line does not move what is below it */
-  .make-guide {
-    min-height: calc(2 * 1.15em + 12px);
-  }
+/* two lines of room at every width, so a longer line (or one with show me beside it) never moves what is below */
+.make-guide {
+  min-height: calc(2 * 1.15em + 12px);
 }
 .make-guide-skip {
   flex: none;
@@ -1315,7 +1313,7 @@
 .keys-dialog h3 {
   margin: 1rem 0 0.4rem;
   font:
-    500 11px var(--f-mono),
+    500 12px var(--f-mono),
     ui-monospace,
     monospace;
   letter-spacing: 0.14em;
@@ -1423,7 +1421,7 @@
   display: block;
   margin-bottom: 0.25rem;
   font:
-    500 11px var(--f-mono),
+    500 12px var(--f-mono),
     ui-monospace,
     monospace;
   letter-spacing: 0.14em;
@@ -1491,7 +1489,7 @@
   min-height: 44px;
   cursor: pointer;
   font:
-    500 11px var(--f-mono),
+    500 12px var(--f-mono),
     ui-monospace,
     monospace;
   letter-spacing: 0.14em;
@@ -1613,7 +1611,7 @@
   display: block;
   margin-bottom: 0.25rem;
   font:
-    500 11px var(--f-mono),
+    500 12px var(--f-mono),
     ui-monospace,
     monospace;
   letter-spacing: 0.14em;
@@ -1690,4 +1688,40 @@
 }
 .set-publisher .problem {
   margin-top: 0.75rem;
+}
+
+/* sentences are read, so they are set as sentences: the serif italic the page already uses for glosses, not small mono.
+   Facts (a cut, a speed, a count) stay in mono. Nothing on this page is set under 12px. */
+.make .local,
+.make .notice,
+.keep-sketch .hint,
+.your-sketches > .hint,
+.set-publisher .hint,
+.set-publisher .progress,
+.sketch-bank-panel .hint,
+.opened-notes .hint,
+.own-more p {
+  font:
+    italic 400 17px/1.4 var(--f-serif),
+    serif;
+  letter-spacing: 0;
+}
+.own-more {
+  margin: 0.5rem 0 0;
+}
+.own-more summary {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  color: var(--muted);
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.1em;
+  text-decoration: underline;
+}
+.make .kicker {
+  font-size: 12px;
 }

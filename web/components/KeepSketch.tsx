@@ -108,6 +108,7 @@ export function KeepSketch({
           className="pill"
           disabled={!enabled || parent === null}
           aria-describedby={`${uid}-said`}
+          data-guide="keep"
           onClick={press}
         >
           {label ?? c.keep}

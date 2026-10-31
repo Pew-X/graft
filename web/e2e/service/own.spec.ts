@@ -150,7 +150,8 @@ test("with uploads on the page says plainly what graft cannot check, before anyt
   const note = page.getByTestId("rights-note");
   await expect(note).toBeVisible();
   await expect(note).toContainText("graft cannot check that for you");
-  await expect(note).toContainText("anyone can report a sound");
+  await page.getByText("more about recordings").click();
+  await expect(page.getByText("anyone can report a sound")).toBeVisible();
   await expect(page.getByTestId("uploads-off")).toHaveCount(0);
 });
 
