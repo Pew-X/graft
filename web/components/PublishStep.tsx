@@ -87,6 +87,7 @@ export function PublishStep({
   apiUrl,
   onClose,
   onPublished,
+  retryKey: given,
   children,
 }: {
   /** What is being published, as a string: a different thing is a different attempt, with its own key. */
@@ -106,6 +107,8 @@ export function PublishStep({
   apiUrl: string;
   onClose: () => void;
   onPublished?: (id: string) => void;
+  /** A key made earlier for exactly this flip (a sketch's own), used instead of a fresh one for the first attempt. */
+  retryKey?: string;
   /** Extra fields between the name and the button. */
   children?: ReactNode;
 }) {
@@ -142,7 +145,7 @@ export function PublishStep({
   async function submit(fresh = false) {
     if (busy.current) return; // a second tap while one is in flight does nothing
     if (fresh || attempt.current === null || attempt.current.signature !== signature) {
-      attempt.current = { signature, key: newRetryKey() };
+      attempt.current = { signature, key: !fresh && given !== undefined ? given : newRetryKey() };
     }
     busy.current = true;
     setPhase({ name: "publishing", attempt: 1, of: 1 });

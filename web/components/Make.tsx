@@ -11,7 +11,7 @@ import { Previewer } from "../lib/make/preview.ts";
 import { browserRenderer } from "../lib/make/browser-renderer.ts";
 import type { Renderer } from "../lib/make/renderer.ts";
 import type { Sound } from "../lib/make/sounds.ts";
-import { STOPS } from "../lib/make/speed.ts";
+import { STOPS, parseSpeed } from "../lib/make/speed.ts";
 import { nudge, speedOf, startEditing, withCut, withStop } from "../lib/make/editing.ts";
 import type { Start } from "../lib/make/editing.ts";
 import { next as nextGuide, replayAt, type MakeEvent, type MakePhase } from "../lib/coach/make.ts";
@@ -22,7 +22,15 @@ import { describeSpeed } from "../lib/roll/speed.ts";
 import { CutEditor } from "./CutEditor.tsx";
 import { type Features, readFeatures } from "../lib/own/features.ts";
 import { type Basis, DECLARATION_TEXT, sourceBody } from "../lib/own/source.ts";
+import { KeepSketch } from "./KeepSketch.tsx";
 import { OwnFlipsPicker } from "./OwnFlipsPicker.tsx";
+import { YourSketches } from "./YourSketches.tsx";
+import { announceSketchChange, sketchStorage, useSketchBook } from "./useSketchBook.ts";
+import { usePublicationRead } from "./usePublicationRead.ts";
+import { markPublished } from "../lib/sketch/book.ts";
+import { type Sketch } from "../lib/sketch/sketch.ts";
+import { whyNotPublishable } from "../lib/sketch/parent-state.ts";
+import { valueOf } from "../lib/make/editing.ts";
 import { OwnSound } from "./OwnSound.tsx";
 import { PublishStep } from "./PublishStep.tsx";
 import { KeysSheet } from "./KeysSheet.tsx";
@@ -59,21 +67,25 @@ export function Make({
   apiUrl: string;
 }) {
   const router = useRouter();
+  // a sketch opened from the list: the editor starts from its cut and speed, on its parent
+  const [opened, setOpened] = useState<Sketch | null>(null);
+  const targetId = opened?.parent.kind === "stage" ? opened.parent.id : from;
   const known = useMemo(
-    () => [...curated, ...flips].find((s) => s.id === from) ?? null,
-    [curated, flips, from],
+    () => [...curated, ...flips].find((s) => s.id === targetId) ?? null,
+    [curated, flips, targetId],
   );
   const [picked, setPicked] = useState<Sound | null>(null);
   // The maker's own sound: in memory only. `toTrim` is one longer than a source may be.
   const [own, setOwn] = useState<Int16Array | null>(null);
   const [toTrim, setToTrim] = useState<Int16Array | null>(null);
-  const origin: Origin | null = picked
-    ? { kind: "shipped", sound: picked }
-    : known
-      ? { kind: "shipped", sound: known }
-      : from
-        ? { kind: "live", id: from }
-        : null;
+  const origin: Origin | null =
+    picked && opened === null
+      ? { kind: "shipped", sound: picked }
+      : known
+        ? { kind: "shipped", sound: known }
+        : targetId
+          ? { kind: "live", id: targetId }
+          : null;
 
   // Asked when the page opens at the picker (a page opened on a stage, `?from=`, has no own-sound block
   // and asks nothing), so the own-sound block can say up front whether publishing a sound of one's own
@@ -118,8 +130,37 @@ export function Make({
     return fetchPcm(last.audio.url, signal);
   });
 
+  // a sketch that was kept against a sound it no longer fits (a shorter sound, a speed off the table)
+  // opens as a plain statement of why, never as a crash
+  const unfit: string | null =
+    opened !== null && sound.status === "ready"
+      ? parseSpeed(`${opened.p}/${opened.q}`) === null
+        ? copy.make.refusals.speedRange
+        : (() => {
+            const problem = checkFlip(sound.value, {
+              cut: opened.cut,
+              p: opened.p,
+              q: opened.q,
+            });
+            return problem ? refusal(problem) : null;
+          })()
+      : null;
   const editing =
     (origin !== null && sound.status === "ready") || (origin === null && own !== null);
+  const openSketch = useCallback((sketch: Sketch) => {
+    setOpened(sketch);
+    setPicked(null);
+  }, []);
+  // Back to the list. A sound named in the link is forgotten with it, and so is an opened sketch.
+  const leave = useCallback(() => {
+    setOpened(null);
+    if (from) router.push("/make");
+    else setPicked(null);
+  }, [from, router]);
+  // where the editor starts: a sketch's own cut and speed, else what the link names
+  const startFrom: Start = opened
+    ? { cut: `${opened.cut.start}-${opened.cut.end}`, speed: `${opened.p}/${opened.q}` }
+    : start;
   const picking = origin === null && own === null && toTrim === null;
   useEffect(() => {
     if (guide === "pick" && editing) queueMicrotask(() => send("picked"));
@@ -182,7 +223,8 @@ export function Make({
           engine={engine.status === "ready" ? engine.value : null}
           engineFailed={engine.status === "failed"}
           onRetryEngine={() => setEngineTry((n) => n + 1)}
-          start={start}
+          start={startFrom}
+          opened={null}
           onGuide={send}
           guideSlot={guideSlot}
           onChange={() => setOwn(null)}
@@ -193,7 +235,10 @@ export function Make({
           flips={flips}
           onChoose={setPicked}
           after={
-            <OwnFlipsPicker apiUrl={apiUrl} onChoose={(id) => router.push(`/make?from=${id}`)} />
+            <>
+              <YourSketches openedId={null} onOpen={openSketch} />
+              <OwnFlipsPicker apiUrl={apiUrl} onChoose={(id) => router.push(`/make?from=${id}`)} />
+            </>
           }
         >
           <OwnSound
@@ -206,26 +251,36 @@ export function Make({
           />
         </SoundPicker>
       ) : sound.status === "ready" ? (
-        <Editor
-          key={origin.kind === "shipped" ? origin.sound.id : origin.id}
-          title={origin.kind === "shipped" ? origin.sound.title : null}
-          own={false}
-          features={features}
-          parentId={origin.kind === "shipped" ? origin.sound.id : origin.id}
-          apiUrl={apiUrl}
-          samples={sound.value}
-          engine={engine.status === "ready" ? engine.value : null}
-          engineFailed={engine.status === "failed"}
-          onRetryEngine={() => setEngineTry((n) => n + 1)}
-          start={start}
-          onGuide={send}
-          guideSlot={guideSlot}
-          onChange={() => {
-            // Back to the list. A sound named in the link is forgotten with it.
-            if (from) router.push("/make");
-            else setPicked(null);
-          }}
-        />
+        unfit !== null ? (
+          <div data-testid="no-fit">
+            <p className="notice" role="status">
+              {fill(copy.sketch.noFit, { why: unfit })}
+            </p>
+            <div className="actions">
+              <button type="button" className="pill" onClick={leave}>
+                {copy.make.pick.change}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <Editor
+            key={`${origin.kind === "shipped" ? origin.sound.id : origin.id}:${opened?.id ?? ""}`}
+            title={origin.kind === "shipped" ? origin.sound.title : null}
+            own={false}
+            features={features}
+            parentId={origin.kind === "shipped" ? origin.sound.id : origin.id}
+            apiUrl={apiUrl}
+            samples={sound.value}
+            engine={engine.status === "ready" ? engine.value : null}
+            engineFailed={engine.status === "failed"}
+            onRetryEngine={() => setEngineTry((n) => n + 1)}
+            start={startFrom}
+            opened={opened}
+            onGuide={send}
+            guideSlot={guideSlot}
+            onChange={leave}
+          />
+        )
       ) : (
         <div>
           <p className="notice" role="status">
@@ -237,14 +292,7 @@ export function Make({
           </p>
           {sound.status === "failed" ? (
             <div className="actions">
-              <button
-                type="button"
-                className="pill"
-                onClick={() => {
-                  if (from) router.push("/make");
-                  else setPicked(null);
-                }}
-              >
+              <button type="button" className="pill" onClick={leave}>
                 {copy.make.pick.change}
               </button>
               {sound.error instanceof GoneError ? null : (
@@ -256,6 +304,9 @@ export function Make({
           ) : null}
         </div>
       )}
+      {editing && unfit === null ? (
+        <YourSketches openedId={opened?.id ?? null} onOpen={openSketch} />
+      ) : null}
       <p className="local">{copy.make.local}</p>
       <p className="local">{copy.make.one}</p>
     </div>
@@ -275,6 +326,7 @@ function Editor({
   engineFailed,
   onRetryEngine,
   start,
+  opened,
   onGuide,
   guideSlot,
   onChange,
@@ -291,6 +343,8 @@ function Editor({
   engineFailed: boolean;
   onRetryEngine: () => void;
   start: Start;
+  /** The sketch this editor was opened from, if any. */
+  opened: Sketch | null;
   /** What the visitor did that the make flow's hints follow. */
   onGuide: (event: MakeEvent) => void;
   /** The hint line, drawn under the step markers. */
@@ -328,6 +382,13 @@ function Editor({
   );
 
   const { p, q, cents } = speedOf(editing);
+  const sameAsOpened =
+    opened !== null &&
+    opened.cut.start === cut.start &&
+    opened.cut.end === cut.end &&
+    opened.p === p &&
+    opened.q === q;
+  const alreadyPublished = sameAsOpened && opened.publishedAs !== undefined;
   const speed = describeSpeed(p, q);
   const problem = checkFlip(samples, { cut, p, q });
   const outLength = problem ? null : outputFrames(cut.end - cut.start, p, q);
@@ -470,7 +531,7 @@ function Editor({
           >
             {listening ? copy.make.hear.pause : copy.make.hear.play}
           </button>
-          {publishing ? null : (
+          {publishing || alreadyPublished ? null : (
             <button
               type="button"
               className="pill"
@@ -530,6 +591,14 @@ function Editor({
             </dl>
           </details>
         ) : null}
+        <KeepSketch
+          parent={flipParent === null ? null : { kind: "stage", id: flipParent }}
+          value={valueOf(editing)}
+          enabled={problem === null}
+        />
+        {opened && flipParent !== null ? (
+          <OpenedNotes opened={opened} apiUrl={apiUrl} parentId={flipParent} />
+        ) : null}
       </section>
       {own && publishingSource ? (
         <PublishStep
@@ -574,9 +643,17 @@ function Editor({
           </fieldset>
         </PublishStep>
       ) : null}
-      {publishing && flipParent !== null ? (
+      {publishing && flipParent !== null && !alreadyPublished ? (
         <PublishStep
           signature={`${flipParent}:${cut.start}-${cut.end}:${p}/${q}`}
+          {...(sameAsOpened && opened ? { retryKey: opened.retryKey } : {})}
+          onPublished={(id) => {
+            // a sketch published unchanged is recorded as what it became, so it is not published twice
+            if (sameAsOpened && opened) {
+              markPublished(sketchStorage(), opened.id, id);
+              announceSketchChange();
+            }
+          }}
           buildBody={({ title, author, retryKey }) => ({
             parent_id: flipParent,
             cut: { start: cut.start, end: cut.end },
@@ -593,5 +670,48 @@ function Editor({
         />
       ) : null}
     </>
+  );
+}
+
+/**
+ * What is true of the sketch the editor was opened from: whether it was discarded in another tab (the editor
+ * keeps its values), whether the sound it was cut from can still be flipped (asked again of the service, and
+ * by itself while it wakes), and whether it has been published already.
+ */
+function OpenedNotes({
+  opened,
+  apiUrl,
+  parentId,
+}: {
+  opened: Sketch;
+  apiUrl: string;
+  parentId: string;
+}) {
+  const book = useSketchBook();
+  const here = book.sketches.find((s) => s.id === opened.id);
+  const { read } = usePublicationRead(apiUrl, parentId);
+  const why = read.status === "ready" ? whyNotPublishable(read.value) : null;
+  const c = copy.sketch;
+  return (
+    <div className="opened-notes">
+      {here === undefined ? (
+        <p className="notice" role="status">
+          {c.elsewhere}
+        </p>
+      ) : null}
+      {why !== null && opened.publishedAs === undefined ? (
+        <p className="notice" role="status">
+          {fill(c.cannot.prefix, { why })}
+        </p>
+      ) : null}
+      {(here ?? opened).publishedAs !== undefined ? (
+        <p className="hint" role="status">
+          {c.publishedAlready}{" "}
+          <a className="link" href={`/p/${(here ?? opened).publishedAs}`}>
+            {c.openPublished}
+          </a>
+        </p>
+      ) : null}
+    </div>
   );
 }

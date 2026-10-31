@@ -154,6 +154,8 @@ test("anything in the kept keys that is not an id is never listed or asked about
   });
   await page.goto("/make");
   await expect(page.locator(".own-flip")).toHaveCount(1);
+  // the row exists before its read is answered: wait for the answer, then look at what was asked
+  await expect(page.locator(".own-flip")).toContainText("only one");
   expect(asked).toEqual([`/v1/publications/${A}`]);
 });
 

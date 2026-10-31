@@ -1367,3 +1367,92 @@
   letter-spacing: 0.02em;
   color: var(--muted);
 }
+
+/* sketches: private tries, listed under the editor and in the picker */
+.your-sketches {
+  margin: 1.5rem 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--hair);
+}
+.sketch-list {
+  list-style: none;
+  margin: 0.5rem 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.your-sketch {
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.your-sketch[data-open="true"] {
+  border-color: var(--ink);
+}
+.sketch-title {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+.your-sketch .hint {
+  margin: 0.15rem 0;
+  overflow-wrap: anywhere;
+}
+.sketch-ask,
+.sketch-rename {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+.sketch-rename input {
+  flex: 1 1 12rem;
+  min-height: 44px;
+}
+.keep-sketch {
+  margin-top: 1rem;
+}
+.opened-notes {
+  margin-top: 0.75rem;
+}
+.keep-sketch .field {
+  margin: 0 0 0.75rem;
+}
+.keep-sketch label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font:
+    500 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.keep-sketch input[type="text"],
+.sketch-rename input[type="text"] {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.25rem 0.6rem;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 1rem;
+}
+.keep-sketch .hint,
+.your-sketches .hint,
+.opened-notes .hint {
+  min-height: 1.5em;
+  margin: 0.25rem 0 0;
+  overflow-wrap: anywhere;
+  font:
+    400 12px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+  color: var(--muted);
+}
+.keep-sketch .hint,
+.opened-notes .notice {
+  overflow-wrap: anywhere;
+}
