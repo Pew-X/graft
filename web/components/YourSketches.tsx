@@ -290,7 +290,7 @@ export function YourSketches({
   onGoOn: (sketch: Sketch) => void;
   where: Where;
   compare?: CompareApi;
-  bank?: BankApi;
+  bank?: BankApi | undefined;
   children?: React.ReactNode;
 }) {
   const book = useSketchBook();

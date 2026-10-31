@@ -5,7 +5,10 @@ import {
   type KeepInput,
   type StorageLike,
   below,
+  addToBank,
   discard,
+  moveInBank,
+  removeFromBank,
   keep,
   markPublished,
   oldestUnused,
@@ -229,4 +232,25 @@ test("a sketch whose parent sketch is missing is unreadable, and so is everythin
   );
   assert.ok(!book.sketches.some((x) => x.id === grand.id));
   assert.equal(book.unread.length, 1, "kept as it was, not shown");
+});
+
+test("the bank holds a sketch once, at most twelve, in an order that can be changed, and discarding a sketch takes it off", () => {
+  const s = new Fake();
+  const made = Array.from(
+    { length: 13 },
+    (_, n) => must(keep(s, input({ cut: { start: 0, end: 1_000 + n } }), n)).sketch,
+  );
+  for (const k of made.slice(0, 12)) must(addToBank(s, k.id));
+  must(addToBank(s, made[0]!.id)); // already there: no second place
+  assert.equal(readBook(s).bank.length, 12);
+  assert.deepEqual(addToBank(s, made[12]!.id), { ok: false, why: "full" });
+  assert.deepEqual(addToBank(s, "sk" + "9".repeat(12)), { ok: false, why: "missing" });
+  must(moveInBank(s, made[3]!.id, -2));
+  assert.equal(readBook(s).bank[1], made[3]!.id);
+  must(moveInBank(s, made[3]!.id, -50));
+  assert.equal(readBook(s).bank[0], made[3]!.id, "stops at the ends");
+  must(removeFromBank(s, made[3]!.id));
+  assert.equal(readBook(s).bank.includes(made[3]!.id), false);
+  must(discard(s, made[5]!.id));
+  assert.equal(readBook(s).bank.includes(made[5]!.id), false);
 });

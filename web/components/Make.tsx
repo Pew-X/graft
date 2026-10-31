@@ -25,11 +25,15 @@ import { type Basis, DECLARATION_TEXT, sourceBody } from "../lib/own/source.ts";
 import { KeepSketch } from "./KeepSketch.tsx";
 import { OwnFlipsPicker } from "./OwnFlipsPicker.tsx";
 import { MoveSketches } from "./MoveSketches.tsx";
-import { type CompareApi, YourSketches } from "./YourSketches.tsx";
+import { type BankApi, type CompareApi, YourSketches } from "./YourSketches.tsx";
+import { SketchBankPanel } from "./SketchBankPanel.tsx";
+import { useSketchBank } from "./useSketchBank.ts";
+import { PERFORM_ON } from "../lib/perform/enabled.ts";
 import { useStageDepth } from "./useStageDepth.ts";
 import { announceSketchChange, sketchStorage, useSketchBook } from "./useSketchBook.ts";
 import { usePublicationRead } from "./usePublicationRead.ts";
-import { markPublished } from "../lib/sketch/book.ts";
+import { addToBank, markPublished, removeFromBank } from "../lib/sketch/book.ts";
+import { MOST_ON_BANK } from "../lib/sketch/sketch.ts";
 import { type Sketch } from "../lib/sketch/sketch.ts";
 import { whyNotPublishable } from "../lib/sketch/parent-state.ts";
 import { pathKey, pathOf, publishedParent } from "../lib/sketch/path.ts";
@@ -384,6 +388,36 @@ export function Make({
                 : fill(copy.sketch.budget.room, { n: room });
           })();
 
+  // The sketch bank: up to twelve sketches on pads, heard together. It shares the page's one audio context,
+  // and a pad sounding quiets whatever else this page is playing.
+  const [bankStatus, setBankStatus] = useState("");
+  const bank = useSketchBank({
+    previewer,
+    book,
+    samplesOf,
+    beforeSound: () => {
+      heard.current += 1;
+      previewer.stop();
+      setCmpPlaying(false);
+      setQuiet((n) => n + 1);
+    },
+    say: setBankStatus,
+  });
+  const bankApi: BankApi = {
+    has: (id) => book.bank.includes(id),
+    add: (id) => {
+      const made = addToBank(sketchStorage(), id);
+      announceSketchChange();
+      if (made.ok) return "";
+      return made.why === "full"
+        ? fill(copy.sketch.bank.full, { max: MOST_ON_BANK })
+        : copy.sketch.failed.invalid;
+    },
+    remove: (id) => {
+      removeFromBank(sketchStorage(), id);
+      announceSketchChange();
+    },
+  };
   const picking = origin === null && own === null && toTrim === null;
   useEffect(() => {
     if (guide === "pick" && editing) queueMicrotask(() => send("picked"));
@@ -469,6 +503,7 @@ export function Make({
                 onGoOn={goOn}
                 where={where}
                 compare={compare}
+                bank={PERFORM_ON ? bankApi : undefined}
               />
               <OwnFlipsPicker apiUrl={apiUrl} onChoose={(id) => router.push(`/make?from=${id}`)} />
             </>
@@ -562,7 +597,11 @@ export function Make({
           onGoOn={goOn}
           where={where}
           compare={compare}
+          bank={PERFORM_ON ? bankApi : undefined}
         />
+      ) : null}
+      {PERFORM_ON && book.sketches.length > 0 ? (
+        <SketchBankPanel bank={bank} status={bankStatus} />
       ) : null}
       <MoveSketches />
       <p className="local">{copy.make.local}</p>

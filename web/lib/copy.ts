@@ -945,6 +945,34 @@ export const copy = {
         ],
         note: null,
       },
+      {
+        // the bank is perform for sketches: a build that holds perform back holds it back too
+        id: "perform",
+        heading: "the sketch bank",
+        rows: [
+          [
+            "number keys: off, on",
+            "the button under the pads turns the number keys on. while it is off a digit never makes a sound. 1 to 9, 0, minus and equal play pads 1 to 12, by where the key is.",
+          ],
+          [
+            "typing in a field",
+            "a digit typed in the title field, the rename field or the publish form is typed, never played, and so is every other letter and symbol.",
+          ],
+          [
+            "escape",
+            "the first press ends a recording, or silences the sound and a phrase playing. the next turns the number keys off.",
+          ],
+          [
+            "the pads",
+            "each pad is a button: tab to it and press enter or space. move earlier, move later and remove from the bank change the order from the keyboard.",
+          ],
+          [
+            "the silent switch",
+            "on a phone with the ring switch set to silent, a pad may stay quiet: turn the switch off, or turn the volume up, and press again.",
+          ],
+        ],
+        note: null,
+      },
     ],
   },
 } as const;

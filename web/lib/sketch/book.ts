@@ -285,3 +285,38 @@ export function twinOf(book: Book, sketch: Sketch): Sketch | null {
     ) ?? null
   );
 }
+
+export type BankChange = { ok: true; book: Book } | { ok: false; why: "full" | "missing" | string };
+
+/** Put a sketch on the sketch bank, last. A sketch is on a bank at most once, and a bank holds twelve. */
+export function addToBank(storage: StorageLike | null, id: string): BankChange {
+  const made = transact<null>(storage, (book) => {
+    if (!book.sketches.some((s) => s.id === id)) return "missing";
+    if (book.bank.includes(id)) return { book, extra: null };
+    if (book.bank.length >= MOST_ON_BANK) return "full";
+    return { book: { ...book, bank: [...book.bank, id] }, extra: null };
+  });
+  return made.ok ? { ok: true, book: made.book } : made;
+}
+
+export function removeFromBank(storage: StorageLike | null, id: string): BankChange {
+  const made = transact<null>(storage, (book) => ({
+    book: { ...book, bank: book.bank.filter((b) => b !== id) },
+    extra: null,
+  }));
+  return made.ok ? { ok: true, book: made.book } : made;
+}
+
+/** Move a pad earlier (negative) or later (positive) by a number of places, stopping at the ends. */
+export function moveInBank(storage: StorageLike | null, id: string, by: number): BankChange {
+  const made = transact<null>(storage, (book) => {
+    const at = book.bank.indexOf(id);
+    if (at < 0) return "missing";
+    const to = Math.max(0, Math.min(book.bank.length - 1, at + by));
+    const bank = [...book.bank];
+    bank.splice(at, 1);
+    bank.splice(to, 0, id);
+    return { book: { ...book, bank }, extra: null };
+  });
+  return made.ok ? { ok: true, book: made.book } : made;
+}
