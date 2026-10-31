@@ -681,3 +681,12 @@ test("redeploy can switch visitor uploads on or off by themselves, and says so i
   assert.notEqual(none.status, 0);
 });
 
+
+test("redeploy can raise the publish limits by themselves, and refuses any other word", () => {
+  const out = plan(sandbox().run(["redeploy", "--limits", "generous"], { DRY_RUN: "1" }));
+  assert.match(out, /limits generous/);
+  assert.match(out, /register-task-definition/);
+  const bad = sandbox().run(["redeploy", "--limits", "none"], { DRY_RUN: "1" });
+  assert.notEqual(bad.status, 0);
+  assert.match(plan(bad), /--limits is generous/);
+});
