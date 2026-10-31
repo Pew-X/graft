@@ -1725,3 +1725,119 @@
 .make .kicker {
   font-size: 12px;
 }
+
+/* how graft works: five steps in the page's own serif, numbered, one idea each */
+.how-card {
+  margin: 0 0 1.5rem;
+  padding: 0.25rem 0 0.75rem;
+  border-top: 1px solid var(--hair);
+  border-bottom: 1px solid var(--hair);
+}
+.how-card summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  cursor: pointer;
+  list-style: none;
+}
+.how-card summary::-webkit-details-marker {
+  display: none;
+}
+.how-card summary::after {
+  content: "+";
+  margin-left: auto;
+  padding-left: 1rem;
+  font:
+    500 16px var(--f-mono),
+    ui-monospace,
+    monospace;
+}
+.how-card[open] summary::after {
+  content: "\2212";
+}
+.how-title {
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.how-lead {
+  margin: 0.25rem 0 0.75rem;
+  max-width: 60ch;
+  font:
+    italic 400 clamp(18px, 2vw, 21px) / 1.4 var(--f-serif),
+    ui-serif,
+    Georgia,
+    serif;
+}
+.how-steps {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: how;
+}
+.how-steps li {
+  display: grid;
+  grid-template-columns: 2rem 1fr;
+  column-gap: 0.5rem;
+  counter-increment: how;
+  max-width: 62ch;
+}
+.how-steps li::before {
+  content: counter(how);
+  grid-row: 1 / span 2;
+  font:
+    400 28px/1 var(--f-brush),
+    cursive;
+}
+.how-name {
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.how-body {
+  font:
+    italic 400 17px/1.4 var(--f-serif),
+    ui-serif,
+    Georgia,
+    serif;
+}
+.how-own {
+  margin: 0.9rem 0 0;
+  max-width: 60ch;
+  font:
+    italic 400 17px/1.4 var(--f-serif),
+    ui-serif,
+    Georgia,
+    serif;
+  color: var(--muted);
+}
+
+/* a long recording: a small picture of the whole, a labelled control to move the minute shown */
+.trim-where {
+  margin: 0.5rem 0 1rem;
+}
+.trim-overview {
+  display: block;
+  width: 100%;
+  height: 56px;
+  margin: 0.5rem 0 0.25rem;
+  background: var(--surface);
+}
+.trim-window {
+  fill: var(--ink);
+  opacity: 0.22;
+}
+.trim-where input[type="range"] {
+  width: 100%;
+  min-height: 44px;
+  accent-color: var(--ink);
+}

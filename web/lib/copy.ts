@@ -697,7 +697,7 @@ export const copy = {
     /** Own sounds are switched on or off by the service, so the page says it with a condition. */
     own: {
       heading: "your own sound",
-      body: "when own sounds are switched on, the make page can start from your own recording or an audio file. the microphone asks your browser for permission first. the sound stays on your device until you publish it, and what is published is the sound as your browser read it. publish only sounds you made or may share: graft cannot check that for you.",
+      body: "when own sounds are switched on, the make page can start from your own recording or an audio file of up to thirty minutes, and you pick up to 15 seconds of it to keep. the microphone asks your browser for permission first. the sound stays on your device until you publish it, and what is published is the sound as your browser read it. publish only sounds you made or may share: graft cannot check that for you.",
     },
     whatItIs: {
       heading: "what a flip is",
@@ -760,13 +760,21 @@ export const copy = {
       "the microphone was not allowed. the sounds made for graft work without it, and you can pick a file instead.",
     unavailable:
       "this browser has no microphone it can use. the sounds made for graft work without it, and you can pick a file instead.",
-    tooBig: "that file is too large. the limit is 30 megabytes.",
+    tooBig:
+      "that file is too large. the limit is 150 megabytes. a thirty minute recording fits as mp3 or m4a, not as wav.",
     unreadable: "that file could not be read as audio. try a wav, mp3, m4a or ogg file.",
     empty: "that file holds no sound.",
     channels:
       "that file has more than two channels, which graft does not read. a mono or stereo file will work.",
-    tooLongToTrim: "that recording is over two minutes, too long to trim here. pick a shorter one.",
+    tooLongToTrim:
+      "that recording is over thirty minutes, too long to read here. pick a shorter one.",
     trimHeading: "pick the part to keep",
+    trimLong:
+      "this recording is {total} long. move along it to find the moment, then place the brackets in the minute shown.",
+    trimWhere: "where in the recording",
+    trimWhereValue: "{at} of {total}",
+    trimHear: "hear this part",
+    trimStopHear: "stop",
     trimGloss: "a source is at most 15 seconds. the rest is left out.",
     trimUse: "use this part",
     trimTooLong: "that part is too long. a source is at most {max} frames, 15 seconds.",
@@ -795,12 +803,40 @@ export const copy = {
       "anyone can report a sound, and a sound that is reported can be hidden, with the flips built on it held while it is looked at.",
     sourceDone: "your sound is published. you can now publish the flip you made from it.",
   },
+  /** The idea of graft in five plain steps: shown on the make page, and again on the about page. */
+  how: {
+    heading: "how graft works",
+    lead: "graft lets you hear where a sound came from, and add the next step yourself.",
+    steps: [
+      {
+        name: "a flip",
+        body: "a flip is a piece of a sound played faster or slower. that is all it does.",
+      },
+      {
+        name: "a lineage",
+        body: "every flip remembers the sound it came from. follow that back and you have its lineage: each sound, who made it, and what it was made from. the record on the first page plays one.",
+      },
+      {
+        name: "publishing",
+        body: "publishing adds your flip to the lineage, where anyone can hear it and flip it again. it cannot be changed afterwards.",
+      },
+      {
+        name: "sketches",
+        body: "so try first. a sketch is a try only you can hear. keep as many as you like, play them side by side on pads, then publish the one you love.",
+      },
+      {
+        name: "your key",
+        body: "when you publish you get a key. it is the only way to close or withdraw that flip later, and graft has no accounts, so keep it.",
+      },
+    ],
+    own: "have a recording of your own? add it here, pick up to 15 seconds of it, and it starts a new lineage.",
+    open: "show how graft works",
+    close: "hide how graft works",
+  },
   make: {
     title: "make a flip",
     kicker: "make a flip",
     home: "← graft",
-    intro:
-      "cut a piece of a sound, play it faster or slower, and hear it. keep the tries you like as sketches, and publish the ones worth sharing.",
     steps: {
       label: "steps",
       pick: "pick",
