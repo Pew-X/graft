@@ -233,6 +233,14 @@ export function Make({
     if (path !== null) return fetchPcm(path, signal);
     return loadStage(liveId ?? "", signal);
   });
+  // the name of a published flip being flipped (one the make page does not ship): read from its chain,
+  // so the editor says which sound this is, as it does for a shipped one
+  const liveTitle = useAsync(liveId === null ? null : `title:${liveId}`, async (signal) => {
+    void signal;
+    const chain = await fetchChain(createApi(apiUrl), liveId ?? "");
+    const last = chain?.stages.at(-1);
+    return last && last.state === "available" ? last.title : null;
+  });
   // a sketch that was kept against a sound it no longer fits (a shorter sound, a speed off the table)
   // opens as a plain statement of why, never as a crash
   const unfit: string | null =
@@ -590,7 +598,9 @@ export function Make({
                 ? origin.sound.title
                 : origin.kind === "sketch"
                   ? origin.parent.title
-                  : null
+                  : liveTitle.status === "ready"
+                    ? liveTitle.value
+                    : null
             }
             own={false}
             features={features}

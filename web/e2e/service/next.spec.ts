@@ -33,7 +33,8 @@ test("from a shipped pick, flip this next opens the NEW stage in the same tab, n
   const id = href.replace("/p/", "");
   await page.getByTestId("flip-next").click();
   await expect(page).toHaveURL(new RegExp(`/make\\?from=${id}$`));
-  await expect(page.locator(".stage-head .slab-text")).toHaveCount(0); // a live stage has no shipped title
+  // the editor names the flip being flipped, as it does for a shipped sound
+  await expect(page.locator(".stage-head .slab-text")).toHaveText("first of a pair");
   await expect(page.locator("[data-output-hash]:not([data-output-hash=''])")).toBeVisible();
   expect(page.context().pages().length).toBe(tabs);
   // and the new editor can publish again: a second flip, a chain of two of the maker's own
