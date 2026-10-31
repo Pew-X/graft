@@ -153,7 +153,7 @@ for (const size of SIZES) {
           size.height,
         );
       }
-      await expect(page.getByTestId("make-intro")).toBeVisible();
+      await expect(page.getByTestId("how-card")).toBeVisible();
     });
   });
 }

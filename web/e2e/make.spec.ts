@@ -1,6 +1,7 @@
 // The make flow in a real browser, against the built site and its shipped snapshots (no service).
 import { expect, test, type Page } from "@playwright/test";
-import { readFileSync } from "node:fs";
+import { closeSync, ftruncateSync, mkdtempSync, openSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -258,13 +259,20 @@ test("a sound that fails to load gives a way back to the list, not a dead end", 
 test("a file over the size limit is refused by its size alone, without being read", async ({
   page,
 }) => {
-  await page.goto("/make");
-  await page.locator("input[type=file]").setInputFiles({
-    name: "huge.wav",
-    mimeType: "audio/wav",
-    buffer: Buffer.alloc(30_000_001),
-  });
-  await expect(page.getByText("that file is too large")).toBeVisible();
+  // a sparse file one byte over 150 megabytes: it takes no disk and is never read
+  const dir = mkdtempSync(join(tmpdir(), "graft-big-"));
+  const path = join(dir, "huge.wav");
+  const fd = openSync(path, "w");
+  ftruncateSync(fd, 150_000_001);
+  closeSync(fd);
+  try {
+    await page.goto("/make");
+    await page.locator("input[type=file]").setInputFiles(path);
+    await expect(page.getByText("that file is too large")).toBeVisible();
+    await expect(page.getByText("limit is 150 megabytes")).toBeVisible();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 // The way in from the header: a visitor who presses "make a flip" has not picked anything yet, so the
@@ -331,18 +339,40 @@ test.describe("arriving from the header's make a flip", () => {
     await expect(main.locator(".cut-editor .help")).toBeVisible();
   });
 
-  test("the picker's intro is one short line and the steps read pick, cut and speed, share", async ({
+  test("a returning visitor finds the explanation folded, and it opens when asked", async ({
     page,
   }) => {
     await page.goto("/make");
-    await expect(page.getByTestId("make-intro")).toHaveText(
-      "cut a piece of a sound, play it faster or slower, and hear it. keep the tries you like as sketches, and publish the ones worth sharing.",
-    );
-    await expect(page.getByTestId("steps").locator("li")).toHaveText([
-      /pick/,
-      /cut and speed/,
-      /share/,
-    ]);
+    const card = page.getByTestId("how-card");
+    await expect(card).toBeVisible();
+    await expect(card).not.toHaveAttribute("open", "");
+    await card.getByText("how graft works").click();
+    await expect(card).toHaveAttribute("open", "");
+    await expect(card.locator(".how-name")).toHaveCount(5);
+  });
+
+  test.describe("a first visit", () => {
+    test.use({ storageState: { cookies: [], origins: [] } });
+    test("the picker explains the idea in five steps and the steps read pick, cut and speed, share", async ({
+      page,
+    }) => {
+      await page.goto("/make");
+      const card = page.getByTestId("how-card");
+      await expect(card).toHaveAttribute("open", "");
+      await expect(card.locator(".how-name")).toHaveText([
+        "a flip",
+        "a lineage",
+        "publishing",
+        "sketches",
+        "your key",
+      ]);
+      await expect(card).toContainText("follow that back and you have its lineage");
+      await expect(page.getByTestId("steps").locator("li")).toHaveText([
+        /pick/,
+        /cut and speed/,
+        /share/,
+      ]);
+    });
   });
 });
 
@@ -351,4 +381,26 @@ test("the make page has one top heading", async ({ page }) => {
   await ready(page);
   await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(/make a flip/i);
+});
+
+test("the about page tells the same five steps, open", async ({ page }) => {
+  await page.goto("/about");
+  const card = page.getByTestId("how-card");
+  await expect(card).toHaveAttribute("open", "");
+  await expect(card.locator(".how-name")).toHaveText([
+    "a flip",
+    "a lineage",
+    "publishing",
+    "sketches",
+    "your key",
+  ]);
+});
+
+test("how it works on the editor opens the plain explanation above it", async ({ page }) => {
+  await page.goto("/make?from=es1418qka9yt&cut=0-43200&speed=3/2");
+  await ready(page);
+  await expect(page.getByTestId("how-card")).toHaveCount(0);
+  await page.getByRole("button", { name: /how it works/ }).click();
+  await expect(page.getByTestId("how-card")).toBeVisible();
+  await expect(page.getByTestId("how-card")).toHaveAttribute("open", "");
 });

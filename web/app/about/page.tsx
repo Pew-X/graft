@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Footer } from "../../components/Footer.tsx";
+import { HowItWorks } from "../../components/HowItWorks.tsx";
 import { copy, fill } from "../../lib/copy.ts";
 import { PERFORM_ON } from "../../lib/perform/enabled.ts";
 import sources from "../../snapshot/sources.json";
@@ -45,6 +46,7 @@ export default function About() {
         </div>
         <p className="about-sentence">{copy.site.sentence}</p>
         <p>{a.what.body}</p>
+        <HowItWorks open id="how-about" />
         <section>
           <h2 className="kicker">{a.tour.heading}</h2>
           <p>{a.tour.body}</p>

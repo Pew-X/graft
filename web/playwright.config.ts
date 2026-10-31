@@ -56,6 +56,8 @@ export default defineConfig({
         "**/sketch-move.spec.ts",
         "**/sketch-bank.spec.ts",
         "**/sketch-set.spec.ts",
+        // a long recording is decoded and held in memory, where WebKit (an iPhone) is the engine to worry about
+        "**/long-recording.spec.ts",
       ],
       use: { browserName: "webkit", baseURL: "http://127.0.0.1:3100" },
     },

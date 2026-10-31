@@ -52,6 +52,7 @@ import { OwnSound } from "./OwnSound.tsx";
 import { PublishStep } from "./PublishStep.tsx";
 import { KeysSheet } from "./KeysSheet.tsx";
 import { MakeGuide } from "./MakeGuide.tsx";
+import { HowItWorks } from "./HowItWorks.tsx";
 import { TrimStep } from "./TrimStep.tsx";
 import { SoundPicker } from "./SoundPicker.tsx";
 import { Steps } from "./Steps.tsx";
@@ -164,6 +165,9 @@ export function Make({
   // is shown.
   const [guide, setGuide] = useState<MakePhase>("done");
   const [slot, setSlot] = useState(false);
+  // "how it works" on the editor also opens the plain explanation above it (on the picker it is already there)
+  const [showHow, setShowHow] = useState(false);
+  const [firstVisit, setFirstVisit] = useState(false);
   const send = useCallback(
     (event: MakeEvent) => setGuide((p) => nextGuide(p, event, PERFORM_ON)),
     [setGuide],
@@ -174,6 +178,8 @@ export function Make({
     // read after the page is up, in a microtask: the server cannot know what the browser has stored
     queueMicrotask(() => {
       const from = startPhase();
+      // the plain explanation is open on a first visit, and stays however a visitor leaves it after that
+      setFirstVisit(from === "pick");
       if (from === "done") return;
       setGuide(from);
       setSlot(true);
@@ -500,6 +506,7 @@ export function Make({
           onClick={() => {
             setSlot(true);
             setGuide(replayAt(editing));
+            setShowHow(true);
           }}
         >
           <span aria-hidden="true">{copy.footer.howMark}</span> {copy.make.guide.how}
@@ -514,13 +521,14 @@ export function Make({
         </>
       )}
       {origin === null && own === null && toTrim === null ? (
-        <p className="lede" data-testid="make-intro">
-          {copy.make.intro}
-        </p>
+        <HowItWorks open={firstVisit} />
+      ) : showHow && editing ? (
+        <HowItWorks open id="how-editor" />
       ) : null}
       {origin === null && toTrim !== null ? (
         <TrimStep
           samples={toTrim}
+          previewer={previewer}
           onUse={(part) => {
             setOwn(part);
             setToTrim(null);
