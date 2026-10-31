@@ -69,8 +69,15 @@ export function parseBook(text: string | null): Book {
     seen.add(sketch.id);
     sketches.push(sketch);
   }
-  const ids = new Set(sketches.map((s) => s.id));
-  const kept = sketches.filter((s) => s.parent.kind === "stage" || ids.has(s.parent.id));
+  // a sketch whose parent sketch is not in the book is unreadable too, and so is whatever goes on from it:
+  // repeat until no more sketches are lost, so no sketch left has a missing parent at any depth
+  let kept = sketches;
+  for (;;) {
+    const ids = new Set(kept.map((s) => s.id));
+    const next = kept.filter((s) => s.parent.kind === "stage" || ids.has(s.parent.id));
+    if (next.length === kept.length) break;
+    kept = next;
+  }
   const keptIds = new Set(kept.map((s) => s.id));
   const orphans = sketches.filter((s) => !keptIds.has(s.id));
   const bankRaw = Array.isArray(data["bank"]) ? (data["bank"] as unknown[]) : [];

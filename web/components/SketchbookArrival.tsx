@@ -45,7 +45,7 @@ export function SketchbookArrival() {
   if (payload === null) return null;
   if (path === "/make") return <ImportQuestion key={arrival.n} text={payload} onDone={done} />;
   return (
-    <div className="sketch-arrival" role="status" data-testid="import-elsewhere">
+    <div className="sketch-arrival aside" role="status" data-testid="import-elsewhere">
       <p>{copy.sketch.move.elsewhere}</p>
       <div className="actions">
         <a className="pill" href={`/make${FRAGMENT}${payload}`}>

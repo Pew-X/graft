@@ -212,3 +212,21 @@ test("the same try kept twice is allowed and each knows its twin", () => {
   assert.equal(twinOf(book, b)?.id, a.id);
   assert.equal(twinOf(book, a), null, "the first is not a twin of the later one");
 });
+
+test("a sketch whose parent sketch is missing is unreadable, and so is everything that goes on from it", () => {
+  const s = new Fake();
+  const root = must(keep(s, input())).sketch;
+  const child = must(keep(s, input({ parent: { kind: "sketch", id: root.id } }))).sketch;
+  const grand = must(keep(s, input({ parent: { kind: "sketch", id: child.id } }))).sketch;
+  const stored = JSON.parse(s.data.get(BOOK_KEY) ?? "{}") as { sketches: Array<{ id: string }> };
+  // the middle one goes missing (as a hand-edited or half-synced store could leave it)
+  stored.sketches = stored.sketches.filter((x) => x.id !== child.id);
+  s.data.set(BOOK_KEY, JSON.stringify(stored));
+  const book = readBook(s);
+  assert.deepEqual(
+    book.sketches.map((x) => x.id),
+    [root.id],
+  );
+  assert.ok(!book.sketches.some((x) => x.id === grand.id));
+  assert.equal(book.unread.length, 1, "kept as it was, not shown");
+});

@@ -1505,3 +1505,19 @@
     monospace;
   color: var(--muted);
 }
+/* on a page that has its own controls along the bottom (the roll), the offer sits under the header instead */
+.sketch-arrival.aside {
+  top: 64px;
+  bottom: auto;
+  left: auto;
+  right: 12px;
+  transform: none;
+  width: min(340px, calc(100vw - 24px));
+}
+@media (max-width: 480px) {
+  .sketch-arrival.aside {
+    left: 12px;
+    right: 12px;
+    width: auto;
+  }
+}

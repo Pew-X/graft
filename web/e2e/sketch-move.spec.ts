@@ -311,3 +311,19 @@ test("with nothing kept there is nothing to move, and the question passes an acc
   void ready;
   await seeded.close();
 });
+
+test("a phrase recorded on a page opened by a sketchbook link does not replace the link", async ({
+  page,
+}) => {
+  const hash = "#sketchbook=g1.0.W10.00000000";
+  await page.goto(`/${hash}`);
+  await expect(page.locator(".roll")).toHaveAttribute("data-audio", "ready");
+  await page.getByRole("button", { name: "perform", exact: true }).click();
+  await expect(page.locator(".roll")).toHaveAttribute("data-latency", /\d/);
+  await page.getByRole("button", { name: /^rec/ }).click();
+  await page.keyboard.press("Digit1");
+  await page.keyboard.press("Digit2");
+  await page.getByRole("button", { name: /stop rec/ }).click();
+  await expect(page.getByText(/this page's link cannot carry it/)).toBeVisible();
+  expect(new URL(page.url()).hash).toBe(hash);
+});
