@@ -124,7 +124,7 @@ const row = (page: Page, title: string) =>
     has: page.locator(".sketch-title", { hasText: new RegExp(`^${title}$`) }),
   });
 const chooseAll = async (page: Page, titles = ["low", "high", "low then lower"]): Promise<void> => {
-  for (const t of titles) await row(page, t).getByLabel("choose for publish these").check();
+  for (const t of titles) await row(page, t).getByLabel("publish this one").check();
 };
 async function start(page: Page, name = "set maker"): Promise<void> {
   await page.getByLabel(/^your name/).fill(name);
@@ -185,7 +185,7 @@ test("a chosen sketch brings its unpublished parent in, and says so before it st
   await seed(page);
   await service(page, (n) => created(n + 1));
   await page.goto("/make");
-  await row(page, "low then lower").getByLabel("choose for publish these").check();
+  await row(page, "low then lower").getByLabel("publish this one").check();
   await expect(page.getByText("2 will be published, in this order:")).toBeVisible();
   await expect(
     page.getByText(

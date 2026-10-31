@@ -54,7 +54,7 @@ async function total(request: Parameters<typeof publishFlip>[0], id: string): Pr
 }
 
 const choose = async (page: Page): Promise<void> => {
-  for (const box of await page.getByLabel("choose for publish these").all()) await box.check();
+  for (const box of await page.getByLabel("publish this one").all()) await box.check();
 };
 
 test("four sketches, one going on from another, publish as a set: the right number exist, the child's render is the service's, and your flips lists all four", async ({

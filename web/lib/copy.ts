@@ -182,7 +182,7 @@ export const copy = {
     },
     set: {
       heading: "publish these",
-      choose: "choose for publish these",
+      choose: "publish this one",
       intro:
         "tick the sketches to publish, then press publish these. they go out in order, and the links and keys end up on one screen.",
       plan: "{n} will be published, in this order:",
