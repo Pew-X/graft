@@ -25,8 +25,10 @@ import { type Basis, DECLARATION_TEXT, sourceBody } from "../lib/own/source.ts";
 import { KeepSketch } from "./KeepSketch.tsx";
 import { OwnFlipsPicker } from "./OwnFlipsPicker.tsx";
 import { MoveSketches } from "./MoveSketches.tsx";
-import { type BankApi, type CompareApi, YourSketches } from "./YourSketches.tsx";
+import { type BankApi, type ChooseApi, type CompareApi, YourSketches } from "./YourSketches.tsx";
 import { SketchBankPanel } from "./SketchBankPanel.tsx";
+import { SetPublisher } from "./SetPublisher.tsx";
+import { useSketchSet } from "./useSketchSet.ts";
 import { useSketchBank } from "./useSketchBank.ts";
 import { PERFORM_ON } from "../lib/perform/enabled.ts";
 import { useStageDepth } from "./useStageDepth.ts";
@@ -391,6 +393,26 @@ export function Make({
   // The sketch bank: up to twelve sketches on pads, heard together. It shares the page's one audio context,
   // and a pad sounding quiets whatever else this page is playing.
   const [bankStatus, setBankStatus] = useState("");
+  const sketchSet = useSketchSet();
+  const chooseApi: ChooseApi = {
+    has: (id) => sketchSet.chosen.ids.includes(id),
+    toggle: sketchSet.toggle,
+  };
+  const hashOf = useCallback(
+    async (sketch: Sketch): Promise<{ ok: true; hash: string } | { ok: false; why: string }> => {
+      const path = pathOf(book, sketch.id);
+      if (!path.ok) return { ok: false, why: copy.sketch.cannot.missing };
+      if (!renderer) return { ok: false, why: copy.make.renderer.loading };
+      try {
+        const rootSamples = await rootAudio(path.root);
+        const made = await cache.current.render(renderer, path.root, rootSamples, path.steps);
+        return made.ok ? { ok: true, hash: made.hash } : { ok: false, why: refusal(made.problem) };
+      } catch {
+        return { ok: false, why: copy.make.pick.failed };
+      }
+    },
+    [book, renderer, rootAudio],
+  );
   const bank = useSketchBank({
     previewer,
     book,
@@ -504,6 +526,7 @@ export function Make({
                 where={where}
                 compare={compare}
                 bank={PERFORM_ON ? bankApi : undefined}
+                choose={chooseApi}
               />
               <OwnFlipsPicker apiUrl={apiUrl} onChoose={(id) => router.push(`/make?from=${id}`)} />
             </>
@@ -598,11 +621,13 @@ export function Make({
           where={where}
           compare={compare}
           bank={PERFORM_ON ? bankApi : undefined}
+          choose={chooseApi}
         />
       ) : null}
       {PERFORM_ON && book.sketches.length > 0 ? (
         <SketchBankPanel bank={bank} status={bankStatus} />
       ) : null}
+      {book.sketches.length > 0 ? <SetPublisher apiUrl={apiUrl} render={hashOf} /> : null}
       <MoveSketches />
       <p className="local">{copy.make.local}</p>
       <p className="local">{copy.make.one}</p>

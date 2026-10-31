@@ -180,6 +180,62 @@ export const copy = {
       phraseLocal:
         "a phrase on this bank is kept for this visit only and cannot be sent as a link.",
     },
+    set: {
+      heading: "publish these",
+      choose: "choose for publish these",
+      intro:
+        "tick the sketches worth keeping, then press publish these. they are published in order, one after another, and every link and every key ends on one screen.",
+      plan: "{n} will be published, in this order:",
+      pulledIn:
+        "also published, because a sketch you chose goes on from them and they are not published yet: {titles}.",
+      leftOut: "at most {max} are sent in one press. {n} wait for the next one.",
+      already: "{n} of the sketches you chose are already published and are not published again.",
+      author: "your name",
+      go: "publish these ({n})",
+      running: "publishing {done} of {total}.",
+      stop: "stop after this one",
+      continue: "continue",
+      nothingLost:
+        "nothing is lost: what is published stays published, and the rest wait here, in this browser.",
+      elsewhere: "this set is being published in another tab.",
+      summary: "{published} published, {waiting} waiting.",
+      state: {
+        waiting: "waiting",
+        publishing: "publishing",
+        trying: "trying again ({n} of {of})",
+        published: "published",
+        already: "already published: an earlier try made it, so nothing was made twice",
+        skippedParent: "skipped: the sketch it goes on from was not published",
+        stopped: "stopped here",
+      },
+      stoppedBecause: {
+        gaveUp: "the service did not answer: {why}. nothing was lost; press continue to try again.",
+        mismatch:
+          "the set stopped here: the last flip came out differently on the service than it did here, so what goes on from it would be made from a sound the service does not hold.",
+        render: "this sketch could not be made here: {why}",
+        cancelled: "stopped. press continue to go on.",
+      },
+      keyLost:
+        "the service made this flip on an earlier try, and its answer never reached this page, so its key was never shown. this flip cannot be changed or withdrawn from here.",
+      keyNotKept:
+        "this browser would not keep the key. copy it from here now: it is not shown again.",
+      editTitle: "change the title of {title}",
+      saveAndContinue: "save and continue",
+      result: "published: your links and keys",
+      resultIntro:
+        "each flip has its own link and its own key. a key is how you withdraw or close a flip later, and it is shown once.",
+      showKey: "show key",
+      hideKey: "hide key",
+      keyLabel: "key for {title}",
+      copyKeys: "copy all keys",
+      keysCopied: "copied. the keys are plain text: keep them somewhere safe.",
+      keysCopyFailed: "the keys could not be copied here. show a key and select it instead.",
+      keep: "keep these keys in this browser",
+      keepGloss: "so these flips are listed under your flips and you can manage them later",
+      forgotten: "forgotten. this browser no longer holds these keys.",
+      none: "nothing was chosen.",
+      open: "open",
+    },
     publishedAlready: "this sketch is published, and a published sketch is not published again.",
     empty: "no sketches yet. press keep as sketch after you hear a try you like.",
     move: {

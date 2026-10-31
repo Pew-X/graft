@@ -28,6 +28,12 @@ export interface CompareApi {
   clear: () => void;
 }
 
+/** Which sketches are chosen for "publish these". */
+export interface ChooseApi {
+  has: (id: string) => boolean;
+  toggle: (id: string) => void;
+}
+
 /** What a row can do with the sketch bank: whether this sketch is on it, and putting it on or taking it off. */
 export interface BankApi {
   has: (id: string) => boolean;
@@ -51,6 +57,7 @@ function Row({
   where,
   compare,
   bank,
+  choose,
   onOpen,
   onGoOn,
   onGone,
@@ -64,6 +71,7 @@ function Row({
   where: Where;
   compare: CompareApi | undefined;
   bank: BankApi | undefined;
+  choose: ChooseApi | undefined;
   onOpen: (sketch: Sketch) => void;
   onGoOn: (sketch: Sketch) => void;
   onGone: (message: string) => void;
@@ -129,6 +137,16 @@ function Row({
             {c.openPublished}
           </a>
         </p>
+      ) : null}
+      {choose && sketch.publishedAs === undefined ? (
+        <label className="check sketch-choose">
+          <input
+            type="checkbox"
+            checked={choose.has(sketch.id)}
+            onChange={() => choose.toggle(sketch.id)}
+          />
+          <span>{c.set.choose}</span>
+        </label>
       ) : null}
       <p className="hint sketch-room" role="status">
         {depth.state === "checking"
@@ -283,6 +301,7 @@ export function YourSketches({
   where,
   compare,
   bank,
+  choose,
   children,
 }: {
   openedId: string | null;
@@ -291,6 +310,7 @@ export function YourSketches({
   where: Where;
   compare?: CompareApi;
   bank?: BankApi | undefined;
+  choose?: ChooseApi | undefined;
   children?: React.ReactNode;
 }) {
   const book = useSketchBook();
@@ -351,6 +371,7 @@ export function YourSketches({
             where={where}
             compare={compare}
             bank={bank}
+            choose={choose}
             onOpen={onOpen}
             onGoOn={onGoOn}
             onGone={setMessage}

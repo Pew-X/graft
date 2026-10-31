@@ -1599,3 +1599,95 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+/* publish these: the plan, the progress of each sketch, and the one screen of links and keys */
+.set-publisher {
+  margin: 1.5rem 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--hair);
+}
+.set-publisher .field {
+  margin: 0 0 0.75rem;
+}
+.set-publisher label:not(.check) {
+  display: block;
+  margin-bottom: 0.25rem;
+  font:
+    500 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.set-publisher input[type="text"] {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.25rem 0.6rem;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 1rem;
+}
+.set-publisher .hint,
+.set-publisher .progress {
+  margin: 0.25rem 0 0;
+  overflow-wrap: anywhere;
+  font:
+    400 12px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+  color: var(--muted);
+}
+.set-plan,
+.set-progress,
+.set-links {
+  margin: 0.5rem 0 1rem;
+  padding-left: 1.2rem;
+}
+.set-progress,
+.set-links {
+  list-style: none;
+  padding-left: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.set-progress li,
+.set-links li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.set-title {
+  flex: 1 1 10rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+.set-state {
+  font:
+    400 12px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+  color: var(--muted);
+}
+.set-progress li[data-status="published"] .set-state {
+  color: var(--ink);
+}
+.set-links a {
+  overflow-wrap: anywhere;
+}
+.set-links code {
+  flex: 1 1 100%;
+  overflow-wrap: anywhere;
+  padding: 0.4rem 0.6rem;
+  background: var(--ink);
+  color: var(--bg);
+}
+.set-publisher .problem {
+  margin-top: 0.75rem;
+}
