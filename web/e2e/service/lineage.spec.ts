@@ -136,6 +136,37 @@ test("own sound to three stages: the panels are named, one next button continues
   await expect(page.getByText("stage 2, made from hook isolate")).toBeVisible();
   await expect(page.getByText("source", { exact: true })).toBeVisible();
 
+  // a second sound of the maker's own starts a second lineage: your flips groups the rows under their sources
+  await page.goto("/make");
+  await pick(page, stereo(90_000), "second.wav");
+  await page.getByRole("button", { name: "publish your sound" }).click();
+  await page.getByLabel(/^title/).fill("second sound");
+  await page.getByLabel(/^your name/).fill("pat");
+  await page.getByLabel(/i confirm/).check();
+  await page.getByRole("button", { name: "publish", exact: true }).click();
+  await expect(page.getByTestId("published-link")).toHaveCount(1);
+  await page.goto("/flips");
+  await expect(page.getByText("lineage of hook isolate")).toBeVisible();
+  await expect(page.getByText("lineage of second sound")).toBeVisible();
+  // inside a lineage the stages run in order, source first
+  const titles = await page.locator(".your-flip .flip-title").allTextContents();
+  expect(titles.indexOf("hook isolate")).toBeLessThan(titles.indexOf("hook down"));
+  expect(titles.indexOf("hook down")).toBeLessThan(titles.indexOf("hook down more"));
+
+  // the maker's flips from every lineage can be played together as pads, in lineage order, without publishing anything
+  await page.getByRole("button", { name: "play your flips as pads" }).click();
+  await expect(page.getByText("your flips, as pads")).toBeVisible();
+  await expect(page.locator(".flips-bank .pad")).toHaveCount(4);
+  await expect(page.locator(".flips-bank .pad").first()).toHaveAttribute(
+    "aria-label",
+    "pad 1, second sound",
+  );
+  await expect(page.locator(".flips-bank .pad").nth(1)).toHaveAttribute(
+    "aria-label",
+    "pad 2, hook isolate",
+  );
+  await page.locator(".flips-bank .pad").nth(1).click();
+
   // the source's own page shows the flips made from it before its facts, so the lineage going on is not hidden
   await page.goto(`/p/${a}`);
   await expect(page.locator(".roll")).toHaveAttribute("data-audio", "ready");
@@ -147,4 +178,59 @@ test("own sound to three stages: the panels are named, one next button continues
     return !!f && !!face && !!(f.compareDocumentPosition(face) & Node.DOCUMENT_POSITION_FOLLOWING);
   });
   expect(before).toBe(true);
+});
+
+test("on a phone the published panels, the lineage line and your flips fit the screen", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    storageState: {
+      cookies: [],
+      origins: [
+        {
+          origin: "http://127.0.0.1:3100",
+          localStorage: [
+            { name: "graft.coach", value: "keys+made" },
+            { name: "graft.coach.sketch", value: "done" },
+          ],
+        },
+      ],
+    },
+  });
+  const page = await context.newPage();
+  await allowBucketReads(page);
+  await viaUploads(page);
+  const overflow = () =>
+    page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  await page.goto("/make");
+  await pick(page, stereo(120_000));
+  await page.getByRole("button", { name: "publish your sound" }).click();
+  await page.getByLabel(/^title/).fill("a very long title for the source of a phone lineage");
+  await page.getByLabel(/^your name/).fill("pat");
+  await page.getByLabel(/i confirm/).check();
+  await page.getByRole("button", { name: "publish", exact: true }).click();
+  await expect(page.getByTestId("published-link")).toHaveCount(1);
+  await page.getByRole("button", { name: "publish this flip" }).click();
+  await page
+    .getByLabel(/^title/)
+    .last()
+    .fill("a second long title for the flip on a phone");
+  await page
+    .getByLabel(/^your name/)
+    .last()
+    .fill("pat");
+  await page.getByRole("button", { name: "publish", exact: true }).last().click();
+  await expect(page.getByText(/stage 2: a second long title/)).toBeVisible();
+  expect(await overflow()).toBeLessThanOrEqual(1);
+  const next = page.getByRole("button", { name: "flip this next" });
+  await next.scrollIntoViewIfNeeded();
+  await expect(next).toBeInViewport();
+  await page.goto("/flips");
+  await expect(page.locator(".your-flip")).toHaveCount(2);
+  await page.getByRole("button", { name: "play your flips as pads" }).click();
+  await expect(page.locator(".flips-bank .pad")).toHaveCount(2);
+  expect(await overflow()).toBeLessThanOrEqual(1);
+  await context.close();
 });

@@ -1872,3 +1872,10 @@
 .your-flip .flip-place {
   margin: 0 0 0.25rem;
 }
+.your-flips .flip-group {
+  list-style: none;
+  margin: 1.25rem 0 0.25rem;
+}
+.your-flips .flip-group .kicker {
+  margin: 0;
+}

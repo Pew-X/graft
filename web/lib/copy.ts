@@ -626,6 +626,15 @@ export const copy = {
     kindSource: "source",
     stageOf: "stage {n}",
     madeFrom: "made from {parent}",
+    /** A heading over the flips that belong to one source, when there is more than one. */
+    lineageOf: "lineage of {title}",
+    /** Your own flips played as pads, across every lineage you made, in lineage order. */
+    pads: {
+      open: "play your flips as pads",
+      heading: "your flips, as pads",
+      honesty:
+        "your own flips, source first within each lineage, up to twelve. nothing is mixed or published: pads play one at a time or together, and rec keeps the order you press them.",
+    },
   },
   report: {
     open: "report this sound",

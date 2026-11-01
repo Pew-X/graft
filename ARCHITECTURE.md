@@ -323,7 +323,7 @@ stateDiagram-v2
 | Make flow | Pick a sound, drag a cut, turn a speed, hear it through the same `.wasm`; publish is optional and last. The editor says which stage the flip will be and what it is made from; a published stage is named, and an older panel folds to one line once a newer stage stands on it, so exactly one next-stage button remains | `web/components/{Make,PublishStep}.tsx`, `web/lib/make/` |
 | Own sounds | Microphone or file, decoded in the browser to canonical audio; recordings up to 30 minutes are trimmed to a 15 s source | `web/lib/own/` |
 | Sketches | A private flip held in `localStorage` (specs only, versioned, up to 40); a bank of up to 12 plays like pads; "publish these" sends a set in order through the ordinary publish call | `web/lib/sketch/`, `web/components/{YourSketches,SetPublisher}.tsx` |
-| Your flips | Manage keys the browser kept (on by default, removable), listed at `/flips` | `web/lib/flips/` |
+| Your flips | Manage keys the browser kept (on by default, removable), listed at `/flips`, grouped by the source each lineage begins with, each row saying its stage and what it was made from; any of them can be played together as pads (up to twelve, across lineages), with the same cut and overlap rules and rec and loop, and nothing published | `web/components/YourFlips.tsx`, `web/lib/flips/` |
 | Operator | `/admin`: reports, hide, the switch, rollups; the secret is held in memory and sent in a header | `web/app/admin`, `web/components/AdminPanel.tsx` |
 
 **Typed contract.** The service generates its OpenAPI 3.1 document (`openapi/openapi.json`); CI regenerates it and the TypeScript client types and fails on any difference, so renaming a response field breaks the site's build.

@@ -59,6 +59,9 @@ export function FlipsBank({
   audio,
   arrived,
   onClose,
+  heading,
+  honesty,
+  linkable = true,
 }: {
   stage: string;
   apiUrl: string;
@@ -67,6 +70,11 @@ export function FlipsBank({
   audio: FlipsAudio;
   arrived: BankLink | null;
   onClose: () => void;
+  /** Another heading and another line about whose flips these are (the maker's own, on the your-flips page). */
+  heading?: string;
+  honesty?: string;
+  /** Whether a phrase may be written into the page's address as a link; false where there is no stage to name. */
+  linkable?: boolean;
 }) {
   const c = copy.stageFlips.bank;
   const [titles, setTitles] = useState<Record<string, string>>(() =>
@@ -113,8 +121,10 @@ export function FlipsBank({
   );
   const onPhrase = useCallback(
     (entry: { presses: BankLink["phrase"]; ids: string[] } | null): boolean =>
-      writeBank(entry === null ? null : { stage, pads: entry.ids, phrase: entry.presses }),
-    [stage],
+      linkable
+        ? writeBank(entry === null ? null : { stage, pads: entry.ids, phrase: entry.presses })
+        : false,
+    [stage, linkable],
   );
   const copyLink = useCallback((): void => {
     try {
@@ -143,8 +153,8 @@ export function FlipsBank({
   const failed = bank.pads.filter((_, i) => !bank.playable[i] && bank.reasons[i] !== c.preparing);
   return (
     <div className="flips-bank" data-testid="flips-bank">
-      <h4 className="kicker">{c.heading}</h4>
-      <p className="hint">{c.honesty}</p>
+      <h4 className="kicker">{heading ?? c.heading}</h4>
+      <p className="hint">{honesty ?? c.honesty}</p>
       {total > ids.length && !arrived ? (
         <p className="hint">{fill(c.newest, { n: ids.length, total })}</p>
       ) : null}
