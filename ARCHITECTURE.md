@@ -532,12 +532,26 @@ Stated so it is not discovered.
 
 ## Roadmap
 
-Small, in order of how likely each is. Nothing here is a promise.
+Small, in order. Nothing here is a promise. Each item says what it would change.
 
-1. **Real-device checks**: an iPhone with two fingers on two pads and the silent switch; Safari; a screen reader.
-2. **Split into pads**: equal slices of the current cut put on the bank as sketches, so a kit needs one tap. Only if testers ask.
-3. **A longer stored source**, which needs changes in the service, the renderer limits and the storage guard.
-4. **A sequencer** over the phrase recorder, if the instrument is wanted beyond pressing pads.
-5. **Several parents mixed into one sound**: outside the one-parent model. It needs a mixing operation in a new pinned renderer version, a graph instead of a line, and new rules for held descendants. A large change, kept as a vision, not a plan.
+**Now: close the evidence gaps**
+
+1. **Real-device checks.** An iPhone with two fingers on two pads and the silent switch; Safari; a screen reader. Changes nothing in the design; it may find bugs automated browsers cannot.
+2. **A repeatable deploy.** A staging environment, and the deploy workflow (`.github/workflows/deploy.yml`, written, never run) run once with a deliberate rollback. Today `aws-dev.sh redeploy` does the same job by hand against the only environment.
+3. **Settle the publish tail.** The service runs at most 4 renders at once and a flip holds its permit about 80 ms, which predicts a ceiling near 50 flips a second, where the tail began. One more run on a clean copy with `GRAFT_MAX_CONCURRENT_RENDERS` raised would confirm or reject it. Until then no ceiling is claimed.
+
+**Next: make the idea easier to see**
+
+4. **More chains, with a human behind them.** Seeded lineages built from real recordings, declared as the maker's own, with no audible speech and place only as a declared note. The seed path already accepts any curated source; this is content, not code.
+5. **A before and after toggle on a stage**, hearing the cut at the same start as its parent. Worth building only when a change is audible, so it follows item 4. It must never become a mode.
+6. **Split into pads.** Equal slices of the current cut put on the bank as sketches. No new concept: a chop is a sibling stage with another cut.
+7. **A longer stored source and more formats.** The 15 s cap is set by the storage guard (overshoot is the burst times the largest blob), so a longer source means changing the guard, the limits and the renderer's input ceiling together. `.ogg` is not decoded by every browser today.
+
+**Later: only if there is a reason**
+
+8. **A prefiltered speed-up method** as renderer method 2, to remove the known aliasing. A new method id means new vectors and a new pin; old stages keep rendering with the old one.
+9. **Limits in the database.** When more than one service task runs, per-address windows should move from process memory to a shared table, so each visitor has one allowance, not one per task.
+10. **A sequencer** over the phrase recorder, if pressing pads is not enough. A step grid is a new instrument, not lineage, so it needs a real reason.
+11. **Several parents mixed into one sound.** Outside the one-parent model: it needs a mixing operation in a new pinned renderer version, turns the chain from a line into a graph, and reopens the roll, the thread, the pads, the phrase format and the held-descendant rules. Kept as a vision.
 
 **Vision.** A public record of how a sound came to be: every sound shows who made it and what it was made from, you can hear each step, and anyone can make the next one. Small, plain, and honest about what it knows and what it does not.

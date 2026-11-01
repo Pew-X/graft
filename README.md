@@ -44,9 +44,22 @@ One load run on a clean copy of the dev environment: one Fargate task of 0.5 vCP
 
 What bent is also on record: at 250 reads a second the 1-unit database was the limit, and from about 50 flips a second publish had a tail of about 5.5 seconds whose cause is a hypothesis that was not tested. No flips-per-second ceiling is claimed, and none of this is extrapolated to a number of users. The table and the limits are in ARCHITECTURE.md, "Measured numbers".
 
-## Where it is going
+## Roadmap
 
-Near term: test on a real phone and in Safari, and tighten the cloud setup further. Next, if people ask for it: split a cut into several pads at once, and a longer stored source. Further out: a sequencer over the phrase recorder, and several parents mixed into one sound, which would turn the chain from a line into a graph and is kept as a vision, not a plan. The list, with the reasons, is in ARCHITECTURE.md, "Roadmap".
+Small steps, in the order that makes the most sense. Nothing here is a promise; the reasons and the costs are in [ARCHITECTURE.md](ARCHITECTURE.md#roadmap).
+
+| When | What | Why it is useful |
+|---|---|---|
+| **Now** | Test on real devices: two fingers on two pads on an iPhone, the silent switch, Safari, a screen reader | The core loop is covered by automated browsers and one laptop; a phone in a hand is the missing evidence |
+| **Now** | A repeatable deploy: a staging environment and the deploy workflow run once, with a rollback | Today a release is a script run by hand against the only environment |
+| **Now** | Settle the publish tail: re-run the load test with a higher render limit | One untested hypothesis says the ceiling is a setting, not the hardware |
+| **Next** | More chains, with a human behind them: seeded lineages from real recordings, declared as the maker's own | The home chain is one synthesized chord; a lineage of real sounds explains the idea faster |
+| **Next** | Hear a stage against its parent (A/B) | Only worth it once a change is audible, which needs the content above |
+| **Next** | Split a cut into several pads at once | A small kit in one tap, built from sketches that already exist |
+| **Next** | A longer stored source, and more file formats (starting with `.ogg`) | Today a source is capped at 15 seconds and some files cannot be read |
+| **Later** | A faster-than-1x method with an anti-alias filter, as a new renderer version | Removes the known aliasing; needs new vectors and a new pin |
+| **Later** | A sequencer over the phrase recorder | Only if pressing pads is not enough |
+| **Later** | Several parents mixed into one sound | Turns the chain from a line into a graph; a vision, not a plan |
 
 The idea underneath is a small public record of how sounds come to be: who made each one, what it was made from, and a way to hear every step and make the next one.
 
