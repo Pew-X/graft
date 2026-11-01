@@ -4,13 +4,28 @@ A sound has a past. Hear how this one was made, then make the next step.
 
 graft shows a sound's ancestry as playable credits. Open a sound, hear the chain of cuts and speed changes that led to it, scrub through it, and make one new flip of your own.
 
-![The home page: the last stage of the seeded chain as a torn-paper title, its credits beside it, and the record with its needle](assets/readme/home-roll.jpg)
+![The home page in dark mode: the last stage of the seeded chain as a torn-paper title, its credits beside it, and the record with its needle](assets/readme/home-dark.jpg)
 
 - A **flip** is a sound with a part cut out and its speed changed.
 - A **stage** is one flip, or the first sound, the **source**. The **chain** is the stages from the source to the newest flip.
 - The **roll** shows the chain as credits, one stage after another, beside a **record** you can drag a needle across.
 
 graft is an independent experiment.
+
+<table>
+  <tr>
+    <td align="center" width="28%"><img src="assets/readme/make.jpg" width="100%" alt="The make page: a cut chosen on a waveform and a speed of about a fifth up"></td>
+    <td align="center" width="55%"><img src="assets/readme/perform.jpg" width="100%" alt="Perform mode: four pads, one per stage, lit in their colours beside the record"></td>
+    <td align="center" width="16%"><img src="assets/readme/phone.jpg" width="100%" alt="The same pads on a phone"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>Make a flip.</b> Cut a piece, change its speed, hear it as you move.</sub></td>
+    <td align="center"><sub><b>Perform.</b> The number keys and the pads play the stages of a chain.</sub></td>
+    <td align="center"><sub><b>On a phone.</b> Everything works by touch.</sub></td>
+  </tr>
+</table>
+
+Light and dark themes follow your system.
 
 ## Try it
 
