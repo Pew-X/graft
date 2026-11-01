@@ -5,6 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 import { copy, fill } from "../lib/copy.ts";
 import { ID_SHAPE, LISTED_MAX, flipIds, stateOf } from "../lib/flips/list.ts";
 import { forgetKey, keptKeys } from "../lib/publish/keep.ts";
+import { createApi, fetchChain } from "../lib/api/chain.ts";
+import { useAsync } from "../lib/make/use-async.ts";
 import { usePublicationRead } from "./usePublicationRead.ts";
 
 function storage(): Storage | null {
@@ -32,6 +34,14 @@ function Row({
   // the read asks again by itself for a few minutes
   const { read, failed } = usePublicationRead(apiUrl, id);
   const [asking, setAsking] = useState(false);
+  // where this flip sits: its stage number and the stage it was made from, read from its chain
+  const place = useAsync(`yours:${id}`, async () => {
+    const chain = await fetchChain(createApi(apiUrl), id);
+    if (chain === null) return null;
+    const n = chain.stages.length;
+    const before = n > 1 ? chain.stages[n - 2] : undefined;
+    return { n, parent: before && "title" in before ? before.title : null };
+  });
   useEffect(() => {
     onFailing(id, failed);
     return () => onFailing(id, false);
@@ -54,6 +64,18 @@ function Row({
       data-state={read.status === "ready" ? stateOf(read.value) : read.status}
     >
       <p className="flip-title">{title}</p>
+      {place.status === "ready" && place.value !== null ? (
+        <p className="hint flip-place">
+          {place.value.n === 1
+            ? copy.flips.kindSource
+            : [
+                fill(copy.flips.stageOf, { n: String(place.value.n) }),
+                place.value.parent ? fill(copy.flips.madeFrom, { parent: place.value.parent }) : "",
+              ]
+                .filter((s) => s !== "")
+                .join(", ")}
+        </p>
+      ) : null}
       <p className="hint" role="status">
         {standing}
       </p>

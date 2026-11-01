@@ -320,7 +320,7 @@ stateDiagram-v2
 |---|---|---|
 | Roll and record | The chain as credit blocks beside a canvas record; the needle scrubs time (radius is stage, groove is time). A governor holds 60 fps and sheds detail before frames | `web/components/{RollPlayer,Disc}.tsx`, `web/lib/record/` |
 | First visit | One sentence, a narrated first play, then three quiet hints; replayable from "how it works" | `web/lib/coach/` |
-| Make flow | Pick a sound, drag a cut, turn a speed, hear it through the same `.wasm`; publish is optional and last | `web/components/Make.tsx`, `web/lib/make/` |
+| Make flow | Pick a sound, drag a cut, turn a speed, hear it through the same `.wasm`; publish is optional and last. The editor says which stage the flip will be and what it is made from; a published stage is named, and an older panel folds to one line once a newer stage stands on it, so exactly one next-stage button remains | `web/components/{Make,PublishStep}.tsx`, `web/lib/make/` |
 | Own sounds | Microphone or file, decoded in the browser to canonical audio; recordings up to 30 minutes are trimmed to a 15 s source | `web/lib/own/` |
 | Sketches | A private flip held in `localStorage` (specs only, versioned, up to 40); a bank of up to 12 plays like pads; "publish these" sends a set in order through the ordinary publish call | `web/lib/sketch/`, `web/components/{YourSketches,SetPublisher}.tsx` |
 | Your flips | Manage keys the browser kept (on by default, removable), listed at `/flips` | `web/lib/flips/` |

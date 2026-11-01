@@ -405,6 +405,8 @@ export function Make({
     rootOfEditor,
     rootOfEditor === null ? null : shippedDepth(rootOfEditor),
   );
+  // the stage a flip made here will be: its parent's depth, plus any sketches above the editor, plus one
+  const stageNumber = editorDepth.state === "known" ? editorDepth.stages + aboveEditor + 1 : null;
   const budgetLine =
     editorDepth.state === "checking"
       ? copy.sketch.budget.checking
@@ -553,6 +555,7 @@ export function Make({
           previewer={previewer}
           quiet={quiet}
           budgetLine={""}
+          stageNumber={null}
           onGuide={send}
           guideSlot={guideSlot}
           onChange={() => setOwn(null)}
@@ -623,6 +626,7 @@ export function Make({
             previewer={previewer}
             quiet={quiet}
             budgetLine={budgetLine}
+            stageNumber={stageNumber}
             apiUrl={apiUrl}
             samples={sound.value}
             engine={engine.status === "ready" ? engine.value : null}
@@ -705,6 +709,7 @@ function Editor({
   previewer,
   quiet,
   budgetLine,
+  stageNumber,
   onGuide,
   guideSlot,
   onChange,
@@ -731,6 +736,8 @@ function Editor({
   quiet: number;
   /** How many more stages can follow this one, or that it is being checked. */
   budgetLine: string;
+  /** The stage number a flip made here will have, when it is known. */
+  stageNumber: number | null;
   /** What the visitor did that the make flow's hints follow. */
   onGuide: (event: MakeEvent) => void;
   /** The hint line, drawn under the step markers. */
@@ -747,6 +754,9 @@ function Editor({
   const setListening = useCallback((on: boolean) => setHeardAt({ on, quiet }), [quiet]);
   const [publishing, setPublishing] = useState(false);
   const [sourceId, setSourceId] = useState<string | null>(null);
+  // the title the maker gave their own sound when they published it, and the flip published after it
+  const [sourceTitle, setSourceTitle] = useState<string | null>(null);
+  const [flipPublished, setFlipPublished] = useState(false);
   const [publishingSource, setPublishingSource] = useState(false);
   const [basis, setBasis] = useState<Basis>("own_recording");
   const [confirmed, setConfirmed] = useState(false);
@@ -807,15 +817,29 @@ function Editor({
       <Steps current={publishing || publishingSource ? 3 : 2} />
       {guideSlot}
       <div className="stage-head">
-        {title ? (
+        {(own && sourceTitle ? sourceTitle : title) ? (
           <h2 className="slab" data-k="src" data-dye="0">
-            <span className="slab-text">{title}</span>
+            <span className="slab-text">{own && sourceTitle ? sourceTitle : title}</span>
           </h2>
         ) : null}
         <button type="button" className="quiet-link" onClick={onChange}>
           {copy.make.pick.change}
         </button>
       </div>
+      <p className="making-from" role="status" data-testid="making-from">
+        {own
+          ? sourceId === null
+            ? copy.make.lineage.ownUnpublished
+            : fill(copy.make.lineage.ownPublished, { title: sourceTitle ?? "" })
+          : title
+            ? fill(
+                stageNumber === null
+                  ? copy.make.lineage.fromStageUnknown
+                  : copy.make.lineage.fromStage,
+                { n: String(stageNumber ?? ""), parent: title },
+              )
+            : ""}
+      </p>
 
       <section className="panel" aria-labelledby="cut-label">
         <h3 id="cut-label" className="kicker">
@@ -953,7 +977,12 @@ function Editor({
         </div>
         {own ? (
           <p id="own-why" className="hint">
-            {closedWhy ?? (sourceId === null ? copy.own.flipNote : copy.own.sourceDone)}
+            {closedWhy ??
+              (sourceId === null
+                ? copy.own.flipNote
+                : flipPublished
+                  ? copy.own.flipDone
+                  : copy.own.sourceDone)}
           </p>
         ) : null}
         {ready ? (
@@ -1015,7 +1044,12 @@ function Editor({
           }
           apiUrl={apiUrl}
           onClose={() => setPublishingSource(false)}
-          onPublished={setSourceId}
+          onPublished={(id, typed) => {
+            setSourceId(id);
+            setSourceTitle(typed);
+          }}
+          kind="source"
+          folded={flipPublished}
         >
           <fieldset className="declaration">
             <legend>{copy.own.basis}</legend>
@@ -1049,7 +1083,11 @@ function Editor({
         <PublishStep
           signature={`${flipParent}:${cut.start}-${cut.end}:${p}/${q}`}
           {...(sameAsOpened && opened ? { retryKey: opened.retryKey } : {})}
+          kind="flip"
+          stage={own ? 2 : stageNumber}
+          fromTitle={own ? sourceTitle : title}
           onPublished={(id) => {
+            setFlipPublished(true);
             // a sketch published unchanged is recorded as what it became, so it is not published twice
             if (sameAsOpened && opened) {
               markPublished(sketchStorage(), opened.id, id);

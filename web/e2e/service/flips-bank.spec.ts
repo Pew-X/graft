@@ -90,7 +90,7 @@ test("three flips become three pads, newest first, played on the roll's one audi
   await openBank(page, parent);
   await expect(page.locator(".flips-bank .pad")).toHaveCount(3);
   await expect(pad(page, 0)).toHaveAttribute("aria-label", "pad 1, third try");
-  await expect(page.getByText(/other people's flips of the same stage/)).toBeVisible();
+  await expect(page.getByText(/these are other people's flips of this stage/)).toBeVisible();
   await pad(page, 0).click();
   await expect.poll(() => page.evaluate(() => window.__started.length)).toBe(1);
   await page.getByRole("button", { name: "overlap" }).click();

@@ -88,6 +88,10 @@ export function PublishStep({
   onClose,
   onPublished,
   retryKey: given,
+  kind,
+  stage = null,
+  fromTitle = null,
+  folded = false,
   children,
 }: {
   /** What is being published, as a string: a different thing is a different attempt, with its own key. */
@@ -106,9 +110,17 @@ export function PublishStep({
   gateWhy?: string | null;
   apiUrl: string;
   onClose: () => void;
-  onPublished?: (id: string) => void;
+  onPublished?: (id: string, title: string) => void;
   /** A key made earlier for exactly this flip (a sketch's own), used instead of a fresh one for the first attempt. */
   retryKey?: string;
+  /** What is being published, so the finished panel can name it ("the source: ...", "stage 2: ..."). */
+  kind?: "source" | "flip";
+  /** The stage number a flip will have (its parent's plus one), when known. */
+  stage?: number | null;
+  /** The title of the stage it is made from, when known. */
+  fromTitle?: string | null;
+  /** A newer stage stands on this one: show one line instead of the whole panel (never while its key is unsafe). */
+  folded?: boolean;
   /** Extra fields between the name and the button. */
   children?: ReactNode;
 }) {
@@ -162,7 +174,7 @@ export function PublishStep({
         if (outcome.manageKey)
           setKept(keepKey(browserStorage(), outcome.id, outcome.manageKey) ? "yes" : "failed");
         setPhase({ name: "done", outcome });
-        onPublished?.(outcome.id);
+        onPublished?.(outcome.id, title);
       } else if (outcome.kind === "refused")
         setPhase({ name: "refused", refusal: outcome.refusal });
       else if (outcome.kind === "gaveUp") {
@@ -179,12 +191,43 @@ export function PublishStep({
   if (phase.name === "done") {
     const { outcome } = phase;
     const url = new URL(`/p/${outcome.id}`, window.location.href).href;
+    const named =
+      kind === "source"
+        ? fill(copy.publish.done.namedSource, { title })
+        : kind === "flip" && stage !== null
+          ? fill(fromTitle ? copy.publish.done.namedFlipFrom : copy.publish.done.namedFlip, {
+              n: String(stage),
+              title,
+              parent: fromTitle ?? "",
+            })
+          : null;
+    const keySafe = outcome.manageKey === null || kept === "yes" || keyCopied === "yes";
+    if (folded && keySafe) {
+      // an older stage with a newer one standing on it: one line, with the way to its page and its key
+      return (
+        <section className="publish done folded" aria-label={named ?? copy.publish.done.folded}>
+          <p className="folded-line">
+            <span className="kicker">{copy.publish.done.folded}</span>{" "}
+            <strong>{named ?? title}</strong>{" "}
+            <a className="link" href={`/p/${outcome.id}`} data-testid="published-link">
+              {url}
+            </a>{" "}
+            <a className="pill" href={`/manage/${outcome.id}`}>
+              {copy.publish.done.manage}
+            </a>
+          </p>
+        </section>
+      );
+    }
     return (
       <section className="publish done" aria-labelledby={`${uid}-done`}>
         <h3 id={`${uid}-done`} ref={heading} tabIndex={-1} className="kicker">
           {copy.publish.done.heading}
         </h3>
-        <p className="kicker">{copy.publish.done.link}</p>
+        {named ? <p className="named">{named}</p> : null}
+        <p className="kicker">
+          {kind === "source" ? copy.publish.done.linkSource : copy.publish.done.link}
+        </p>
         <p>
           <a className="link" href={`/p/${outcome.id}`} data-testid="published-link">
             {url}
@@ -238,6 +281,7 @@ export function PublishStep({
                 : ""}
           </span>
         </div>
+        {named ? <p className="hint">{copy.publish.done.nextNote}</p> : null}
         {warned ? (
           <p className="notice" role="alert">
             {copy.publish.done.leaveWarn}
