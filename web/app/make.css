@@ -1841,3 +1841,41 @@
   min-height: 44px;
   accent-color: var(--ink);
 }
+
+/* where a flip sits: said at the top of the editor, on each published panel and on each row of your flips */
+.making-from {
+  margin: 0.25rem 0 1rem;
+  font-family: var(--serif, inherit);
+  font-style: italic;
+  font-size: 1.05rem;
+  line-height: 1.4;
+}
+.making-from:empty {
+  display: none;
+}
+.publish .named {
+  margin: 0.25rem 0 0.5rem;
+  font-weight: 600;
+}
+.publish.done.folded {
+  padding: 0.6rem 0;
+  border-top: 1px solid currentColor;
+  border-top-color: color-mix(in srgb, currentColor 25%, transparent);
+}
+.publish.done.folded .folded-line {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.75rem;
+  align-items: baseline;
+}
+.your-flip .flip-place {
+  margin: 0 0 0.25rem;
+}
+.your-flips .flip-group {
+  list-style: none;
+  margin: 1.25rem 0 0.25rem;
+}
+.your-flips .flip-group .kicker {
+  margin: 0;
+}

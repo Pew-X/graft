@@ -100,6 +100,8 @@ test("anything in the kept keys that is not a publication id is never listed or 
   await keep(page, [A, "../../admin", "<script>alert(1)</script>", "short", "AAAAAAAAAAAA"]);
   await page.goto("/flips");
   await expect(page.locator(".your-flip")).toHaveCount(1);
+  // the row is drawn before its read is sent: wait for the one ask, then check nothing else was
+  await expect.poll(() => asked.length).toBe(1);
   expect(asked).toEqual([`/v1/publications/${A}`]);
 });
 

@@ -545,6 +545,17 @@ export const copy = {
     done: {
       heading: "published",
       link: "the link to your flip",
+      /** The one line that says what was published and where it sits in the lineage. */
+      namedSource: "the source: {title}",
+      namedFlip: "stage {n}: {title}",
+      namedFlipFrom: "stage {n}: {title}, made from {parent}",
+      /** The link line for a sound of one's own (the source), which is not a flip. */
+      linkSource: "the link to your sound",
+      /** An older published panel, folded to one line once a newer stage stands on it. */
+      folded: "published",
+      foldedNote: "built on below",
+      /** What the next-stage button is for, said once, beside the newest published stage. */
+      nextNote: "the next flip is made from this one, so the lineage grows by one.",
       /** The main button: the next stage is made from this one, in this tab. */
       next: "flip this next",
       /** Shown when the key is neither kept in this browser nor copied and "flip this next" is pressed. */
@@ -611,6 +622,19 @@ export const copy = {
     retry: "try again",
     older: "{n} older flips are also kept in this browser.",
     untitled: "a flip",
+    /** On each row: where this flip sits. */
+    kindSource: "source",
+    stageOf: "stage {n}",
+    madeFrom: "made from {parent}",
+    /** A heading over the flips that belong to one source, when there is more than one. */
+    lineageOf: "lineage of {title}",
+    /** Your own flips played as pads, across every lineage you made, in lineage order. */
+    pads: {
+      open: "play your flips as pads",
+      heading: "your flips, as pads",
+      honesty:
+        "your own flips, source first within each lineage, up to twelve. nothing is mixed or published: pads play one at a time or together, and rec keeps the order you press them.",
+    },
   },
   report: {
     open: "report this sound",
@@ -802,6 +826,9 @@ export const copy = {
     reportNote:
       "anyone can report a sound, and a sound that is reported can be hidden, with the flips built on it held while it is looked at.",
     sourceDone: "your sound is published. you can now publish the flip you made from it.",
+    /** Once a flip of the sound is published: what is next. */
+    flipDone:
+      "published. to build on it, press flip this next under the newest stage: it makes the next stage from that one.",
   },
   /** The idea of graft in five plain steps: shown on the make page, and again on the about page. */
   how: {
@@ -862,6 +889,15 @@ export const copy = {
       show: "show me",
       how: "how it works",
       label: "a short guide to making a flip",
+    },
+    /** Where this flip will sit, said at the top of the editor so a maker never has to guess. */
+    lineage: {
+      ownUnpublished:
+        "you are cutting your own recording. publish it first: it becomes stage 1, and the flip you make from it stage 2.",
+      ownPublished:
+        "you are cutting your recording, stage 1: {title}. the flip you publish here is stage 2.",
+      fromStage: "making stage {n}, from {parent}.",
+      fromStageUnknown: "making the next stage, from {parent}.",
     },
     pick: {
       heading: "pick a sound to start from",

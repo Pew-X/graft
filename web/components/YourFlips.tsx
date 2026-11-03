@@ -1,10 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { copy, fill } from "../lib/copy.ts";
 import { ID_SHAPE, LISTED_MAX, flipIds, stateOf } from "../lib/flips/list.ts";
 import { forgetKey, keptKeys } from "../lib/publish/keep.ts";
+import { createApi, fetchChain } from "../lib/api/chain.ts";
+import type { FlipItem } from "../lib/flips/read.ts";
+import { MOST_BANK_PADS } from "../lib/perform/bank-link.ts";
+import type { AudioContextLike } from "../lib/playback/webaudio.ts";
+import { FlipsBank, type FlipsAudio } from "./FlipsBank.tsx";
 import { usePublicationRead } from "./usePublicationRead.ts";
 
 function storage(): Storage | null {
@@ -16,14 +21,27 @@ function storage(): Storage | null {
 }
 
 /** One flip: what it is called and how it stands, read from the service, with the ways to act on it. */
+export interface Place {
+  /** The stage number of this flip in its own lineage (1 is a source). */
+  n: number;
+  /** The title of the stage it was made from, when it has one. */
+  parent: string | null;
+  /** The source that lineage begins with. */
+  root: string;
+  rootTitle: string;
+}
+
 function Row({
   id,
   apiUrl,
+  place,
   onForget,
   onFailing,
 }: {
   id: string;
   apiUrl: string;
+  /** Where it sits, once the lineages have been read. */
+  place: Place | null;
   onForget: (id: string) => void;
   /** Said when this flip's read starts or stops failing, so the page knows whether to offer "try again". */
   onFailing: (id: string, failing: boolean) => void;
@@ -54,6 +72,18 @@ function Row({
       data-state={read.status === "ready" ? stateOf(read.value) : read.status}
     >
       <p className="flip-title">{title}</p>
+      {place ? (
+        <p className="hint flip-place">
+          {place.n === 1
+            ? copy.flips.kindSource
+            : [
+                fill(copy.flips.stageOf, { n: String(place.n) }),
+                place.parent ? fill(copy.flips.madeFrom, { parent: place.parent }) : "",
+              ]
+                .filter((s) => s !== "")
+                .join(", ")}
+        </p>
+      ) : null}
       <p className="hint" role="status">
         {standing}
       </p>
@@ -83,6 +113,58 @@ function Row({
         )}
       </div>
     </li>
+  );
+}
+
+/** The maker's own flips as pads, over an audio context of its own made on the first press. */
+function YourPads({ apiUrl, ids }: { apiUrl: string; ids: readonly string[] }) {
+  const [open, setOpen] = useState(false);
+  const context = useRef<AudioContextLike | null>(null);
+  const audio = useMemo<FlipsAudio>(
+    () => ({
+      context: async () => {
+        if (context.current === null)
+          context.current = new window.AudioContext() as unknown as AudioContextLike;
+        await (context.current as unknown as AudioContext).resume();
+        return context.current;
+      },
+      beforeSound: () => undefined,
+      stageIds: new Set<string>(),
+      ready: true,
+    }),
+    [],
+  );
+  const padKey = ids.slice(0, MOST_BANK_PADS).join(",");
+  const flips = useMemo(
+    () =>
+      padKey === ""
+        ? []
+        : padKey.split(",").map((id) => ({ id, title: "" }) as unknown as FlipItem),
+    [padKey],
+  );
+  const c = copy.flips.pads;
+  if (flips.length === 0) return null;
+  if (!open)
+    return (
+      <p className="actions">
+        <button type="button" className="pill" onClick={() => setOpen(true)}>
+          {c.open}
+        </button>
+      </p>
+    );
+  return (
+    <FlipsBank
+      stage={flips[0]?.id ?? ""}
+      apiUrl={apiUrl}
+      flips={flips}
+      total={flips.length}
+      audio={audio}
+      arrived={null}
+      onClose={() => setOpen(false)}
+      heading={c.heading}
+      honesty={c.honesty}
+      linkable={false}
+    />
   );
 }
 
@@ -120,6 +202,38 @@ export function YourFlips({ apiUrl }: { apiUrl: string }) {
     });
   }, []);
 
+  // where each listed flip sits, read once for the whole list (a chain read each), so the list can be grouped by source
+  const [places, setPlaces] = useState<Readonly<Record<string, Place | null>>>({});
+  const listed = ids === null ? "" : ids.slice(0, LISTED_MAX).join(",");
+  useEffect(() => {
+    if (listed === "") return undefined;
+    const controller = new AbortController();
+    const api = createApi(apiUrl);
+    for (const id of listed.split(",")) {
+      fetchChain(api, id)
+        .then((chain) => {
+          if (controller.signal.aborted) return;
+          let place: Place | null = null;
+          if (chain !== null && chain.stages.length > 0) {
+            const n = chain.stages.length;
+            const first = chain.stages[0];
+            const before = n > 1 ? chain.stages[n - 2] : undefined;
+            place = {
+              n,
+              parent: before && "title" in before ? before.title : null,
+              root: first && "id" in first ? first.id : id,
+              rootTitle: first && "title" in first ? first.title : "",
+            };
+          }
+          setPlaces((was) => ({ ...was, [id]: place }));
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) setPlaces((was) => ({ ...was, [id]: null }));
+        });
+    }
+    return () => controller.abort();
+  }, [listed, apiUrl, round]);
+
   const f = copy.flips;
   if (ids === null)
     return (
@@ -141,23 +255,53 @@ export function YourFlips({ apiUrl }: { apiUrl: string }) {
       </div>
     );
   const shown = ids.slice(0, LISTED_MAX);
+  // group by the source each lineage begins with, once every row's place is known; until then the list is as kept
+  const settled = shown.every((id) => id in places);
+  const order = (() => {
+    if (!settled) return shown.map((id) => ({ id, heading: null as string | null }));
+    const groups = new Map<string, string[]>();
+    for (const id of shown) {
+      const root = places[id]?.root ?? id;
+      groups.set(root, [...(groups.get(root) ?? []), id]);
+    }
+    const out: Array<{ id: string; heading: string | null }> = [];
+    for (const [root, members] of groups) {
+      members.sort((a, b) => (places[a]?.n ?? 0) - (places[b]?.n ?? 0));
+      const title = places[members[0] ?? root]?.rootTitle ?? "";
+      members.forEach((id, i) =>
+        out.push({
+          id,
+          heading: i === 0 && groups.size > 1 && title !== "" ? fill(f.lineageOf, { title }) : null,
+        }),
+      );
+    }
+    return out;
+  })();
   return (
     <div className="your-flips">
       <p>{f.intro}</p>
       <ul className="flip-list">
-        {shown.map((id) => (
-          <Row
-            key={`${id}:${round}`}
-            id={id}
-            apiUrl={apiUrl}
-            onForget={forget}
-            onFailing={onFailing}
-          />
+        {order.map(({ id, heading }) => (
+          <Fragment key={`${id}:${round}`}>
+            {heading ? (
+              <li className="flip-group">
+                <p className="kicker">{heading}</p>
+              </li>
+            ) : null}
+            <Row
+              id={id}
+              apiUrl={apiUrl}
+              place={places[id] ?? null}
+              onForget={forget}
+              onFailing={onFailing}
+            />
+          </Fragment>
         ))}
       </ul>
       {ids.length > shown.length ? (
         <p className="hint">{fill(f.older, { n: ids.length - shown.length })}</p>
       ) : null}
+      <YourPads apiUrl={apiUrl} ids={order.map((o) => o.id)} />
       <p className="hint">{f.here}</p>
       <p className="actions">
         {failing.size > 0 ? (

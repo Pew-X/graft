@@ -67,7 +67,9 @@ for (const [label, coach] of STATES) {
         const guide = page.getByTestId("make-guide");
         await page.goto("/make");
         if (coach === null) {
-          await expect(guide).toContainText("pick a sound. you cut a piece of it next.");
+          await expect(guide).toContainText(
+            "pick a sound, or record your own. you cut a piece of it next.",
+          );
         }
         await page.getByRole("button", { name: "flip this sound: saber hum" }).click();
         await expect(page.getByRole("slider", { name: "speed" })).toBeVisible();
@@ -78,7 +80,9 @@ for (const [label, coach] of STATES) {
           await expect(guide).toContainText("now move a bracket or the speed, and hear it change.");
           await page.getByRole("button", { name: "faster" }).click();
         }
-        await expect(guide).toContainText("like a try? keep it as a sketch. only you can hear it.");
+        await expect(guide).toContainText(
+          "keep a try as a sketch. a published flip is permanent; a sketch is not.",
+        );
         const tabs = page.context().pages().length;
         await page.getByRole("button", { name: "keep as sketch" }).click();
         await expect(guide).toContainText("try another, or press go on from this on a sketch.");

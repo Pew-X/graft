@@ -192,15 +192,16 @@ export const CreditBlock = memo(function CreditBlock({
             </button>
           ) : null}
         </div>
+        {/* the flips made from this stage come straight after the action: that is the lineage going on */}
+        {flipsFrom && hero && block.state === "available" ? (
+          <FlipsOfStage key={block.id} id={block.id} apiUrl={flipsFrom} audio={flipsAudio} />
+        ) : null}
         <dl className="face">
           {block.face.map((line) => (
             <Line key={`${line.role}-${line.value}`} line={line} />
           ))}
         </dl>
         {block.flipped ? <p className="flipped">{block.flipped}</p> : null}
-        {flipsFrom && hero && block.state === "available" ? (
-          <FlipsOfStage key={block.id} id={block.id} apiUrl={flipsFrom} audio={flipsAudio} />
-        ) : null}
         {block.details.length === 0 ? null : (
           <details className="details">
             <summary>{copy.details.summary}</summary>
