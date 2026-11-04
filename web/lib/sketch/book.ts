@@ -149,6 +149,8 @@ export interface KeepInput {
   p: number;
   q: number;
   title: string;
+  /** Optional, already cleaned. */
+  note?: string;
 }
 
 export type Kept =
@@ -174,6 +176,7 @@ export function keep(storage: StorageLike | null, input: KeepInput, now = Date.n
       title: input.title,
       retryKey: newRetryKey(),
       at: now,
+      ...(input.note ? { note: input.note } : {}),
     };
     if (parseSketch(candidate) === null) return "invalid";
     return { book: { ...book, sketches: [...book.sketches, candidate] }, extra: candidate };
@@ -240,6 +243,27 @@ export function rename(
     if (!target) return "missing";
     if (target.publishedAs !== undefined) return "published";
     const next = { ...target, title };
+    if (parseSketch(next) === null) return "invalid";
+    return {
+      book: { ...book, sketches: book.sketches.map((s) => (s.id === id ? next : s)) },
+      extra: null,
+    };
+  });
+  return made.ok ? { ok: true, book: made.book } : made;
+}
+
+/** Set, change or clear (with "") the note of a sketch. A note can be edited before and after publishing: it is the maker's own. */
+export function setNote(
+  storage: StorageLike | null,
+  id: string,
+  note: string,
+): { ok: true; book: Book } | { ok: false; why: string } {
+  const made = transact<null>(storage, (book) => {
+    const target = book.sketches.find((s) => s.id === id);
+    if (!target) return "missing";
+    const next: Sketch = { ...target };
+    if (note === "") delete next.note;
+    else next.note = note;
     if (parseSketch(next) === null) return "invalid";
     return {
       book: { ...book, sketches: book.sketches.map((s) => (s.id === id ? next : s)) },

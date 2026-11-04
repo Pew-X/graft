@@ -87,6 +87,22 @@ export const copy = {
     kept: "kept as a sketch: {title}. nothing is published.",
     keptAdjusted:
       "kept as a sketch: {title}. a link or a handle in the title was removed, as it would be when published.",
+    noteLabel: "a note",
+    noteGloss:
+      "optional: a line to remember it by, up to 140 characters. it is sent with the flip if you publish this sketch.",
+    noteWhy: {
+      empty: "the note is empty once links and handles are removed.",
+      too_long: "the note is longer than {limit} characters.",
+      character: "the note has a character that is not allowed: {detail}",
+      mixed_scripts: "a word in the note mixes letters from different scripts.",
+      denied_word: "the word {detail} cannot be used in a note.",
+    },
+    noteAdd: "add a note",
+    noteEdit: "edit the note",
+    noteSave: "save the note",
+    noteCancel: "cancel",
+    noteClear: "remove the note",
+    noteEditLabel: "note",
     titleWhy: {
       empty: "the title is empty once links and handles are removed.",
       too_long: "the title is longer than {limit} characters.",
@@ -277,6 +293,7 @@ export const copy = {
         checksum: "this link was changed or damaged, so none of it was added.",
         number: "this link has a number that is out of range, so none of it was added.",
         title: "a title in this link breaks the rules for titles, so none of it was added.",
+        note: "a note in this link breaks the rules for notes, so none of it was added.",
         parent:
           "a sketch in this link goes on from one that is not in it, so none of it was added.",
         cycle:
@@ -924,6 +941,18 @@ export const copy = {
       help: "or click a bracket and use the arrow keys: one millisecond a press, ten with shift.",
       tag: { start: "start", end: "end" },
       range: "{from} to {to} seconds, {length} kept",
+      playhead: "where the sound is playing now",
+      zoom: {
+        toggle: "zoom",
+        gloss: "look closer to place a bracket exactly. the brackets still hold the whole sound.",
+        in: "zoom in",
+        out: "zoom out",
+        fit: "fit the cut",
+        whole: "whole sound",
+        hint: "scroll or pinch to zoom around the pointer. hold shift and scroll to slide.",
+        showing: "showing {from} to {to} seconds",
+        offscreen: "out of view",
+      },
     },
     speed: {
       label: "speed",
@@ -932,6 +961,16 @@ export const copy = {
       faster: "faster",
       approximate: "about {interval}",
       value: "{percent}, {interval}",
+      typed: {
+        label: "or type a speed",
+        unit: "percent",
+        set: "set",
+        snapped: "snapped to {percent}, the nearest speed there is",
+        exact: "set to {percent}",
+        empty: "type a number between 25 and 400",
+        number: "that is not a number. use digits, like 150",
+        range: "speeds go from 25 to 400 percent",
+      },
     },
     result: {
       label: "what you hear",
@@ -967,6 +1006,7 @@ export const copy = {
   },
   details: {
     summary: "details",
+    summaryRights: "rights and details",
     printLabel: "a line drawn from this sound's code",
     printNote:
       "drawn from the code below, so the same sound always draws the same line. a picture of the code, not of how the sound goes.",

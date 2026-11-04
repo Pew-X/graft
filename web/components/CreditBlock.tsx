@@ -51,6 +51,13 @@ function Line({ line }: { line: FaceLine }) {
   );
 }
 
+/**
+ * The fine print of a stage: what the maker declared about sharing it and whether the right to share it
+ * is established. It stays in the block, with its honesty state in words, one level down: the face is the
+ * title, the maker and where it came from. A stage that is not available keeps every line on its face.
+ */
+const FINE_PRINT = new Set(["declaration", "rights"]);
+
 function Detail({ row }: { row: DetailRow }) {
   return (
     <div className="line" data-honesty={row.honesty}>
@@ -124,6 +131,8 @@ export const CreditBlock = memo(function CreditBlock({
   flipsAudio,
 }: Props) {
   const heading = `stage-${block.id}`;
+  const fine = block.state === "available" ? block.face.filter((l) => FINE_PRINT.has(l.role)) : [];
+  const face = fine.length === 0 ? block.face : block.face.filter((l) => !FINE_PRINT.has(l.role));
   return (
     <li
       ref={(node) => register(block.index, node)}
@@ -197,15 +206,29 @@ export const CreditBlock = memo(function CreditBlock({
           <FlipsOfStage key={block.id} id={block.id} apiUrl={flipsFrom} audio={flipsAudio} />
         ) : null}
         <dl className="face">
-          {block.face.map((line) => (
+          {face.map((line) => (
             <Line key={`${line.role}-${line.value}`} line={line} />
           ))}
         </dl>
         {block.flipped ? <p className="flipped">{block.flipped}</p> : null}
         {block.details.length === 0 ? null : (
           <details className="details">
-            <summary>{copy.details.summary}</summary>
+            <summary>
+              {fine.length === 0 ? copy.details.summary : copy.details.summaryRights}
+            </summary>
             <dl>
+              {fine.map((line) => (
+                <Detail
+                  key={`${line.role}-${line.value}`}
+                  row={{
+                    label: line.word,
+                    value: line.value,
+                    honesty: line.honesty,
+                    state: line.state,
+                    asTyped: line.asTyped,
+                  }}
+                />
+              ))}
               {block.details.map((row) => (
                 <Detail key={row.label} row={row} />
               ))}

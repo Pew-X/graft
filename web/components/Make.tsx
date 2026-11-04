@@ -26,6 +26,7 @@ import { type Async, useAsync } from "../lib/make/use-async.ts";
 import { fetchPcm } from "../lib/roll/pcm.ts";
 import { describeSpeed } from "../lib/roll/speed.ts";
 import { CutEditor } from "./CutEditor.tsx";
+import { TypedSpeed } from "./TypedSpeed.tsx";
 import { type Features, readFeatures } from "../lib/own/features.ts";
 import { type Basis, DECLARATION_TEXT, sourceBody } from "../lib/own/source.ts";
 import { KeepSketch } from "./KeepSketch.tsx";
@@ -807,6 +808,9 @@ function Editor({
     onGuide("heard");
   }, [previewer, onGuide, setListening]);
 
+  // the line on the cut follows the preview loop
+  const playhead = useCallback(() => previewer.fraction(), [previewer]);
+
   const direction = cents > 0 ? "up" : cents < 0 ? "down" : "src";
   const interval = speed.approximate
     ? fill(copy.make.speed.approximate, { interval: speed.interval })
@@ -853,6 +857,7 @@ function Editor({
             onGuide("changed");
           }}
           onTouch={touch}
+          playhead={playhead}
         />
       </section>
 
@@ -908,6 +913,13 @@ function Editor({
             +
           </button>
         </div>
+        <TypedSpeed
+          onSet={(chosen) => {
+            touch();
+            setEditing((was) => withStop(was, chosen));
+            onGuide("changed");
+          }}
+        />
       </section>
 
       <section

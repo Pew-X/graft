@@ -17,7 +17,7 @@ import { ID_SHAPE } from "../flips/list.ts";
 import { type Book, type StorageLike, transact } from "./book.ts";
 import { MOST_DEPTH, MOST_SKETCHES, type Parent, type Sketch, newSketchId } from "./sketch.ts";
 import { newRetryKey } from "../publish/retry-key.ts";
-import { cleanTitle } from "./title.ts";
+import { cleanNote, cleanTitle } from "./title.ts";
 
 export const VERSION = "g1";
 /** A link's whole fragment may be this long; a file may be larger. */
@@ -35,6 +35,8 @@ export interface Entry {
   end: number;
   p: number;
   q: number;
+  /** Optional: a sketch's note travels with it. Older payloads have none. */
+  note?: string;
 }
 
 export type Refusal =
@@ -45,6 +47,7 @@ export type Refusal =
   | "checksum"
   | "number"
   | "title"
+  | "note"
   | "parent"
   | "cycle"
   | "depth"
@@ -102,13 +105,20 @@ export function entriesOf(sketches: readonly Sketch[]): Entry[] {
     end: s.cut.end,
     p: s.p,
     q: s.q,
+    ...(s.note ? { note: s.note } : {}),
   }));
 }
 
 /** The one line of text for these entries. */
 export function write(entries: readonly Entry[]): string {
   const body = `${VERSION}.${entries.length}.${b64(
-    JSON.stringify(entries.map((e) => [e.title, e.parent, e.start, e.end, e.p, e.q])),
+    JSON.stringify(
+      entries.map((e) =>
+        e.note
+          ? [e.title, e.parent, e.start, e.end, e.p, e.q, e.note]
+          : [e.title, e.parent, e.start, e.end, e.p, e.q],
+      ),
+    ),
   )}`;
   return `${body}.${fnv1a(body)}`;
 }
@@ -148,8 +158,9 @@ export function read(text: string, mostBytes = MOST_LINK_BYTES): Read {
   if (data.length !== count) return { ok: false, why: "cutShort" };
   const entries: Entry[] = [];
   for (const row of data as unknown[]) {
-    if (!Array.isArray(row) || row.length !== 6) return { ok: false, why: "format" };
-    const [title, parent, start, end, p, q] = row as unknown[];
+    if (!Array.isArray(row) || (row.length !== 6 && row.length !== 7))
+      return { ok: false, why: "format" };
+    const [title, parent, start, end, p, q, note] = row as unknown[];
     if (!whole(start, 10_000_000) || !whole(end, 10_000_000) || end <= start)
       return { ok: false, why: "number" };
     if (typeof p !== "number" || typeof q !== "number" || checkSpeed(p, q) !== null)
@@ -163,7 +174,23 @@ export function read(text: string, mostBytes = MOST_LINK_BYTES): Read {
     } else if (!whole(parent, count - 1)) {
       return { ok: false, why: "parent" };
     }
-    entries.push({ title, parent: parent as string | number, start, end, p, q });
+    let kept: string | undefined;
+    if (row.length === 7) {
+      if (typeof note !== "string") return { ok: false, why: "note" };
+      const cleanedNote = cleanNote(note);
+      if (!cleanedNote.ok || cleanedNote.value !== note || cleanedNote.adjusted || note === "")
+        return { ok: false, why: "note" };
+      kept = note;
+    }
+    entries.push({
+      title,
+      parent: parent as string | number,
+      start,
+      end,
+      p,
+      q,
+      ...(kept !== undefined ? { note: kept } : {}),
+    });
   }
   // every sketch parent is in the payload, none is its own, there is no cycle, and no path is too deep
   const depthOf = (i: number, seen: readonly number[]): number | "cycle" => {
@@ -250,6 +277,7 @@ export function plan(book: Book, entries: readonly Entry[], now = Date.now()): P
       title: e.title,
       retryKey: newRetryKey(),
       at: now,
+      ...(e.note ? { note: e.note } : {}),
     });
   };
   entries.forEach((_, i) => resolve(i, 0));

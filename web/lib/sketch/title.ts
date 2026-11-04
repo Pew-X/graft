@@ -8,6 +8,8 @@
  */
 
 export const TITLE_LIMIT = 60;
+/** A note is a short line of the same plain text, in characters. */
+export const NOTE_LIMIT = 140;
 
 export type TitleRule = "empty" | "too_long" | "character" | "mixed_scripts" | "denied_word";
 
@@ -146,4 +148,13 @@ export function cleanTitle(input: string, max = TITLE_LIMIT): Cleaned {
     if (BUILT_IN_DENY.includes(bare)) return refuse("denied_word", bare);
   }
   return { ok: true, value, adjusted };
+}
+
+/**
+ * Clean a note: the title rules at the note's length, except that a note may be empty (it is optional).
+ * Whitespace-only text is no note.
+ */
+export function cleanNote(input: string): Cleaned {
+  if (input.trim() === "") return { ok: true, value: "", adjusted: false };
+  return cleanTitle(input, NOTE_LIMIT);
 }

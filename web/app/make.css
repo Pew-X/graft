@@ -297,6 +297,42 @@
     monospace;
   color: var(--muted);
 }
+/* zoom: an aid for placing a bracket; off until asked for */
+.cut-editor .zoom-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.cut-editor .zoom-bar .gloss {
+  font-size: 12px;
+}
+.cut-editor .zoom-bar .pill[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--bg);
+}
+.cut-editor .track[data-zoomed="true"] {
+  cursor: crosshair;
+}
+/* a bracket outside the zoomed window waits at the edge it left by, dimmed */
+.handle[data-offscreen] {
+  opacity: 0.55;
+}
+/* the line that follows what is playing: thin, in the ink, never covering a bracket's touch area */
+.cut-editor .playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--ink);
+  box-shadow: 0 0 0 1px var(--bg);
+  pointer-events: none;
+  opacity: 0;
+}
+.cut-editor .playhead[data-on="true"] {
+  opacity: 1;
+}
 .cut-editor .readout {
   margin: 0.5rem 0 0;
   font:
@@ -1878,4 +1914,38 @@
 }
 .your-flips .flip-group .kicker {
   margin: 0;
+}
+
+/* a speed typed as a percentage */
+.typed-speed {
+  margin-top: 0.75rem;
+}
+.typed-speed .typed-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+.typed-speed input {
+  font:
+    500 16px var(--f-mono),
+    ui-monospace,
+    monospace;
+  padding: 0.4rem 0.5rem;
+  min-height: 44px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+.typed-speed .hint {
+  margin: 0.25rem 0 0;
+  min-height: 1.5em;
+}
+
+/* a sketch's note: one quiet line under its title */
+.sketch-note {
+  margin: 0.15rem 0 0.25rem;
+  font-size: 0.9rem;
+  color: var(--ink);
+  overflow-wrap: anywhere;
 }
