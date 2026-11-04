@@ -80,6 +80,7 @@ pub async fn seed_source(
         author: source.author,
         evidence: Some(source.evidence),
         manage_key_hash: None,
+        note: None,
     };
     match store.create_publication(&new).await? {
         Outcome::KeyConflict => Err(SeedError::KeyConflict(source.key)),
@@ -207,6 +208,7 @@ pub async fn seed_chain(
             author: flip.author.clone(),
             retry_key: flip.key.clone(),
             preview_hash: Some(flip.expected_output_sha256.clone()),
+            note: None,
         };
         let (_, published) =
             crate::publish::publish_flip_as(state, request, crate::publish::Identity::Seeded)

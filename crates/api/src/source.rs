@@ -227,6 +227,7 @@ async fn publish_source_inner(
             retry_key: request.retry_key.clone(),
             title: title.value.clone(),
             author: author.value.clone(),
+            note: None,
             evidence: Some(SourceEvidence {
                 licence: basis.to_owned(),
                 work_title: None,

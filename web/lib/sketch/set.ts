@@ -121,6 +121,8 @@ export interface SetDeps {
   markPublished: (sketchId: string, publicationId: string) => void;
   /** The name the whole set is published under. */
   author: string;
+  /** The service has notes: a sketch's note is sent with it. False for an older service, which would refuse the field. */
+  notes?: boolean;
   signal: AbortSignal;
   /** Called after every change, with every sketch's state. */
   onUpdate: (states: ReadonlyMap<string, ItemState>, keys: ReadonlyMap<string, string>) => void;
@@ -199,6 +201,7 @@ export async function runSet(order: readonly Sketch[], deps: SetDeps): Promise<S
         title: here.title,
         author: deps.author,
         retry_key: here.retryKey,
+        ...(deps.notes && here.note ? { note: here.note } : {}),
         preview_hash: rendered.hash,
       },
       (attempt, of) => {

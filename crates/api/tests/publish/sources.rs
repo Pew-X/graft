@@ -398,12 +398,18 @@ async fn anyone_can_read_whether_publishing_and_uploads_are_open_and_nothing_els
     let (status, headers, body) = h.get("/v1/features").await;
     assert_eq!(status, StatusCode::OK);
     assert!(!is_problem(&headers));
-    assert_eq!(body, json!({ "publishing": true, "uploads": false }));
+    assert_eq!(
+        body,
+        json!({ "publishing": true, "uploads": false, "notes": true })
+    );
     h.finish().await;
 
     let on = open().await;
     let (_, _, body) = on.get("/v1/features").await;
-    assert_eq!(body, json!({ "publishing": true, "uploads": true }));
+    assert_eq!(
+        body,
+        json!({ "publishing": true, "uploads": true, "notes": true })
+    );
     // The kill switch shows here too, so the page can say publishing is closed before anything is sent.
     let (status, _, _) = on
         .send(
@@ -415,6 +421,9 @@ async fn anyone_can_read_whether_publishing_and_uploads_are_open_and_nothing_els
         .await;
     assert_eq!(status, StatusCode::OK);
     let (_, _, body) = on.get("/v1/features").await;
-    assert_eq!(body, json!({ "publishing": false, "uploads": true }));
+    assert_eq!(
+        body,
+        json!({ "publishing": false, "uploads": true, "notes": true })
+    );
     on.finish().await;
 }

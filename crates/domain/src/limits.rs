@@ -25,6 +25,8 @@ pub struct Limits {
     pub max_title_chars: usize,
     /// Longest author name as typed, in characters.
     pub max_author_chars: usize,
+    /// Longest maker's note, in characters.
+    pub max_note_chars: usize,
 }
 
 impl Default for Limits {
@@ -37,6 +39,7 @@ impl Default for Limits {
             max_chain_depth: 12,
             max_title_chars: 60,
             max_author_chars: 32,
+            max_note_chars: 140,
         }
     }
 }
@@ -55,5 +58,6 @@ mod tests {
         assert_eq!(l.min_frames, 480);
         assert_eq!(l.max_chain_depth, 12);
         assert_eq!((l.max_title_chars, l.max_author_chars), (60, 32));
+        assert_eq!(l.max_note_chars, 140);
     }
 }

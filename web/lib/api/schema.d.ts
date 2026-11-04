@@ -127,6 +127,27 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/publications/{id}/note": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Write, change or clear the note on a publication. It is the one part of a publication that can
+     *     change after it is published, so it follows the same text rules as a title, it is closed with
+     *     the rest of publishing when the operator closes it, and a hidden publication keeps the note it had.
+     */
+    put: operations["set_note"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/publications/{id}/withdraw": {
     parameters: {
       query?: never;
@@ -371,6 +392,21 @@ export interface components {
       /** @description Whether the stage is hidden (withdrawn). */
       withdrawn: boolean;
     };
+    /** @description A note to set on a publication, or to clear. */
+    NoteRequest: {
+      /**
+       * @description The note as typed: one short line of plain text under the title rules (links and handles are
+       *     removed, and the response says so). Empty or absent clears the note.
+       */
+      note?: string | null;
+    };
+    /** @description The note after an edit. */
+    NoteState: {
+      /** @description True when a link or a handle was removed from what was typed. */
+      adjusted: boolean;
+      /** @description The note now, or null when there is none. */
+      note?: string | null;
+    };
     /** @description A problem-details document. */
     Problem: {
       /** @description What went wrong this time, for a person. */
@@ -400,6 +436,12 @@ export interface components {
       author: string;
       /** @description The cut of the parent's audio. */
       cut: components["schemas"]["CutRequest"];
+      /**
+       * @description An optional note from the maker, one short line of plain text under the same rules as a title
+       *     (links and handles are removed, and the response says so). The maker can change it later
+       *     with the manage key; it is not part of the content record. Empty text means no note.
+       */
+      note?: string | null;
       /** @description Public id of the stage being flipped. */
       parent_id: string;
       /** @description SHA-256 (hex) of the audio the client's preview rendered. A cross-check only. */
@@ -418,7 +460,7 @@ export interface components {
     PublishSourceRequest: {
       /**
        * @description Base64 (standard alphabet, no line breaks) of canonical audio: 48 kHz, mono, signed 16-bit
-       *     little-endian, no header; at most 15 seconds.
+       *     little-endian, no header; at most 30 seconds.
        */
       audio: string;
       /** @description The maker's name as typed. Plain text, never a handle. */
@@ -566,6 +608,8 @@ export interface components {
       kind: string;
       /** @description Credit lines, each with its honesty state. */
       lines: components["schemas"]["LineView"][];
+      /** @description The maker's note as typed, if they wrote one. It can be edited by the maker after publishing. */
+      note?: string | null;
       /** @description Id of the parent publication, absent for a source. */
       parent_id?: string | null;
       /** @description Title as typed. */
@@ -576,6 +620,12 @@ export interface components {
      *     runs; uploads are set when it starts (`GRAFT_UPLOADS`), so this only reports them.
      */
     SwitchView: {
+      /**
+       * @description Whether a flip may carry a maker's note, and a maker may edit it. Always true from the version
+       *     that has notes; a page treats a missing field as false, so it never sends a note to a service
+       *     that would refuse the field.
+       */
+      notes: boolean;
       /** @description Whether publishing is open. */
       publishing: boolean;
       /** @description Whether visitors may publish their own sources. */
@@ -896,6 +946,81 @@ export interface operations {
         };
       };
       /** @description Busy; send the same request again */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+    };
+  };
+  set_note: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The manage key shown once when the publication was created */
+        "x-graft-manage-key": string;
+      };
+      path: {
+        /** @description Public id of the publication */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["NoteRequest"];
+      };
+    };
+    responses: {
+      /** @description The note now; repeating the request changes nothing */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NoteState"];
+        };
+      };
+      /** @description The manage key was not accepted (the same answer for every reason) */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description The publication is withdrawn or held, so its note is left as it was */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description The note breaks a rule; `field` and `rule` say which */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description This visitor published or edited too often; `Retry-After` says when to try again */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Busy, send the same request again; or publishing is switched off (`publishing-off`) */
       503: {
         headers: {
           [name: string]: unknown;

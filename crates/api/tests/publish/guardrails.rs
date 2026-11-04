@@ -133,6 +133,8 @@ const WRITE_ROUTES: &[(&str, &str, bool)] = &[
     ("POST", "/v1/publications", true),
     ("POST", "/v1/events", true),
     ("POST", "/v1/sources", true),
+    // A maker's note is public text that can change after publishing, so the switch closes it too.
+    ("PUT", "/v1/publications/{id}/note", true),
     // Reports stay open so a problem can always be raised; a maker can always withdraw; the
     // operator's own routes are how the switch is reopened.
     ("POST", "/v1/reports", false),
@@ -471,12 +473,18 @@ async fn the_operator_can_read_both_switches_and_what_each_says_about_visitors()
         .send("GET", "/admin/switch", &[(ADMIN, SECRET)], None)
         .await;
     assert_eq!(status, StatusCode::OK, "{res}");
-    assert_eq!(res, json!({ "publishing": true, "uploads": true }));
+    assert_eq!(
+        res,
+        json!({ "publishing": true, "uploads": true, "notes": true })
+    );
     switch(&h, false).await;
     let (_, _, res) = h
         .send("GET", "/admin/switch", &[(ADMIN, SECRET)], None)
         .await;
-    assert_eq!(res, json!({ "publishing": false, "uploads": true }));
+    assert_eq!(
+        res,
+        json!({ "publishing": false, "uploads": true, "notes": true })
+    );
 
     let off = with_secret(|_| {}).await;
     let (_, _, res) = off
@@ -484,7 +492,7 @@ async fn the_operator_can_read_both_switches_and_what_each_says_about_visitors()
         .await;
     assert_eq!(
         res,
-        json!({ "publishing": true, "uploads": false }),
+        json!({ "publishing": true, "uploads": false, "notes": true }),
         "uploads are off unless the service was started with them on"
     );
 }

@@ -236,6 +236,17 @@ impl Problem {
         }
     }
 
+    /// 409: the publication is withdrawn or held, so its note is left as it was.
+    #[must_use]
+    pub fn note_locked() -> Self {
+        Self::base(
+            "urn:graft:problem:note-locked",
+            "The note cannot be changed",
+            409,
+            "this publication is withdrawn or held, so its note is left as it was",
+        )
+    }
+
     /// 409: the retry key was already used for different content.
     #[must_use]
     pub fn key_conflict() -> Self {

@@ -7,6 +7,7 @@ const shown = (state: string, forkPermitted: boolean | null = true) => ({
   state,
   title: "t",
   author: "a",
+  note: null,
   forkPermitted,
 });
 

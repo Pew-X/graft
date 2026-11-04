@@ -47,6 +47,9 @@ pub struct StoredStage {
     pub title: String,
     /// Maker's name as typed.
     pub author: String,
+    /// The maker's note as typed, if they wrote one. The only part of a stage the maker can change
+    /// later, and not part of the content record.
+    pub note: Option<String>,
     /// Creation time, milliseconds since the Unix epoch.
     pub created_at_ms: i64,
     /// Declared evidence, present on sources.
@@ -229,6 +232,13 @@ pub fn credit_lines(stage: &StoredStage) -> Vec<CreditLine> {
                         honesty: Honesty::Declared,
                     });
                 }
+                if let Some(note) = &stage.note {
+                    lines.push(CreditLine {
+                        role: "note",
+                        value: note.clone(),
+                        honesty: Honesty::Declared,
+                    });
+                }
                 if let Some(declaration) = &ev.declaration {
                     lines.push(CreditLine {
                         role: "declaration",
@@ -249,6 +259,13 @@ pub fn credit_lines(stage: &StoredStage) -> Vec<CreditLine> {
                 value: stage.author.clone(),
                 honesty: Honesty::Declared,
             });
+            if let Some(note) = &stage.note {
+                lines.push(CreditLine {
+                    role: "note",
+                    value: note.clone(),
+                    honesty: Honesty::Declared,
+                });
+            }
             let cut = record.cut();
             lines.push(CreditLine {
                 role: "cut",
@@ -302,6 +319,7 @@ mod tests {
             record: ContentRecord::source(audio, 48_000, renderer()).expect("valid"),
             title: format!("source {n}"),
             author: "a maker".into(),
+            note: None,
             created_at_ms: 0,
             evidence: Some(SourceEvidence {
                 licence: "CC0".into(),
@@ -339,6 +357,7 @@ mod tests {
             record,
             title: format!("flip {n}"),
             author: "jo".into(),
+            note: None,
             created_at_ms: 0,
             evidence: None,
             flipped_count: 0,

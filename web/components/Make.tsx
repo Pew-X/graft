@@ -146,15 +146,13 @@ export function Make({
           ? { kind: "live", id: targetId }
           : null;
 
-  // Asked when the page opens at the picker (a page opened on a stage, `?from=`, has no own-sound block
-  // and asks nothing), so the own-sound block can say up front whether publishing a sound of one's own
-  // is open and the editor can use the same answer: nothing more than this one read leaves the device
-  // before a publish. If that read failed, choosing a sound of one's own asks once more. A service that
-  // cannot be asked says nothing.
+  // Asked when the page opens, so the own-sound block can say up front whether publishing a sound of
+  // one's own is open, and the publish step knows whether the service has notes (an older one would
+  // refuse the field): nothing more than this one read leaves the device before a publish. If that read
+  // failed, choosing a sound of one's own asks once more. A service that cannot be asked says nothing,
+  // and then no note is offered.
   const [featuresTry, setFeaturesTry] = useState(0);
-  const features = useAsync(from === null ? `features:${featuresTry}` : null, (signal) =>
-    readFeatures(apiUrl, signal),
-  );
+  const features = useAsync(`features:${featuresTry}`, (signal) => readFeatures(apiUrl, signal));
 
   const [engineTry, setEngineTry] = useState(0);
   const engine = useAsync(`renderer:${engineTry}`, browserRenderer);
@@ -681,7 +679,12 @@ export function Make({
         <SketchBankPanel bank={bank} status={bankStatus} />
       ) : null}
       {book.sketches.length >= 2 || sketchSet.chosen.ids.length > 0 ? (
-        <SetPublisher apiUrl={apiUrl} render={hashOf} onStarted={() => send("published")} />
+        <SetPublisher
+          apiUrl={apiUrl}
+          render={hashOf}
+          notes={features.status === "ready" && features.value.notes}
+          onStarted={() => send("published")}
+        />
       ) : null}
       <MoveSketches />
       <p className="local">{copy.make.local}</p>
@@ -762,6 +765,7 @@ function Editor({
   const [basis, setBasis] = useState<Basis>("own_recording");
   const [confirmed, setConfirmed] = useState(false);
   const flipParent = own ? sourceId : sketchParent ? publishedParent(sketchParent) : parentId;
+  const notesOn = features.status === "ready" && features.value.notes;
   const closedWhy =
     !own || features.status !== "ready"
       ? null
@@ -1106,13 +1110,16 @@ function Editor({
               announceSketchChange();
             }
           }}
-          buildBody={({ title, author, retryKey }) => ({
+          noteEnabled={notesOn}
+          initialNote={sameAsOpened && opened?.note ? opened.note : ""}
+          buildBody={({ title, author, note, retryKey }) => ({
             parent_id: flipParent,
             cut: { start: cut.start, end: cut.end },
             speed: { p, q },
             title,
             author,
             retry_key: retryKey,
+            ...(note !== "" ? { note } : {}),
             ...(current ? { preview_hash: current.hash } : {}),
           })}
           gate={current !== null}

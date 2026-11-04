@@ -530,6 +530,7 @@ impl Config {
             &mut limits.max_output_frames,
         )?;
         number(&lookup, "GRAFT_MIN_FRAMES", &mut limits.min_frames)?;
+        number(&lookup, "GRAFT_MAX_NOTE_CHARS", &mut limits.max_note_chars)?;
         number(
             &lookup,
             "GRAFT_MAX_TITLE_CHARS",
@@ -749,6 +750,12 @@ fn validate(l: &Limits, blob_url_ttl_secs: u64) -> Result<(), ConfigError> {
     }
     if l.max_title_chars == 0 || l.max_author_chars == 0 {
         return invalid("GRAFT_MAX_TITLE_CHARS", "text limits must be at least 1");
+    }
+    if l.max_note_chars == 0 || l.max_note_chars > 400 {
+        return invalid(
+            "GRAFT_MAX_NOTE_CHARS",
+            "must be from 1 to 400 (the most the table holds)",
+        );
     }
     if blob_url_ttl_secs == 0 {
         return invalid("GRAFT_BLOB_URL_TTL_SECS", "must be at least 1");

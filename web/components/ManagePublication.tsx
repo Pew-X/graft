@@ -1,8 +1,17 @@
 "use client";
 
 import { useState, useSyncExternalStore } from "react";
-import { copy } from "../lib/copy.ts";
-import { type Result, setForkPermission, withdraw } from "../lib/manage/client.ts";
+import { copy, fill } from "../lib/copy.ts";
+import {
+  type NoteResult,
+  type Result,
+  setForkPermission,
+  setNote,
+  withdraw,
+} from "../lib/manage/client.ts";
+import { readFeatures } from "../lib/own/features.ts";
+import { NOTE_MAX, hintFor } from "../lib/publish/hints.ts";
+import { hintText } from "../lib/publish/words.ts";
 import { readPublication } from "../lib/manage/read.ts";
 import { forgetKey, keptKeys } from "../lib/publish/keep.ts";
 import { useAsync } from "../lib/make/use-async.ts";
@@ -30,7 +39,13 @@ export function ManagePublication({ id, apiUrl }: { id: string; apiUrl: string }
     () => (keptKeys(storage())[id] ? "yes" : "no"),
     () => "no",
   );
+  // the note controls show only where the service has notes: an older service would refuse the route
+  const features = useAsync(`features:${apiUrl}`, (signal) => readFeatures(apiUrl, signal));
+  const notesOn = features.status === "ready" && features.value.notes;
   const [key, setKey] = useState("");
+  const [noteDraft, setNoteDraft] = useState<string | null>(null);
+  const [noteNow, setNoteNow] = useState<{ value: string | null } | null>(null);
+  const [noteMessage, setNoteMessage] = useState("");
   const [override, setOverride] = useState<{ forkPermitted?: boolean; withdrawn?: boolean }>({});
   const [message, setMessage] = useState("");
   const [confirming, setConfirming] = useState(false);
@@ -82,6 +97,52 @@ export function ManagePublication({ id, apiUrl }: { id: string; apiUrl: string }
     }
   }
   const fetcher = (url: string, init?: RequestInit) => fetch(url, init);
+  const savedNote = noteNow ? noteNow.value : shown.note;
+  const draft = noteDraft ?? savedNote ?? "";
+  const draftHint = draft === "" ? null : hintFor(draft, NOTE_MAX);
+  const noteBlocked =
+    draftHint !== null && (draftHint.kind === "tooLong" || draftHint.kind === "character");
+  async function saveNote() {
+    if (working) return;
+    setWorking(true);
+    setNoteMessage("");
+    const result: NoteResult = await setNote(fetcher, apiUrl, id, key, draft);
+    setWorking(false);
+    const n = copy.manage.note;
+    switch (result.kind) {
+      case "saved":
+        setNoteNow({ value: result.note });
+        setNoteDraft(null);
+        setNoteMessage(
+          result.note === null ? n.removed : result.adjusted ? n.savedAdjusted : n.saved,
+        );
+        break;
+      case "refused":
+        setNoteMessage(copy.manage.refused);
+        break;
+      case "locked":
+        setNoteMessage(n.locked);
+        break;
+      case "limited":
+        setNoteMessage(n.limited);
+        break;
+      case "closed":
+        setNoteMessage(n.closed);
+        break;
+      case "invalid":
+        setNoteMessage(
+          fill(n.invalid, {
+            rule: (copy.publish.rules as Record<string, string>)[result.rule ?? ""] ?? "a rule",
+          }),
+        );
+        break;
+      case "busy":
+        setNoteMessage(copy.manage.busy);
+        break;
+      default:
+        setNoteMessage(copy.manage.unreachable);
+    }
+  }
   const useKept = () => setKey(keptKeys(storage())[id] ?? "");
 
   return (
@@ -135,6 +196,50 @@ export function ManagePublication({ id, apiUrl }: { id: string; apiUrl: string }
           </div>
         ) : null}
       </section>
+
+      {withdrawn || !notesOn ? null : (
+        <section className="panel" aria-labelledby="manage-note">
+          <h3 id="manage-note" className="kicker">
+            {copy.manage.note.heading}
+          </h3>
+          <p className="hint">{copy.manage.note.gloss}</p>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (key !== "" && !noteBlocked) void saveNote();
+            }}
+          >
+            <label htmlFor="manage-note-input" className="visually-hidden">
+              {copy.manage.note.label}
+            </label>
+            <input
+              id="manage-note-input"
+              type="text"
+              autoComplete="off"
+              spellCheck={false}
+              value={draft}
+              aria-describedby="manage-note-hint"
+              data-testid="manage-note"
+              onChange={(e) => setNoteDraft(e.target.value)}
+            />
+            <p id="manage-note-hint" className="hint">
+              {draftHint ? hintText(draftHint) : savedNote === null ? copy.manage.note.none : ""}
+            </p>
+            <div className="actions">
+              <button
+                type="submit"
+                className="pill"
+                disabled={key === "" || working || noteBlocked || draft === (savedNote ?? "")}
+              >
+                {draft.trim() === "" ? copy.manage.note.clear : copy.manage.note.save}
+              </button>
+            </div>
+          </form>
+          <p role="status" className="refusal" data-testid="manage-note-said">
+            {noteMessage}
+          </p>
+        </section>
+      )}
 
       {withdrawn ? null : (
         <section className="panel" aria-labelledby="manage-actions">

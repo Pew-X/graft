@@ -89,6 +89,8 @@ pub struct StageView {
     pub title: String,
     /// Maker's name as typed. Plain text, never a handle.
     pub author: String,
+    /// The maker's note as typed, if they wrote one. It can be edited by the maker after publishing.
+    pub note: Option<String>,
     /// Creation time, milliseconds since the Unix epoch.
     pub created_at_ms: i64,
     /// How many publications were flipped from this one, counted from publications data.
@@ -171,6 +173,7 @@ pub fn stage_view(stage: &StoredStage, audio: AudioView) -> StageView {
         .to_owned(),
         title: stage.title.clone(),
         author: stage.author.clone(),
+        note: stage.note.clone(),
         created_at_ms: stage.created_at_ms,
         flipped_count: stage.flipped_count,
         parent_id: r.parent().map(ToString::to_string),
@@ -227,8 +230,11 @@ pub fn removed_view(stage: &StoredStage, reason: HideReason) -> RemovedView {
         author: stage.author.clone(),
         created_at_ms: stage.created_at_ms,
         parent_id: r.parent().map(ToString::to_string),
+        // The maker's note is not shown for a stage that is no longer here: it is the maker's words
+        // about a sound that is not being served.
         lines: credit_lines(stage)
             .into_iter()
+            .filter(|l| l.role != "note")
             .map(|l| LineView {
                 role: l.role.to_owned(),
                 value: l.value,

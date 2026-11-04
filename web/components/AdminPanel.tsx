@@ -166,6 +166,17 @@ export function AdminPanel({ apiUrl }: { apiUrl: string }) {
                 {fill(copy.admin.filed, { when: hourText(report.created_at_ms) })}
               </p>
               <p className="admin-note">{report.note ?? copy.admin.noNote}</p>
+              {report.maker_note ? (
+                <p className="admin-note" data-testid="maker-note">
+                  {fill(
+                    report.maker_note_updated_at_ms != null &&
+                      report.maker_note_updated_at_ms > report.created_at_ms
+                      ? copy.admin.makerNoteChanged
+                      : copy.admin.makerNote,
+                    { note: report.maker_note },
+                  )}
+                </p>
+              ) : null}
               <p className="admin-state" data-state={report.state}>
                 {copy.admin.state[report.state as keyof typeof copy.admin.state] ?? report.state}
               </p>

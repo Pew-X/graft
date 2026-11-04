@@ -75,3 +75,60 @@ export function withdraw(
 ): Promise<Result> {
   return send(fetcher, `${apiUrl}/v1/publications/${encodeURIComponent(id)}/withdraw`, "POST", key);
 }
+
+export type NoteResult =
+  | { kind: "saved"; note: string | null; adjusted: boolean }
+  | { kind: "refused" | "locked" | "limited" | "closed" | "busy" | "unreachable" }
+  | { kind: "invalid"; rule: string | null };
+
+/**
+ * Write, change or clear (with an empty note) the note on a publication. Every way of being refused the
+ * key is the one answer `refused`; a withdrawn publication says `locked`; a note that breaks the title
+ * rules says which (`invalid`); and switched-off publishing says `closed`, so the page can be honest about why.
+ */
+export async function setNote(
+  fetcher: Fetcher,
+  apiUrl: string,
+  id: string,
+  key: string,
+  note: string,
+): Promise<NoteResult> {
+  if (key === "" || /[\r\n\0]/.test(key)) return { kind: "refused" };
+  try {
+    const reply = await fetcher(`${apiUrl}/v1/publications/${encodeURIComponent(id)}/note`, {
+      method: "PUT",
+      headers: { [HEADER]: key, "content-type": "application/json" },
+      body: JSON.stringify({ note }),
+    });
+    const text = await reply.text();
+    const body = ((): Record<string, unknown> => {
+      try {
+        const parsed: unknown = JSON.parse(text);
+        return typeof parsed === "object" && parsed !== null
+          ? (parsed as Record<string, unknown>)
+          : {};
+      } catch {
+        return {};
+      }
+    })();
+    if (reply.status === 200) {
+      return {
+        kind: "saved",
+        note: typeof body["note"] === "string" && body["note"] !== "" ? body["note"] : null,
+        adjusted: body["adjusted"] === true,
+      };
+    }
+    const type =
+      typeof body["type"] === "string" ? body["type"].replace("urn:graft:problem:", "") : "";
+    if (reply.status === 403 || reply.status === 404) return { kind: "refused" };
+    if (reply.status === 409) return { kind: "locked" };
+    if (reply.status === 422)
+      return { kind: "invalid", rule: typeof body["rule"] === "string" ? body["rule"] : null };
+    if (reply.status === 429) return { kind: "limited" };
+    if (reply.status === 503)
+      return type === "publishing-off" ? { kind: "closed" } : { kind: "busy" };
+    return { kind: "unreachable" };
+  } catch {
+    return { kind: "unreachable" };
+  }
+}

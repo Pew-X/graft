@@ -64,8 +64,11 @@ export function SetPublisher({
   apiUrl,
   render,
   onStarted,
+  notes = false,
 }: {
   apiUrl: string;
+  /** The service has notes, so each sketch's note is sent with it. */
+  notes?: boolean;
   /** The visitor started a set: the make guide's last lines follow it. */
   onStarted?: () => void;
   /** The hash of the sound a sketch renders to here: sent as the preview, so a differing render is caught. */
@@ -154,6 +157,7 @@ export function SetPublisher({
           announceSketchChange();
         },
         author: chosen.author.trim(),
+        notes,
         signal: controller.signal,
         // a resumed run adds to what the first showed, so the screen counts the whole set
         onUpdate: (next, got) => {

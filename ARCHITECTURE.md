@@ -145,6 +145,7 @@ erDiagram
     text retry_key "unique"
     text title "as typed"
     text author "as typed"
+    text note "optional, as typed, editable by the maker"
     bool fork_permitted
     text hidden_reason "withdrawn or rights"
     bytea manage_key_hash
@@ -209,7 +210,7 @@ Evidence, all against real Postgres: a 40-way simultaneous fork over a 16-connec
 
 ## Ownership and moderation
 
-**No accounts.** A maker controls their own publication with the manage key. It grants exactly two actions: close or reopen the stage to new flips, and withdraw it. Header-only, constant-time compare, one identical 403 for a missing key and a wrong key, never logged or echoed. Losing it loses only those two abilities. There is no recovery, because recovery means accounts or email, which are non-goals.
+**No accounts.** A maker controls their own publication with the manage key. It grants exactly three actions: close or reopen the stage to new flips, withdraw it, and write, change or clear its note (one short line of plain text under the title rules, optional, up to 140 characters, outside the content record, so the audio and the record id never depend on it). Header-only, constant-time compare, one identical 403 for a missing key and a wrong key, never logged or echoed. Losing it loses only those abilities. A note cannot be changed on a withdrawn or held stage, which also does not show it; the operator's reports list shows the current note and when the maker last changed it, so a note changed after a report is visible as such. There is no recovery, because recovery means accounts or email, which are non-goals.
 
 **Reports** (`POST /v1/reports`) are public, accept a category from a closed set and an optional note for the operator, and store no identity. **Hiding** is one operator action with a reason:
 
@@ -237,7 +238,7 @@ The write surface is anonymous. Each limit refuses with a stated reason and neve
 | Global publish cap | 120 per hour, burst 30 | 429 `publish-cap` |
 | Storage admission | 8 GB minus the overshoot bound | 503 `storage-full` |
 
-- **The kill switch** is a database row read through a 2 s cache, set with `PUT /admin/switch`, no redeploy. It closes flips, source uploads and event batches. Reads, reports, withdrawals and operator routes stay open, so a bad moment can always be reported and undone. A test lists every write route and checks it against the OpenAPI document.
+- **The kill switch** is a database row read through a 2 s cache, set with `PUT /admin/switch`, no redeploy. It closes flips, source uploads, event batches and note edits. Reads, reports, withdrawals and operator routes stay open, so a bad moment can always be reported and undone. A test lists every write route and checks it against the OpenAPI document.
 - **Per-address limits** are sliding windows in one process's memory. An address is never written to a row, a log line or a metric label, hashed or not (a test dumps every table, log and metric after a mixed run and looks). IPv6 counts by /64. Behind a load balancer `GRAFT_TRUSTED_PROXY_HOPS` says how many proxies to trust.
 - **The global cap** is a token bucket in one database row, updated conditionally, so any number of instances admit exactly as many publishes as there are tokens (40 at once against a burst of 7 admits 7 and refuses 33). A replay spends no token.
 - **Storage is an admission threshold, not a quota.** The total is read at most every 60 s outside any transaction. Publishes admitted between reads add to it; the global cap bounds how many, each no larger than the largest blob the limits allow. That is the documented **overshoot bound**, and start-up refuses a configuration whose bound exceeds the limit.

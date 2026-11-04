@@ -336,7 +336,7 @@ test("the ticket's picture is drawn from the public id, and the secret key is on
   await page.goto(`/manage/${id}`);
   await expect(page.getByTestId("trace")).toBeVisible();
   expect(await page.getByTestId("trace").locator(".beam").getAttribute("d")).toBe(line);
-  await expect(page.getByText("a published flip is fixed.")).toBeVisible();
+  await expect(page.getByText("a published flip's sound is fixed.")).toBeVisible();
 });
 
 test("the key is kept in this browser by default, and it is the only thing stored about their publications", async ({

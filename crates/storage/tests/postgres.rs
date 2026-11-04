@@ -41,6 +41,7 @@ fn source(key: &str, audio: u8) -> NewPublication {
         author: "pat".into(),
         evidence: Some(evidence()),
         manage_key_hash: None,
+        note: None,
     }
 }
 
@@ -69,6 +70,7 @@ fn flip(key: &str, parent: &NewPublication, out: u8) -> NewPublication {
         author: "jo".into(),
         evidence: None,
         manage_key_hash: None,
+        note: None,
     }
 }
 
@@ -315,6 +317,7 @@ async fn a_value_too_large_for_the_database_is_refused_and_never_wrapped_into_a_
         author: "pat".into(),
         evidence: None,
         manage_key_hash: None,
+        note: None,
     };
     let err = db
         .store

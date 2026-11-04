@@ -47,7 +47,7 @@ flowchart LR
 
 - **One renderer, everywhere.** Every flip is rendered by one integer-only renderer compiled to a single WebAssembly file. The browser previews with it and the server renders with the same bytes, so what you hear is what is stored. The claim is "reproducible for this renderer version and these published test vectors", and the repository carries the vectors and the tool that checks it.
 - **Honest credits.** Every fact shown about a sound is *declared* (a person said it), *computed* (the system produced it and can again) or *unknown* (not established). graft does not check who made a sound or whether they may share it, and says so on the page.
-- **No accounts.** The maker of a flip gets a key, shown once, that can close or withdraw that flip. Nothing else is stored about people.
+- **No accounts.** The maker of a flip gets a key, shown once, that can close it to new flips, withdraw it, or change its short note. Nothing else is stored about people.
 - **Sketches.** A sketch is a private try held in your browser until you publish it, so you can keep several directions of one sound, hear up to twelve together on pads, and publish the ones you like.
 - **Perform.** The number row plays stages 1 to 12; pads do the same by touch. A press plays one stage and nothing else.
 

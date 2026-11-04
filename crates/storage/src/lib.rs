@@ -20,7 +20,7 @@ pub use events::{Backlog, Claimed, EventKind, NewEvent, Origin, StoredEvent};
 pub use flip::{FlipOutcome, NewFlip, Refusal};
 pub use gate::{Gate, NoGate};
 pub use guardrails::PublishToken;
-pub use maker::StageFlags;
+pub use maker::{NoteChange, StageFlags};
 pub use orphans::{CleanupError, CleanupReport, remove_orphans};
 pub use postgres::{FlipsAfter, FlipsPage, ForkFlags, NewPublication, Outcome, Store, StoreError};
 pub use reports::{ReportCategory, ReportRow};

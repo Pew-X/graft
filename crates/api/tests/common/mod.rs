@@ -209,6 +209,7 @@ impl Harness {
             author: "jo".into(),
             evidence: None,
             manage_key_hash: None,
+            note: None,
         };
         self.db
             .store

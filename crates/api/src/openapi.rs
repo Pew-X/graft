@@ -24,6 +24,7 @@ use utoipa::OpenApi;
         crate::flips::get_flips,
         publish::publish_flip,
         maker::set_fork_permission,
+        maker::set_note,
         maker::withdraw,
         moderation::file_report,
         crate::ingest::ingest_events,
@@ -48,7 +49,9 @@ use utoipa::OpenApi;
         crate::source::PublishSourceRequest,
         crate::source::DeclarationRequest,
         crate::source::PublishedSource,
-        crate::moderation::SwitchView
+        crate::moderation::SwitchView,
+        maker::NoteRequest,
+        maker::NoteState
     ))
 )]
 struct ApiDoc;
