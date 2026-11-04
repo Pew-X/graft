@@ -5,7 +5,7 @@ import { copy, fill } from "../lib/copy.ts";
 import type { FlipValue } from "../lib/make/editing.ts";
 import { discard, keep, oldestUnused, readBook } from "../lib/sketch/book.ts";
 import { defaultTitle } from "../lib/sketch/names.ts";
-import { cleanTitle, TITLE_LIMIT } from "../lib/sketch/title.ts";
+import { cleanNote, cleanTitle, NOTE_LIMIT, TITLE_LIMIT } from "../lib/sketch/title.ts";
 import { MOST_SKETCHES, type Parent, type Sketch } from "../lib/sketch/sketch.ts";
 import { announceSketchChange, sketchStorage } from "./useSketchBook.ts";
 
@@ -36,6 +36,8 @@ export function KeepSketch({
   const uid = useId();
   const c = copy.sketch;
   const [title, setTitle] = useState("");
+  const [note, setNote] = useState("");
+  const [noteOpen, setNoteOpen] = useState(false);
   const [said, setSaid] = useState("");
   const [offer, setOffer] = useState<Sketch | null>(null);
 
@@ -64,17 +66,25 @@ export function KeepSketch({
       name = cleaned.value;
       adjusted = cleaned.adjusted;
     }
+    const cleanedNote = cleanNote(note);
+    if (!cleanedNote.ok) {
+      setSaid(fill(c.noteWhy[cleanedNote.rule], { limit: NOTE_LIMIT, detail: cleanedNote.detail }));
+      return;
+    }
     const made = keep(sketchStorage(), {
       parent,
       cut: value.cut,
       p: value.p,
       q: value.q,
       title: name,
+      note: cleanedNote.value,
     });
     announceSketchChange();
     if (made.ok) {
       setSaid(fill(adjusted ? c.keptAdjusted : c.kept, { title: made.sketch.title }));
       setTitle("");
+      setNote("");
+      setNoteOpen(false);
       onKept?.(made.sketch);
       return;
     }
@@ -102,6 +112,23 @@ export function KeepSketch({
           onChange={(e) => setTitle(e.target.value)}
         />
       </div>
+      {noteOpen ? (
+        <div className="field">
+          <label htmlFor={`${uid}-note`}>
+            {c.noteLabel} <span className="gloss">{c.noteGloss}</span>
+          </label>
+          <input
+            id={`${uid}-note`}
+            type="text"
+            value={note}
+            maxLength={NOTE_LIMIT}
+            autoComplete="off"
+            spellCheck={false}
+            data-testid="sketch-note"
+            onChange={(e) => setNote(e.target.value)}
+          />
+        </div>
+      ) : null}
       <div className="actions">
         <button
           type="button"
@@ -113,6 +140,16 @@ export function KeepSketch({
         >
           {label ?? c.keep}
         </button>
+        {noteOpen ? null : (
+          <button
+            type="button"
+            className="pill"
+            data-testid="sketch-note-add"
+            onClick={() => setNoteOpen(true)}
+          >
+            {c.noteAdd}
+          </button>
+        )}
       </div>
       <p id={`${uid}-said`} role="status" className="hint">
         {parent === null ? c.needSource : said}

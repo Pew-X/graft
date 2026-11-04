@@ -4,11 +4,11 @@ import { useState } from "react";
 import { copy, fill } from "../lib/copy.ts";
 import { intervalPhrase, secondsText } from "../lib/flips/describe.ts";
 import { outputFrames } from "../lib/make/cut.ts";
-import { type Book, below, discard, rename, twinOf } from "../lib/sketch/book.ts";
+import { type Book, below, discard, rename, setNote, twinOf } from "../lib/sketch/book.ts";
 import { remaining } from "../lib/sketch/depth.ts";
 import { pathOf } from "../lib/sketch/path.ts";
 import { type Sketch } from "../lib/sketch/sketch.ts";
-import { cleanTitle, TITLE_LIMIT } from "../lib/sketch/title.ts";
+import { cleanNote, cleanTitle, NOTE_LIMIT, TITLE_LIMIT } from "../lib/sketch/title.ts";
 import { Trace } from "./Trace.tsx";
 import { announceSketchChange, sketchStorage, useSketchBook } from "./useSketchBook.ts";
 import { useStageDepth } from "./useStageDepth.ts";
@@ -77,7 +77,8 @@ function Row({
   onGone: (message: string) => void;
 }) {
   const c = copy.sketch;
-  const [mode, setMode] = useState<"idle" | "rename" | "discard">("idle");
+  const [mode, setMode] = useState<"idle" | "rename" | "note" | "discard">("idle");
+  const [noteText, setNoteText] = useState(sketch.note ?? "");
   const [title, setTitle] = useState(sketch.title);
   const [problem, setProblem] = useState("");
   const path = pathOf(book, sketch.id);
@@ -114,6 +115,11 @@ function Row({
         </div>
         <div className="sketch-text">
           <p className="sketch-title">{sketch.title}</p>
+          {sketch.note ? (
+            <p className="sketch-note" data-testid="sketch-note-text">
+              {sketch.note}
+            </p>
+          ) : null}
           <p className="hint sketch-from">{fromLine}</p>
           <p className="hint sketch-facts">
             {fill("{interval}, {out} s", {
@@ -195,6 +201,52 @@ function Row({
             {c.discardNo}
           </button>
         </form>
+      ) : mode === "note" ? (
+        <form
+          className="sketch-rename"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const cleaned = cleanNote(noteText);
+            if (!cleaned.ok) {
+              setProblem(
+                fill(c.noteWhy[cleaned.rule], { limit: NOTE_LIMIT, detail: cleaned.detail }),
+              );
+              return;
+            }
+            const done = setNote(sketchStorage(), sketch.id, cleaned.value);
+            announceSketchChange();
+            if (done.ok) {
+              setProblem("");
+              setMode("idle");
+            } else setProblem(c.failed.invalid);
+          }}
+        >
+          <label>
+            <span className="visually-hidden">{c.noteEditLabel}</span>
+            <input
+              type="text"
+              value={noteText}
+              maxLength={NOTE_LIMIT}
+              autoComplete="off"
+              spellCheck={false}
+              data-testid="sketch-note-edit"
+              onChange={(e) => setNoteText(e.target.value)}
+            />
+          </label>
+          <button type="submit" className="pill">
+            {noteText.trim() === "" ? c.noteClear : c.noteSave}
+          </button>
+          <button
+            type="button"
+            className="pill"
+            onClick={() => {
+              setNoteText(sketch.note ?? "");
+              setMode("idle");
+            }}
+          >
+            {c.noteCancel}
+          </button>
+        </form>
       ) : mode === "discard" ? (
         <div className="sketch-ask" role="group" aria-label={c.discardAsk}>
           <p className="hint">
@@ -271,6 +323,17 @@ function Row({
               {c.rename}
             </button>
           ) : null}
+          <button
+            type="button"
+            className="pill"
+            data-testid="sketch-note-open"
+            onClick={() => {
+              setNoteText(sketch.note ?? "");
+              setMode("note");
+            }}
+          >
+            {sketch.note ? c.noteEdit : c.noteAdd}
+          </button>
           <button type="button" className="pill" onClick={() => setMode("discard")}>
             {c.discard}
           </button>

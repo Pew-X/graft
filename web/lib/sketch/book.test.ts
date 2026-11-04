@@ -15,6 +15,7 @@ import {
   parseBook,
   readBook,
   rename,
+  setNote,
   twinOf,
 } from "./book.ts";
 import { MOST_SKETCHES, SKETCH_ID, newSketchId } from "./sketch.ts";
@@ -253,4 +254,35 @@ test("the bank holds a sketch once, at most twelve, in an order that can be chan
   assert.equal(readBook(s).bank.includes(made[3]!.id), false);
   must(discard(s, made[5]!.id));
   assert.equal(readBook(s).bank.includes(made[5]!.id), false);
+});
+
+test("a note is kept with a sketch, read back, edited and cleared", () => {
+  const s = new Fake();
+  const kept = must(keep(s, input({ note: "from the tape at the lake" })));
+  assert.equal(kept.sketch.note, "from the tape at the lake");
+  assert.equal(readBook(s).sketches[0]?.note, "from the tape at the lake");
+  must(setNote(s, kept.sketch.id, "second thoughts"));
+  assert.equal(readBook(s).sketches[0]?.note, "second thoughts");
+  must(setNote(s, kept.sketch.id, ""));
+  assert.equal("note" in (readBook(s).sketches[0] ?? {}), false);
+});
+
+test("a sketch kept with no note, and one saved before notes existed, read as having none", () => {
+  const s = new Fake();
+  const kept = must(keep(s, input()));
+  assert.equal("note" in kept.sketch, false);
+  const old = JSON.stringify({ v: 1, sketches: [{ ...kept.sketch }], bank: [] });
+  assert.equal(parseBook(old).sketches.length, 1);
+});
+
+test("a note can be edited after the sketch is published, and a bad note is refused whole", () => {
+  const s = new Fake();
+  const kept = must(keep(s, input()));
+  must(markPublished(s, kept.sketch.id, "ab1418qka9yt"));
+  must(setNote(s, kept.sketch.id, "still mine to change"));
+  const before = readBook(s);
+  assert.equal(setNote(s, kept.sketch.id, "x".repeat(141)).ok, false);
+  assert.equal(setNote(s, kept.sketch.id, "line\nbreak").ok, false);
+  assert.equal(setNote(s, "skzzzzzzzzzzzz", "n").ok, false);
+  assert.deepEqual(readBook(s), before);
 });

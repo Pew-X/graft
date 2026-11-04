@@ -1,4 +1,4 @@
-// A recording of up to thirty minutes can be read, and the 15 seconds to keep are found by moving a window
+// A recording of up to thirty minutes can be read, and the 30 seconds to keep are found by moving a window
 // along it and hearing the part. The files are synthesized (a quiet low tone, no third-party sound) at 8 kHz
 // mono so thirty minutes is about 29 megabytes; the browser resamples them to 48 kHz, which is what makes
 // the frame limit real. Nothing is sent anywhere: the service is not needed.
@@ -48,13 +48,13 @@ test("a five minute recording is read, and a window is moved along it to find th
   await move.focus();
   for (let i = 0; i < 90; i++) await page.keyboard.press("ArrowRight");
   await expect(page.getByTestId("trim-at")).toHaveText("1:30 of 5:00");
-  // the brackets work in the minute shown, and the part is still at most fifteen seconds
-  await expect(page.getByTestId("cut-readout")).toContainText("15.000 kept");
+  // the brackets work in the minute shown, and the part is still at most thirty seconds
+  await expect(page.getByTestId("cut-readout")).toContainText("30.000 kept");
   await expect(page.getByRole("button", { name: "hear this part" })).toBeEnabled();
   await page.getByRole("button", { name: "use this part" }).click();
   await expect(page.getByRole("slider", { name: "end of the cut" })).toHaveAttribute(
     "aria-valuemax",
-    "720000",
+    "1440000",
   );
 });
 

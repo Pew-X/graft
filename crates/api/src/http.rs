@@ -161,6 +161,12 @@ pub fn router(state: AppState, config: &Config) -> Router {
                 .layer(axum::extract::DefaultBodyLimit::max(maker::MAX_BODY_BYTES)),
         )
         .route(
+            "/v1/publications/{id}/note",
+            put(maker::set_note)
+                .layer(axum::extract::DefaultBodyLimit::max(maker::MAX_BODY_BYTES))
+                .layer(middleware::from_fn_with_state(state.clone(), publish_guard)),
+        )
+        .route(
             "/v1/publications/{id}/withdraw",
             post(maker::withdraw)
                 .layer(axum::extract::DefaultBodyLimit::max(maker::MAX_BODY_BYTES)),

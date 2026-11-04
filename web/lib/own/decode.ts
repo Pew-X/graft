@@ -13,7 +13,7 @@ import { canonicalise, MAX_CHANNELS } from "./canonical.ts";
 export const MAX_FILE_BYTES = 150_000_000;
 /**
  * The longest recording that can be read and trimmed down to a source: thirty minutes. The part that is
- * kept is still at most 15 seconds, and that, not this, is what is stored and published. Reading holds the
+ * kept is still at most 30 seconds, and that, not this, is what is stored and published. Reading holds the
  * whole recording in memory for a while (about 700 megabytes at the longest, in stereo).
  */
 export const MAX_DECODED_FRAMES = 30 * 60 * 48_000;

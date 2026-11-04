@@ -10,8 +10,11 @@
  */
 import { checkSpeed, type Cut } from "../make/cut.ts";
 import { ID_SHAPE } from "../flips/list.ts";
+import { NOTE_MAX } from "../publish/hints.ts";
 
 export const TITLE_MAX = 60;
+/** The longest note, in characters. */
+export { NOTE_MAX };
 /** Most sketches this browser keeps, and most on one bank. */
 export const MOST_SKETCHES = 40;
 export const MOST_ON_BANK = 12;
@@ -38,6 +41,8 @@ export interface Sketch {
   at: number;
   /** The id of the publication this sketch became; set once, and a published sketch is never published again. */
   publishedAs?: string;
+  /** A short note of the maker's, kept with the sketch and sent with it if it is published. Absent when there is none. */
+  note?: string;
 }
 
 /** A fresh local id that is not in `taken`: a collision is re-rolled. */
@@ -57,6 +62,11 @@ const whole = (v: unknown, max: number): v is number =>
 /** A stored title: plain text of at most 60 characters with no control or line-break characters. */
 export function plainTitle(v: unknown): v is string {
   return typeof v === "string" && [...v].length <= TITLE_MAX && !/[\p{C}\u2028\u2029]/u.test(v);
+}
+
+/** A stored note: plain text of at most 140 characters, one line, no control or line-break characters. */
+export function plainNote(v: unknown): v is string {
+  return typeof v === "string" && [...v].length <= NOTE_MAX && !/[\p{C}\u2028\u2029]/u.test(v);
 }
 
 export function parseParent(v: unknown): Parent | null {
@@ -88,6 +98,8 @@ export function parseSketch(v: unknown): Sketch | null {
   const published = v["publishedAs"];
   if (published !== undefined && (typeof published !== "string" || !ID_SHAPE.test(published)))
     return null;
+  const note = v["note"];
+  if (note !== undefined && !plainNote(note)) return null;
   return {
     id,
     parent,
@@ -98,6 +110,7 @@ export function parseSketch(v: unknown): Sketch | null {
     retryKey,
     at,
     ...(typeof published === "string" ? { publishedAs: published } : {}),
+    ...(typeof note === "string" && note !== "" ? { note } : {}),
   };
 }
 

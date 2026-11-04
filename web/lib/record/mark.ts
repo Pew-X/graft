@@ -16,8 +16,8 @@ export interface Mark {
 const RATE = 48_000;
 /** the smallest cut the renderer accepts (480 frames, 10 ms): a mark shorter than this is a tap, not a part. */
 export const MIN_FRAMES = 480;
-/** the longest cut the renderer accepts (10 s). */
-export const MAX_FRAMES = 480_000;
+/** the longest cut the service accepts (30 s). */
+export const MAX_FRAMES = 1_440_000;
 
 const clamp01 = (n: number): number => (Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0);
 

@@ -7,8 +7,8 @@ import { toBytes } from "../make/renderer.ts";
 export const DECLARATION_TEXT =
   "I made this sound or I have the right to share it. It does not contain anyone's private conversation.";
 
-/** The longest source: 15 seconds. */
-export const MAX_FRAMES = 720_000;
+/** The longest source: 30 seconds. */
+export const MAX_FRAMES = 1_440_000;
 
 export type Basis = "own_recording" | "right_to_share";
 
@@ -38,7 +38,7 @@ export function sourceBody(input: {
   };
 }
 
-/** The part of a long recording to keep: whole frames inside the sound, 480 frames to 15 seconds. */
+/** The part of a long recording to keep: whole frames inside the sound, 480 frames to 30 seconds. */
 export function checkTrim(cut: Cut, frames: number): Problem | null {
   const { start, end } = cut;
   if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end > frames) {

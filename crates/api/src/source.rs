@@ -71,7 +71,7 @@ pub struct DeclarationRequest {
 #[serde(deny_unknown_fields)]
 pub struct PublishSourceRequest {
     /// Base64 (standard alphabet, no line breaks) of canonical audio: 48 kHz, mono, signed 16-bit
-    /// little-endian, no header; at most 15 seconds.
+    /// little-endian, no header; at most 30 seconds.
     pub audio: String,
     /// Title as typed; links and handles are removed, and the response says so.
     pub title: String,
@@ -227,6 +227,7 @@ async fn publish_source_inner(
             retry_key: request.retry_key.clone(),
             title: title.value.clone(),
             author: author.value.clone(),
+            note: None,
             evidence: Some(SourceEvidence {
                 licence: basis.to_owned(),
                 work_title: None,
@@ -331,8 +332,8 @@ mod tests {
     #[test]
     fn the_body_limit_is_the_base64_of_the_longest_source_plus_an_envelope() {
         let l = Limits::default();
-        // 720,000 frames are 1,440,000 bytes, which is 1,920,000 base64 characters.
-        assert_eq!(max_body_bytes(&l), 1_920_000 + ENVELOPE_BYTES);
+        // 1,440,000 frames are 2,880,000 bytes, which is 3,840,000 base64 characters.
+        assert_eq!(max_body_bytes(&l), 3_840_000 + ENVELOPE_BYTES);
     }
 
     #[test]

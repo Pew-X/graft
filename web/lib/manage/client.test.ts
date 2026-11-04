@@ -1,8 +1,8 @@
-// The maker's two actions, sent with the manage key in a header and nowhere else. Every way of being
+// The maker's actions, sent with the manage key in a header and nowhere else. Every way of being
 // refused reads the same, so the page cannot tell a wrong key from a missing publication.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { setForkPermission, withdraw, type Fetcher } from "./client.ts";
+import { setForkPermission, setNote, withdraw, type Fetcher } from "./client.ts";
 
 const KEY = "a-very-secret-manage-key-0123456789abcdefABCDEF";
 function fake(
@@ -78,5 +78,63 @@ test("a key that cannot be a header value is refused before anything is sent", a
   const { fetcher, calls } = fake(200);
   assert.deepEqual(await withdraw(fetcher, "http://a", "x", "has a\nnewline"), { kind: "refused" });
   assert.deepEqual(await withdraw(fetcher, "http://a", "x", ""), { kind: "refused" });
+  assert.equal(calls.length, 0);
+});
+
+test("a note goes to the note route as JSON with the key in the header only", async () => {
+  const { fetcher, calls } = fake(200, { note: "from the lake", adjusted: false });
+  const done = await setNote(fetcher, "http://api.test", "abc123", KEY, "from the lake");
+  assert.deepEqual(done, { kind: "saved", note: "from the lake", adjusted: false });
+  const call = calls[0]!;
+  assert.equal(call.url, "http://api.test/v1/publications/abc123/note");
+  assert.equal(call.init.method, "PUT");
+  assert.equal(call.init.body, JSON.stringify({ note: "from the lake" }));
+  assert.ok(!call.url.includes(KEY) && !String(call.init.body).includes(KEY));
+  assert.equal((call.init.headers as Record<string, string>)["x-graft-manage-key"], KEY);
+});
+
+test("an emptied note comes back as no note, and a removed link is reported", async () => {
+  assert.deepEqual(
+    await setNote(fake(200, { note: null, adjusted: false }).fetcher, "http://a", "x", KEY, ""),
+    { kind: "saved", note: null, adjusted: false },
+  );
+  assert.deepEqual(
+    await setNote(
+      fake(200, { note: "see", adjusted: true }).fetcher,
+      "http://a",
+      "x",
+      KEY,
+      "see a.com",
+    ),
+    { kind: "saved", note: "see", adjusted: true },
+  );
+});
+
+test("each way a note edit can be turned away is told apart, except the key, which is one answer", async () => {
+  const run = (status: number, body: unknown = {}) =>
+    setNote(fake(status, body).fetcher, "http://a", "x", KEY, "n");
+  assert.deepEqual(await run(403), { kind: "refused" });
+  assert.deepEqual(await run(404), { kind: "refused" });
+  assert.deepEqual(await run(409, { type: "urn:graft:problem:note-locked" }), { kind: "locked" });
+  assert.deepEqual(await run(422, { rule: "too_long", field: "note" }), {
+    kind: "invalid",
+    rule: "too_long",
+  });
+  assert.deepEqual(await run(429), { kind: "limited" });
+  assert.deepEqual(await run(503, { type: "urn:graft:problem:publishing-off" }), {
+    kind: "closed",
+  });
+  assert.deepEqual(await run(503, { type: "urn:graft:problem:retry-later" }), { kind: "busy" });
+  assert.deepEqual(await run(500), { kind: "unreachable" });
+  const down: Fetcher = async () => {
+    throw new TypeError("failed to fetch");
+  };
+  assert.deepEqual(await setNote(down, "http://a", "x", KEY, "n"), { kind: "unreachable" });
+});
+
+test("a note edit with a key that cannot be a header value sends nothing", async () => {
+  const { fetcher, calls } = fake(200);
+  assert.deepEqual(await setNote(fetcher, "http://a", "x", "bad\nkey", "n"), { kind: "refused" });
+  assert.deepEqual(await setNote(fetcher, "http://a", "x", "", "n"), { kind: "refused" });
   assert.equal(calls.length, 0);
 });

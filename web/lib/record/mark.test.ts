@@ -36,7 +36,7 @@ test("a tap is not a part: under 480 frames is nothing", () => {
 });
 
 test("a mark longer than the renderer takes is shortened to its limit, never refused later", () => {
-  const long = 2_000_000; // about 41 s
+  const long = 4_000_000; // about 83 s: well past the longest cut (30 s)
   const cut = markFrames(markBetween(0, 0, 1), long)!;
   assert.equal(cut.start, 0);
   assert.equal(cut.end - cut.start, MAX_FRAMES);

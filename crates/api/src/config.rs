@@ -530,6 +530,7 @@ impl Config {
             &mut limits.max_output_frames,
         )?;
         number(&lookup, "GRAFT_MIN_FRAMES", &mut limits.min_frames)?;
+        number(&lookup, "GRAFT_MAX_NOTE_CHARS", &mut limits.max_note_chars)?;
         number(
             &lookup,
             "GRAFT_MAX_TITLE_CHARS",
@@ -726,6 +727,12 @@ fn validate(l: &Limits, blob_url_ttl_secs: u64) -> Result<(), ConfigError> {
             "the output maximum must be at least the minimum, and the cut maximum at most the source maximum",
         );
     }
+    if l.max_cut_frames > graft_domain::limits::RENDERER_MAX_INPUT_FRAMES {
+        return invalid(
+            "GRAFT_MAX_CUT_FRAMES",
+            "must not exceed the renderer's input ceiling of 2097152 frames",
+        );
+    }
     if l.max_chain_depth == 0 {
         return invalid("GRAFT_MAX_CHAIN_DEPTH", "must be at least 1");
     }
@@ -743,6 +750,12 @@ fn validate(l: &Limits, blob_url_ttl_secs: u64) -> Result<(), ConfigError> {
     }
     if l.max_title_chars == 0 || l.max_author_chars == 0 {
         return invalid("GRAFT_MAX_TITLE_CHARS", "text limits must be at least 1");
+    }
+    if l.max_note_chars == 0 || l.max_note_chars > 400 {
+        return invalid(
+            "GRAFT_MAX_NOTE_CHARS",
+            "must be from 1 to 400 (the most the table holds)",
+        );
     }
     if blob_url_ttl_secs == 0 {
         return invalid("GRAFT_BLOB_URL_TTL_SECS", "must be at least 1");
@@ -1045,16 +1058,30 @@ mod tests {
     fn the_guardrail_defaults_leave_a_threshold_below_the_hosts_limit_by_the_overshoot_bound() {
         let c = Config::from_lookup(env(&[("GRAFT_DATABASE_URL", "postgres://x")])).expect("valid");
         let g = &c.guardrails;
-        // The largest blob is the 20 s output: 960,000 frames of 2 bytes. A burst of 30 plus one
+        // The largest blob is the 60 s output: 2,880,000 frames of 2 bytes. A burst of 30 plus one
         // minute of the 120-an-hour cap (2) is 32 of them.
-        assert_eq!(g.overshoot_bound_bytes(&c.limits), 32 * 1_920_000);
+        assert_eq!(g.overshoot_bound_bytes(&c.limits), 32 * 5_760_000);
         assert_eq!(
             g.admission_threshold_bytes(&c.limits),
-            8_000_000_000 - 32 * 1_920_000
+            8_000_000_000 - 32 * 5_760_000
         );
         assert!(g.publishing_default);
         assert!(!g.uploads_enabled, "visitor uploads are off by default");
         assert_eq!(g.trusted_proxy_hops, 0);
+    }
+
+    #[test]
+    fn a_cut_limit_past_the_renderers_input_ceiling_is_refused_at_start_up() {
+        let at = |frames: &str| {
+            Config::from_lookup(env(&[
+                ("GRAFT_DATABASE_URL", "postgres://x"),
+                ("GRAFT_MAX_SOURCE_FRAMES", "3000000"),
+                ("GRAFT_MAX_CUT_FRAMES", frames),
+            ]))
+        };
+        assert!(at("2097152").is_ok(), "exactly the ceiling is fine");
+        let err = at("2097153").expect_err("refused");
+        assert!(err.to_string().contains("GRAFT_MAX_CUT_FRAMES"), "{err}");
     }
 
     #[test]

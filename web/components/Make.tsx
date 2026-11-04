@@ -26,6 +26,7 @@ import { type Async, useAsync } from "../lib/make/use-async.ts";
 import { fetchPcm } from "../lib/roll/pcm.ts";
 import { describeSpeed } from "../lib/roll/speed.ts";
 import { CutEditor } from "./CutEditor.tsx";
+import { TypedSpeed } from "./TypedSpeed.tsx";
 import { type Features, readFeatures } from "../lib/own/features.ts";
 import { type Basis, DECLARATION_TEXT, sourceBody } from "../lib/own/source.ts";
 import { KeepSketch } from "./KeepSketch.tsx";
@@ -149,7 +150,8 @@ export function Make({
   // and asks nothing), so the own-sound block can say up front whether publishing a sound of one's own
   // is open and the editor can use the same answer: nothing more than this one read leaves the device
   // before a publish. If that read failed, choosing a sound of one's own asks once more. A service that
-  // cannot be asked says nothing.
+  // cannot be asked says nothing. (A page opened on a stage asks later, when the publish step opens: see
+  // the editor.)
   const [featuresTry, setFeaturesTry] = useState(0);
   const features = useAsync(from === null ? `features:${featuresTry}` : null, (signal) =>
     readFeatures(apiUrl, signal),
@@ -761,6 +763,16 @@ function Editor({
   const [basis, setBasis] = useState<Basis>("own_recording");
   const [confirmed, setConfirmed] = useState(false);
   const flipParent = own ? sourceId : sketchParent ? publishedParent(sketchParent) : parentId;
+  // Whether the service has notes (an older one would refuse the field). Asked of the page's own read where
+  // there is one, and otherwise only when the publish step opens, so a page that is only being used to
+  // cut and hear makes no request.
+  const lateFeatures = useAsync(
+    publishing && features.status === "idle" ? "late-features" : null,
+    (signal) => readFeatures(apiUrl, signal),
+  );
+  const notesOn =
+    (features.status === "ready" && features.value.notes) ||
+    (lateFeatures.status === "ready" && lateFeatures.value.notes);
   const closedWhy =
     !own || features.status !== "ready"
       ? null
@@ -806,6 +818,9 @@ function Editor({
     setListening(true);
     onGuide("heard");
   }, [previewer, onGuide, setListening]);
+
+  // the line on the cut follows the preview loop
+  const playhead = useCallback(() => previewer.fraction(), [previewer]);
 
   const direction = cents > 0 ? "up" : cents < 0 ? "down" : "src";
   const interval = speed.approximate
@@ -853,6 +868,7 @@ function Editor({
             onGuide("changed");
           }}
           onTouch={touch}
+          playhead={playhead}
         />
       </section>
 
@@ -908,6 +924,13 @@ function Editor({
             +
           </button>
         </div>
+        <TypedSpeed
+          onSet={(chosen) => {
+            touch();
+            setEditing((was) => withStop(was, chosen));
+            onGuide("changed");
+          }}
+        />
       </section>
 
       <section
@@ -1094,13 +1117,16 @@ function Editor({
               announceSketchChange();
             }
           }}
-          buildBody={({ title, author, retryKey }) => ({
+          noteEnabled={notesOn}
+          initialNote={sameAsOpened && opened?.note ? opened.note : ""}
+          buildBody={({ title, author, note, retryKey }) => ({
             parent_id: flipParent,
             cut: { start: cut.start, end: cut.end },
             speed: { p, q },
             title,
             author,
             retry_key: retryKey,
+            ...(note !== "" ? { note } : {}),
             ...(current ? { preview_hash: current.hash } : {}),
           })}
           gate={current !== null}

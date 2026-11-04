@@ -22,10 +22,10 @@ test("base64 of canonical audio is of the little-endian bytes, whatever the mach
 });
 
 test("a long recording encodes without running out of call depth", () => {
-  const long = new Int16Array(720_000).fill(1234);
+  const long = new Int16Array(1_440_000).fill(1234);
   const text = toBase64(long);
-  assert.equal(text.length, Math.ceil((720_000 * 2) / 3) * 4);
-  assert.equal(Buffer.from(text, "base64").length, 1_440_000);
+  assert.equal(text.length, Math.ceil((1_440_000 * 2) / 3) * 4);
+  assert.equal(Buffer.from(text, "base64").length, 2_880_000);
 });
 
 test("the body carries the audio, the title, the name, the retry key and the declaration, and no more", () => {
@@ -47,10 +47,10 @@ test("the body carries the audio, the title, the name, the retry key and the dec
   assert.equal(body.audio, toBase64(Int16Array.of(1, 2, 3)));
 });
 
-test("a region to keep is refused when it is under 480 frames, over 15 seconds, backwards or outside", () => {
-  assert.equal(MAX_FRAMES, 720_000);
-  assert.equal(checkTrim({ start: 0, end: 720_000 }, 2_000_000), null);
-  assert.equal(checkTrim({ start: 0, end: 720_001 }, 2_000_000)?.kind, "cutLong");
+test("a region to keep is refused when it is under 480 frames, over 30 seconds, backwards or outside", () => {
+  assert.equal(MAX_FRAMES, 1_440_000);
+  assert.equal(checkTrim({ start: 0, end: 1_440_000 }, 2_000_000), null);
+  assert.equal(checkTrim({ start: 0, end: 1_440_001 }, 2_000_000)?.kind, "cutLong");
   assert.equal(checkTrim({ start: 0, end: 479 }, 2_000_000)?.kind, "cutShort");
   assert.equal(checkTrim({ start: 900, end: 100 }, 2_000_000)?.kind, "cutInverted");
   assert.equal(checkTrim({ start: 0, end: 3_000_000 }, 2_000_000)?.kind, "cutOutside");

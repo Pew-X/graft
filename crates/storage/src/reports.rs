@@ -71,6 +71,12 @@ pub struct ReportRow {
     pub author: String,
     /// Whether it is hidden now, and why.
     pub hidden: Option<HideReason>,
+    /// The maker's note on the publication now.
+    pub maker_note: Option<String>,
+    /// When the maker last changed that note, milliseconds since the Unix epoch; `None` if it was never
+    /// changed after publishing. Compare it with `created_at_ms`: a note changed after the report was
+    /// filed is not the note that was reported.
+    pub maker_note_updated_ms: Option<i64>,
 }
 
 impl Store {
@@ -116,7 +122,8 @@ impl Store {
         let rows = sqlx::query(
             "SELECT r.id, r.publication_id, r.category, r.note, \
                     (extract(epoch from r.created_at) * 1000)::bigint AS created_ms, \
-                    p.title, p.author, p.hidden_reason \
+                    p.title, p.author, p.hidden_reason, p.note AS maker_note, \
+                    (extract(epoch from p.note_updated_at) * 1000)::bigint AS note_updated_ms \
              FROM reports r JOIN publications p ON p.id = r.publication_id \
              ORDER BY r.created_at DESC, r.id DESC LIMIT $1",
         )
@@ -146,6 +153,8 @@ impl Store {
                             HideReason::parse(&h).ok_or_else(|| corrupt("an unknown hide reason"))
                         })
                         .transpose()?,
+                    maker_note: row.try_get("maker_note").map_err(db)?,
+                    maker_note_updated_ms: row.try_get("note_updated_ms").map_err(db)?,
                 })
             })
             .collect()

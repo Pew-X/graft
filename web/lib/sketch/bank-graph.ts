@@ -1,8 +1,8 @@
 /**
  * The audio side of a sketch bank: a voice for each pad, through the performance's mix bus, on the page's
  * one audio context. A pad's sound is held as 16-bit samples (2 bytes a frame) and turned into the context's
- * float buffer only on the pad's first press, so a bank of twelve of the longest flips (20 seconds each)
- * costs about 23 MB until pads are played, and about 46 MB of float buffers once all of them have been. The
+ * float buffer only on the pad's first press, so a bank of twelve of the longest flips (60 seconds each)
+ * costs about 69 MB until pads are played, and about 138 MB of float buffers once all of them have been (a bank of twelve 20 second flips was a third of that). The
  * pad that is not ready has no voice and the press says why: it is never a silent dead press.
  */
 import type { Voice } from "../playback/engine.ts";

@@ -252,3 +252,26 @@ test("a link is the fragment form of the same text", () => {
   assert.equal(url.search, "", "never the query string");
   assert.equal(read(fromFragment(url.hash)!).ok, true);
 });
+
+test("a note travels with its sketch, and an entry without one stays six fields", () => {
+  const withNote = entry({ note: "from the tape at the lake" });
+  const plain = entry({ title: "plain" });
+  const back = read(write([withNote, plain]));
+  assert.ok(back.ok);
+  assert.equal(back.entries[0]?.note, "from the tape at the lake");
+  assert.equal("note" in (back.entries[1] ?? {}), false);
+});
+
+test("a note that breaks the rules refuses the whole payload", () => {
+  for (const note of ["see example.com", "x".repeat(141), "two\nlines"]) {
+    const r = read(write([entry({ note })]));
+    assert.deepEqual(r, { ok: false, why: "note" }, JSON.stringify(note));
+  }
+});
+
+test("an imported note becomes the sketch's note", () => {
+  const s = new Fake();
+  const done = importEntries(s, [entry({ note: "lake" })], 5);
+  assert.ok(done.ok);
+  assert.equal(readBook(s).sketches[0]?.note, "lake");
+});

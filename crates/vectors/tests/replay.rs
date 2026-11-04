@@ -170,7 +170,8 @@ fn render_host_gives_identical_bytes_for_render_a_b_a_and_across_threads() {
 
 #[test]
 fn the_most_expensive_accepted_render_is_interrupted_when_its_fuel_budget_is_too_small() {
-    // 480,000 frames at 1/4 speed is the costliest render the renderer accepts (about 4.1e8 fuel).
+    // The vector is 480,000 frames at 1/4 speed (about 4.1e8 fuel), a long one but no longer the costliest the
+    // service accepts: the 30 s limits allow more (see the next test).
     use graft_render_host::{Limits, Method, Ratio, Render, RenderError, RenderHost};
     let host = RenderHost::load(
         &artefact(),
@@ -190,4 +191,22 @@ fn the_most_expensive_accepted_render_is_interrupted_when_its_fuel_budget_is_too
     );
     assert_eq!(result, Err(RenderError::Interrupted));
     assert!(started.elapsed() < std::time::Duration::from_secs(5));
+}
+
+#[test]
+fn the_costliest_render_the_service_accepts_fits_the_default_fuel_budget_with_room() {
+    // A 30 s cut at half speed is the longest output the service allows (60 s, 2,879,999 frames): measured
+    // at about 6.2e8 fuel against the default budget of 1e9. It must render with the default limits.
+    use graft_render_host::{Limits, Method, Ratio, Render, RenderHost};
+    let host = RenderHost::load(&artefact(), Limits::default()).expect("loads");
+    let input = graft_vectors::measure::noise(1_440_000);
+    let (out, stats) = host
+        .render_with_stats(&input, Ratio { p: 1, q: 2 }, Method::Hermite)
+        .expect("renders within the default budget");
+    assert_eq!(out.len(), 2_879_999);
+    assert!(
+        stats.fuel_used < Limits::default().max_fuel / 10 * 8,
+        "the worst accepted render should leave at least 20% of the fuel budget, used {}",
+        stats.fuel_used
+    );
 }

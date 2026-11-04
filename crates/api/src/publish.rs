@@ -71,6 +71,11 @@ pub struct PublishFlipRequest {
     /// SHA-256 (hex) of the audio the client's preview rendered. A cross-check only.
     #[serde(default)]
     pub preview_hash: Option<String>,
+    /// An optional note from the maker, one short line of plain text under the same rules as a title
+    /// (links and handles are removed, and the response says so). The maker can change it later
+    /// with the manage key; it is not part of the content record. Empty text means no note.
+    #[serde(default)]
+    pub note: Option<String>,
 }
 
 /// The result of publishing.
@@ -185,6 +190,7 @@ pub(crate) async fn publish_flip_as(
     // 1. Everything that needs no I/O.
     let title = clean("title", &request.title, limits.max_title_chars, state)?;
     let author = clean("author", &request.author, limits.max_author_chars, state)?;
+    let note = clean_note(request.note.as_deref(), limits.max_note_chars, state)?;
     check_retry_key(&request.retry_key)?;
     let preview = parse_preview(request.preview_hash.as_deref())?;
     check_cut_and_speed(limits, request.cut, request.speed)?;
@@ -420,18 +426,25 @@ pub(crate) async fn publish_flip_as(
         state,
         record,
         &request.retry_key,
-        &title.value,
-        &author.value,
+        FlipText {
+            title: &title.value,
+            author: &author.value,
+            note: note.as_ref().map(|n| n.value.as_str()),
+        },
         key_hash,
         identity_kind,
     )
     .await?;
 
-    let adjusted_fields: Vec<String> = [("title", title.adjusted), ("author", author.adjusted)]
-        .into_iter()
-        .filter(|(_, adjusted)| *adjusted)
-        .map(|(name, _)| name.to_owned())
-        .collect();
+    let adjusted_fields: Vec<String> = [
+        ("title", title.adjusted),
+        ("author", author.adjusted),
+        ("note", note.as_ref().is_some_and(|n| n.adjusted)),
+    ]
+    .into_iter()
+    .filter(|(_, adjusted)| *adjusted)
+    .map(|(name, _)| name.to_owned())
+    .collect();
     let (status, stage, key) = match outcome {
         FlipOutcome::Created(stage) => {
             // The orphan cleanup cannot be made atomic with this transaction, so the last line of
@@ -473,16 +486,27 @@ pub(crate) async fn publish_flip_as(
     Ok((status, body))
 }
 
+/// The cleaned public text of a flip, as it is stored.
+struct FlipText<'a> {
+    title: &'a str,
+    author: &'a str,
+    note: Option<&'a str>,
+}
+
 /// Create the flip under a fresh random id (or the seeded one), choosing another random id if one happens to be taken.
 async fn create_with_fresh_id(
     state: &AppState,
     record: ContentRecord,
     retry_key: &str,
-    title: &str,
-    author: &str,
+    text: FlipText<'_>,
     manage_key_hash: Option<[u8; 32]>,
     identity_kind: Identity,
 ) -> Result<FlipOutcome, Problem> {
+    let FlipText {
+        title,
+        author,
+        note,
+    } = text;
     for _ in 0..4 {
         let id = match identity_kind {
             Identity::Visitor => random_id().map_err(|e| internal("making an id", &e))?,
@@ -495,6 +519,7 @@ async fn create_with_fresh_id(
                 retry_key: retry_key.to_owned(),
                 title: title.to_owned(),
                 author: author.to_owned(),
+                note: note.map(str::to_owned),
                 evidence: None,
                 manage_key_hash,
             },
@@ -542,6 +567,20 @@ pub(crate) fn clean(
 ) -> Result<text::Cleaned, Problem> {
     text::clean(input, max, &state.publish.extra_deny_words)
         .map_err(|e| Problem::invalid(field, e.rule(), format!("the {field} is not valid: {e}")))
+}
+
+/// Clean the optional note: absent or blank is no note; anything else follows the title rules at the
+/// note's own length. Shared by publishing and by editing a note.
+pub(crate) fn clean_note(
+    input: Option<&str>,
+    max: usize,
+    state: &AppState,
+) -> Result<Option<text::Cleaned>, Problem> {
+    match input {
+        None => Ok(None),
+        Some(text) if text.trim().is_empty() => Ok(None),
+        Some(text) => clean("note", text, max, state).map(Some),
+    }
 }
 
 pub(crate) fn check_retry_key(key: &str) -> Result<(), Problem> {
@@ -671,11 +710,11 @@ mod tests {
             None
         );
         assert_eq!(
-            rule(check_cut_and_speed(&l, cut(0, 480_000), speed(1, 1))),
+            rule(check_cut_and_speed(&l, cut(0, 1_440_000), speed(1, 1))),
             None
         );
         assert_eq!(
-            rule(check_cut_and_speed(&l, cut(0, 480_001), speed(1, 1))),
+            rule(check_cut_and_speed(&l, cut(0, 1_440_001), speed(1, 1))),
             Some("too_long")
         );
     }

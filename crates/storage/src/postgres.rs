@@ -90,6 +90,8 @@ pub struct NewPublication {
     pub title: String,
     /// Maker's name as typed.
     pub author: String,
+    /// The maker's note as typed, if any (already cleaned by the service).
+    pub note: Option<String>,
     /// Declared evidence for a source.
     pub evidence: Option<SourceEvidence>,
     /// SHA-256 of the maker's manage key; the key itself is never stored. `None` for seeded sources.
@@ -146,7 +148,7 @@ pub struct Store {
     pub(crate) stats: std::sync::Arc<StoreStats>,
 }
 
-const STAGE_COLUMNS: &str = "p.id AS pub_id, c.id AS content_id, p.title, p.author, \
+const STAGE_COLUMNS: &str = "p.id AS pub_id, c.id AS content_id, p.title, p.author, p.note, \
     (extract(epoch from p.created_at) * 1000)::bigint AS created_ms, \
     p.licence, p.work_title, p.work_author, p.work_url, p.declaration, \
     (extract(epoch from p.declared_at) * 1000)::bigint AS declared_ms, \
@@ -526,9 +528,9 @@ pub(crate) async fn insert_publication(
     let ev = n.evidence.as_ref();
     let row = sqlx::query(
         "INSERT INTO publications (id, content_id, retry_key, title, author, licence, work_title, \
-           work_author, work_url, manage_key_hash, declaration, declared_at) \
+           work_author, work_url, manage_key_hash, declaration, declared_at, note) \
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, \
-                 CASE WHEN $11::text IS NULL THEN NULL ELSE now() END) \
+                 CASE WHEN $11::text IS NULL THEN NULL ELSE now() END, $12) \
          ON CONFLICT (retry_key) DO NOTHING RETURNING id",
     )
     .bind(n.id.as_str())
@@ -545,6 +547,7 @@ pub(crate) async fn insert_publication(
         ev.and_then(|e| e.declaration.as_ref())
             .map(|d| d.text.as_str()),
     )
+    .bind(n.note.as_deref())
     .fetch_optional(&mut **tx)
     .await
     .map_err(db)?;
@@ -631,6 +634,7 @@ fn stage_from_row(row: &PgRow) -> Result<StoredStage, StoreError> {
         record,
         title: row.try_get("title").map_err(db)?,
         author: row.try_get("author").map_err(db)?,
+        note: row.try_get("note").map_err(db)?,
         created_at_ms: row.try_get("created_ms").map_err(db)?,
         evidence,
         fork_permitted: row.try_get("fork_permitted").map_err(db)?,

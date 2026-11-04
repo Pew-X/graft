@@ -6,6 +6,8 @@
  */
 export const TITLE_MAX = 60;
 export const NAME_MAX = 32;
+/** A maker's note: the title rules at this length. It is optional, so an empty note is fine. */
+export const NOTE_MAX = 140;
 
 export type Hint =
   | { kind: "empty" }

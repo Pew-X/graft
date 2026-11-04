@@ -22,6 +22,10 @@ export interface Report {
   author: string;
   /** "visible", "withdrawn" or "rights". */
   state: string;
+  /** The maker's note on the publication now (absent from an older service). */
+  maker_note?: string | null;
+  /** When the maker last changed it after publishing; a time after `created_at_ms` means it is not the note that was reported. */
+  maker_note_updated_at_ms?: number | null;
 }
 export interface SwitchView {
   publishing: boolean;

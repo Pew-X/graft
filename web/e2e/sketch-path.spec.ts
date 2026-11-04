@@ -335,6 +335,6 @@ test("the sketches say why they exist: a published flip cannot be changed and a 
   await expect(page.getByTestId("no-sketches")).toBeVisible();
   await keep(page, "why");
   await expect(page.getByTestId("your-sketches")).toContainText(
-    "a published flip is public and cannot be changed",
+    "a published flip is public and its sound cannot be changed",
   );
 });

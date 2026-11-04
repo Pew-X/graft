@@ -277,3 +277,15 @@ test("a sketch published by another tab since the run began is not sent again", 
   assert.equal(w.bodies.length, 0);
   assert.equal(r.states.get(a.id)?.status, "published");
 });
+
+test("a sketch's note is sent with it only to a service that has notes", async () => {
+  const a = sk(1, undefined, { note: "from the lake" });
+  const plain = sk(2);
+  const withNotes = world([a, plain], []);
+  await runSet([a, plain], { ...withNotes.deps, notes: true });
+  assert.equal((withNotes.bodies[0] as { note?: string }).note, "from the lake");
+  assert.equal("note" in (withNotes.bodies[1] ?? {}), false, "no note, no field");
+  const without = world([a], []);
+  await runSet([a], without.deps);
+  assert.equal("note" in (without.bodies[0] ?? {}), false, "an older service never sees the field");
+});

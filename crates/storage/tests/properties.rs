@@ -34,6 +34,7 @@ fn source(key: &str) -> NewPublication {
         author: "pat".into(),
         evidence: None,
         manage_key_hash: None,
+        note: None,
     }
 }
 
@@ -62,6 +63,7 @@ fn flip(parent: &NewPublication, key: &str, cut_end: u32, out: u8) -> NewFlip {
             author: "jo".into(),
             evidence: None,
             manage_key_hash: Some([7; 32]),
+            note: None,
         },
         max_forks_per_stage_per_hour: 10_000,
         serialization_retries: 8,

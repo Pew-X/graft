@@ -5,6 +5,7 @@
  */
 import { RELEASE, SAMPLE_RATE } from "../playback/config.ts";
 import { pcmToFloat } from "../playback/webaudio.ts";
+import { loopFraction } from "./playhead.ts";
 
 interface ParamLike {
   readonly value: number;
@@ -41,6 +42,8 @@ export class Previewer {
   readonly #ctor: () => Ctor | undefined;
   #context: PreviewContext | null = null;
   #stopLoop: (() => void) | null = null;
+  /** When the loop now playing began (the context's clock) and how long it is, for the playhead. */
+  #loop: { began: number; seconds: number } | null = null;
   /** Bumped by every stop, so a play that was waiting on the context can tell it was cancelled. */
   #generation = 0;
 
@@ -50,6 +53,13 @@ export class Previewer {
 
   get playing(): boolean {
     return this.#stopLoop !== null;
+  }
+
+  /** How far through the loop now playing the sound is (0 up to 1), or null when no loop is playing. */
+  fraction(): number | null {
+    const loop = this.#loop;
+    if (loop === null || this.#context === null || this.#stopLoop === null) return null;
+    return loopFraction(this.#context.currentTime - loop.began, loop.seconds);
   }
 
   /**
@@ -85,6 +95,7 @@ export class Previewer {
     source.connect(gain);
     gain.connect(context.destination);
     source.start();
+    this.#loop = { began: context.currentTime, seconds: samples.length / SAMPLE_RATE };
     this.#stopLoop = () => {
       const now = context.currentTime;
       const level = gain.gain.value;
@@ -141,6 +152,7 @@ export class Previewer {
     this.#generation += 1;
     this.#stopLoop?.();
     this.#stopLoop = null;
+    this.#loop = null;
   }
 
   /** Stop, and give the audio context back: browsers allow only a few. */

@@ -57,6 +57,7 @@ fn source_over(audio: Sha256Hash) -> NewPublication {
         author: "pat".into(),
         evidence: None,
         manage_key_hash: None,
+        note: None,
     }
 }
 
@@ -85,6 +86,7 @@ fn flip_to(parent: &NewPublication, key: &str, output: Sha256Hash) -> NewFlip {
             author: "jo".into(),
             evidence: None,
             manage_key_hash: Some([7; 32]),
+            note: None,
         },
         max_forks_per_stage_per_hour: 1000,
         serialization_retries: 5,

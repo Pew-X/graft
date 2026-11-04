@@ -43,6 +43,7 @@ const ROUTES: &[(&str, &str)] = &[
     ("POST", "/v1/reports"),
     ("POST", "/v1/events"),
     ("PUT", "/v1/publications/{id}/fork-permission"),
+    ("PUT", "/v1/publications/{id}/note"),
     ("POST", "/v1/publications/{id}/withdraw"),
     ("GET", "/admin/reports"),
     ("GET", "/admin/rollups"),
@@ -59,7 +60,7 @@ fn is_admin(path: &str) -> bool {
 }
 /// The routes that need a publication's manage key.
 fn is_maker(path: &str) -> bool {
-    path.ends_with("/fork-permission") || path.ends_with("/withdraw")
+    path.ends_with("/fork-permission") || path.ends_with("/withdraw") || path.ends_with("/note")
 }
 
 fn text(bytes: &[u8]) -> String {

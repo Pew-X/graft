@@ -452,6 +452,40 @@
         ],
         "type": "object"
       },
+      "NoteRequest": {
+        "additionalProperties": false,
+        "description": "A note to set on a publication, or to clear.",
+        "properties": {
+          "note": {
+            "description": "The note as typed: one short line of plain text under the title rules (links and handles are\nremoved, and the response says so). Empty or absent clears the note.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "NoteState": {
+        "description": "The note after an edit.",
+        "properties": {
+          "adjusted": {
+            "description": "True when a link or a handle was removed from what was typed.",
+            "type": "boolean"
+          },
+          "note": {
+            "description": "The note now, or null when there is none.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "adjusted"
+        ],
+        "type": "object"
+      },
       "Problem": {
         "description": "A problem-details document.",
         "properties": {
@@ -517,6 +551,13 @@
             "$ref": "#/components/schemas/CutRequest",
             "description": "The cut of the parent's audio."
           },
+          "note": {
+            "description": "An optional note from the maker, one short line of plain text under the same rules as a title\n(links and handles are removed, and the response says so). The maker can change it later\nwith the manage key; it is not part of the content record. Empty text means no note.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "parent_id": {
             "description": "Public id of the stage being flipped.",
             "type": "string"
@@ -556,7 +597,7 @@
         "description": "A source to publish.",
         "properties": {
           "audio": {
-            "description": "Base64 (standard alphabet, no line breaks) of canonical audio: 48 kHz, mono, signed 16-bit\nlittle-endian, no header; at most 15 seconds.",
+            "description": "Base64 (standard alphabet, no line breaks) of canonical audio: 48 kHz, mono, signed 16-bit\nlittle-endian, no header; at most 30 seconds.",
             "type": "string"
           },
           "author": {
@@ -869,6 +910,13 @@
             },
             "type": "array"
           },
+          "note": {
+            "description": "The maker's note as typed, if they wrote one. It can be edited by the maker after publishing.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "parent_id": {
             "description": "Id of the parent publication, absent for a source.",
             "type": [
@@ -898,6 +946,10 @@
       "SwitchView": {
         "description": "What the operator reads about the two switches, and what anyone may read at `/v1/features`. Publishing can be changed while the service\nruns; uploads are set when it starts (`GRAFT_UPLOADS`), so this only reports them.",
         "properties": {
+          "notes": {
+            "description": "Whether a flip may carry a maker's note, and a maker may edit it. Always true from the version\nthat has notes; a page treats a missing field as false, so it never sends a note to a service\nthat would refuse the field.",
+            "type": "boolean"
+          },
           "publishing": {
             "description": "Whether publishing is open.",
             "type": "boolean"
@@ -909,7 +961,8 @@
         },
         "required": [
           "publishing",
-          "uploads"
+          "uploads",
+          "notes"
         ],
         "type": "object"
       }
@@ -1330,6 +1383,107 @@
           }
         },
         "summary": "Close or reopen a stage to new flips. Existing flips and rolls are untouched.",
+        "tags": [
+          "maker"
+        ]
+      }
+    },
+    "/v1/publications/{id}/note": {
+      "put": {
+        "operationId": "set_note",
+        "parameters": [
+          {
+            "description": "Public id of the publication",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "The manage key shown once when the publication was created",
+            "in": "header",
+            "name": "x-graft-manage-key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteState"
+                }
+              }
+            },
+            "description": "The note now; repeating the request changes nothing"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The manage key was not accepted (the same answer for every reason)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The publication is withdrawn or held, so its note is left as it was"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The note breaks a rule; `field` and `rule` say which"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "This visitor published or edited too often; `Retry-After` says when to try again"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Busy, send the same request again; or publishing is switched off (`publishing-off`)"
+          }
+        },
+        "summary": "Write, change or clear the note on a publication. It is the one part of a publication that can\nchange after it is published, so it follows the same text rules as a title, it is closed with\nthe rest of publishing when the operator closes it, and a hidden publication keeps the note it had.",
         "tags": [
           "maker"
         ]

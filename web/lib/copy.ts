@@ -77,7 +77,7 @@ export const copy = {
   sketch: {
     heading: "your sketches",
     intro:
-      "a sketch is a try only you can hear. a published flip is public and cannot be changed, so keep as many tries as you like and publish the one you love.",
+      "a sketch is a try only you can hear. a published flip is public and its sound cannot be changed, so keep as many tries as you like and publish the one you love.",
     where:
       "sketches are kept in this browser only: closing the tab keeps them, and a private window loses them when it closes.",
     noAutosave: "the editor is not saved by itself. press keep as sketch to keep a try.",
@@ -87,6 +87,22 @@ export const copy = {
     kept: "kept as a sketch: {title}. nothing is published.",
     keptAdjusted:
       "kept as a sketch: {title}. a link or a handle in the title was removed, as it would be when published.",
+    noteLabel: "a note",
+    noteGloss:
+      "optional: a line to remember it by, up to 140 characters. it is sent with the flip if you publish this sketch.",
+    noteWhy: {
+      empty: "the note is empty once links and handles are removed.",
+      too_long: "the note is longer than {limit} characters.",
+      character: "the note has a character that is not allowed: {detail}",
+      mixed_scripts: "a word in the note mixes letters from different scripts.",
+      denied_word: "the word {detail} cannot be used in a note.",
+    },
+    noteAdd: "add a note",
+    noteEdit: "edit the note",
+    noteSave: "save the note",
+    noteCancel: "cancel",
+    noteClear: "remove the note",
+    noteEditLabel: "note",
     titleWhy: {
       empty: "the title is empty once links and handles are removed.",
       too_long: "the title is longer than {limit} characters.",
@@ -167,6 +183,7 @@ export const copy = {
       full: "the bank holds at most {max} sketches.",
       empty: "nothing on the bank yet. press put on the bank on a sketch above.",
       preparing: "getting the sound ready",
+      long: "this bank holds about {n} seconds of sound. on a phone that is a lot to keep ready, and the page may run short of memory. shorter flips keep it light.",
       keysOff: "number keys: off",
       keysOn: "number keys: on",
       keysWhy:
@@ -277,6 +294,7 @@ export const copy = {
         checksum: "this link was changed or damaged, so none of it was added.",
         number: "this link has a number that is out of range, so none of it was added.",
         title: "a title in this link breaks the rules for titles, so none of it was added.",
+        note: "a note in this link breaks the rules for notes, so none of it was added.",
         parent:
           "a sketch in this link goes on from one that is not in it, so none of it was added.",
         cycle:
@@ -427,6 +445,9 @@ export const copy = {
     filed: "filed {when}",
     note: "note",
     noNote: "no note",
+    makerNote: "the maker's note: {note}",
+    makerNoteChanged:
+      "the maker's note, changed after this report was filed (so it may not be what was reported): {note}",
     openChain: "open the chain",
     state: {
       visible: "visible",
@@ -467,7 +488,7 @@ export const copy = {
     heading: "publish",
     public: "what you publish is public. anyone with the link can hear it and flip it.",
     noAccount:
-      "there is no account. you get a key once, when it is published: keep it if you may want to close the flip or withdraw it. a published flip cannot be edited; flip it again to change it.",
+      "there is no account. you get a key once, when it is published: keep it if you may want to close the flip or withdraw it. the sound of a published flip cannot be edited; flip it again to change it. only its note can be changed, with the key.",
     title: "title",
     titleGloss: "up to 60 characters, shown as typed",
     name: "your name",
@@ -534,7 +555,16 @@ export const copy = {
       statement: "it is not the statement that was shown",
       basis: "the basis is not one that is offered",
     },
-    fields: { title: "title", author: "name", audio: "sound", declaration: "declaration" },
+    fields: {
+      title: "title",
+      author: "name",
+      note: "note",
+      audio: "sound",
+      declaration: "declaration",
+    },
+    note: "a note",
+    noteGloss:
+      "optional: up to 140 characters, shown as typed under the title. you can change it later with the key.",
     when: {
       soon: "in a moment",
       seconds: "in about {n} seconds",
@@ -579,7 +609,7 @@ export const copy = {
       keyCopied: "key copied.",
       keyCopyFailed: "copying did not work here. select the key and copy it.",
       fixed:
-        "a published flip is fixed. to change it, flip it again: that makes a new stage after it and leaves this one as it was.",
+        "a published flip's sound is fixed. to change it, flip it again: that makes a new stage after it and leaves this one as it was. its note is the one thing you can still change.",
       keep: "keep this key in this browser",
       keepGloss:
         "so this flip is listed under your flips and you can manage it later. untick it to forget the key now.",
@@ -607,7 +637,7 @@ export const copy = {
     manage: "manage",
     forget: "forget",
     forgetAsk:
-      "forget this key? you will not be able to close or withdraw this flip from here again. the flip stays published.",
+      "forget this key? you will not be able to close, withdraw or change the note of this flip from here again. the flip stays published.",
     forgetYes: "yes, forget it",
     forgetNo: "keep it",
     forgottenOne: "forgotten.",
@@ -665,7 +695,7 @@ export const copy = {
   manage: {
     title: "manage a publication",
     intro:
-      "the manage key you were shown when you published opens two controls for that one publication, and nothing else.",
+      "the manage key you were shown when you published opens three controls for that one publication: its note, whether it is open to new flips, and withdrawing it. nothing else.",
     keyLabel: "manage key",
     keyGloss:
       "it is sent with each action. this browser keeps it only if the keep box was ticked when you published.",
@@ -697,6 +727,22 @@ export const copy = {
     closedDone: "closed to new flips.",
     reopenedDone: "open to new flips again.",
     withdrawnDone: "withdrawn.",
+    note: {
+      heading: "the note",
+      gloss:
+        "one short line under the title, in your own words. you can change or remove it whenever you like. the sound stays exactly as it is.",
+      label: "note",
+      save: "save the note",
+      clear: "remove the note",
+      saved: "the note is saved.",
+      savedAdjusted: "the note is saved. a link or a handle was removed, as it is in titles.",
+      removed: "the note is removed.",
+      locked: "this publication is withdrawn, so its note is left as it was.",
+      limited: "too many changes just now. wait a little and try again.",
+      closed: "publishing is switched off for now, so notes cannot be changed. try again later.",
+      invalid: "the note breaks a rule: {rule}.",
+      none: "there is no note yet.",
+    },
   },
   about: {
     title: "about graft",
@@ -721,7 +767,7 @@ export const copy = {
     /** Own sounds are switched on or off by the service, so the page says it with a condition. */
     own: {
       heading: "your own sound",
-      body: "when own sounds are switched on, the make page can start from your own recording or an audio file of up to thirty minutes, and you pick up to 15 seconds of it to keep. the microphone asks your browser for permission first. the sound stays on your device until you publish it, and what is published is the sound as your browser read it. publish only sounds you made or may share: graft cannot check that for you.",
+      body: "when own sounds are switched on, the make page can start from your own recording or an audio file of up to thirty minutes, and you pick up to 30 seconds of it to keep. the microphone asks your browser for permission first. the sound stays on your device until you publish it, and what is published is the sound as your browser read it. publish only sounds you made or may share: graft cannot check that for you.",
     },
     whatItIs: {
       heading: "what a flip is",
@@ -777,7 +823,7 @@ export const copy = {
     gloss: "stays on this device until you publish it",
     record: "record with the microphone",
     stop: "stop recording",
-    recording: "recording. it stops by itself at 15 seconds.",
+    recording: "recording. it stops by itself at 30 seconds.",
     pick: "pick an audio file",
     working: "reading the sound.",
     denied:
@@ -799,9 +845,9 @@ export const copy = {
     trimWhereValue: "{at} of {total}",
     trimHear: "hear this part",
     trimStopHear: "stop",
-    trimGloss: "a source is at most 15 seconds. the rest is left out.",
+    trimGloss: "a source is at most 30 seconds. the rest is left out.",
     trimUse: "use this part",
-    trimTooLong: "that part is too long. a source is at most {max} frames, 15 seconds.",
+    trimTooLong: "that part is too long. a source is at most {max} frames, 30 seconds.",
     trimWhy: "why this part cannot be used",
     honesty:
       "what is published is the sound as your browser read it, worked out here and shown to you. graft cannot tell whether a recording is what you say it is, and the same compressed file can come out slightly different in another browser.",
@@ -845,7 +891,7 @@ export const copy = {
       },
       {
         name: "publishing",
-        body: "publishing adds your flip to the lineage, where anyone can hear it and flip it again. it cannot be changed afterwards.",
+        body: "publishing adds your flip to the lineage, where anyone can hear it and flip it again. its sound, cut and speed cannot be changed afterwards. its note can.",
       },
       {
         name: "sketches",
@@ -853,10 +899,10 @@ export const copy = {
       },
       {
         name: "your key",
-        body: "when you publish you get a key. it is the only way to close or withdraw that flip later, and graft has no accounts, so keep it.",
+        body: "when you publish you get a key. it is the only way to close, withdraw or add a note to that flip later, and graft has no accounts, so keep it.",
       },
     ],
-    own: "have a recording of your own? add it here, pick up to 15 seconds of it, and it starts a new lineage.",
+    own: "have a recording of your own? add it here, pick up to 30 seconds of it, and it starts a new lineage.",
     open: "show how graft works",
     close: "hide how graft works",
   },
@@ -924,6 +970,18 @@ export const copy = {
       help: "or click a bracket and use the arrow keys: one millisecond a press, ten with shift.",
       tag: { start: "start", end: "end" },
       range: "{from} to {to} seconds, {length} kept",
+      playhead: "where the sound is playing now",
+      zoom: {
+        toggle: "zoom",
+        gloss: "look closer to place a bracket exactly. the brackets still hold the whole sound.",
+        in: "zoom in",
+        out: "zoom out",
+        fit: "fit the cut",
+        whole: "whole sound",
+        hint: "scroll or pinch to zoom around the pointer. hold shift and scroll to slide.",
+        showing: "showing {from} to {to} seconds.",
+        offscreen: "out of view",
+      },
     },
     speed: {
       label: "speed",
@@ -932,6 +990,16 @@ export const copy = {
       faster: "faster",
       approximate: "about {interval}",
       value: "{percent}, {interval}",
+      typed: {
+        label: "or type a speed",
+        unit: "percent",
+        set: "set",
+        snapped: "snapped to {percent}, the nearest speed there is",
+        exact: "set to {percent}",
+        empty: "type a number between 25 and 400",
+        number: "that is not a number. use digits, like 150",
+        range: "speeds go from 25 to 400 percent",
+      },
     },
     result: {
       label: "what you hear",
@@ -943,14 +1011,14 @@ export const copy = {
     hear: { play: "hear it", pause: "pause", why: "why you cannot hear it yet" },
     refusals: {
       cutShort: "the cut is too short. keep at least 10 milliseconds.",
-      cutLong: "the cut is too long. keep at most 10 seconds.",
+      cutLong: "the cut is too long. keep at most 30 seconds.",
       cutInverted: "the cut ends before it starts. move the end handle to the right of the start.",
       cutOutside: "the cut reaches outside the sound. pull the handles back inside it.",
       speedRange: "that speed is out of range. it has to be between a quarter and four times.",
       speedTerms: "that speed cannot be sent. pick another.",
       outputShort:
         "this flip would come out too short, under 10 milliseconds. cut a longer part or play it slower.",
-      outputLong: "this flip would come out too long, over 20 seconds. cut less or play it faster.",
+      outputLong: "this flip would come out too long, over 60 seconds. cut less or play it faster.",
     },
   },
   end: {
@@ -967,6 +1035,7 @@ export const copy = {
   },
   details: {
     summary: "details",
+    summaryRights: "rights and details",
     printLabel: "a line drawn from this sound's code",
     printNote:
       "drawn from the code below, so the same sound always draws the same line. a picture of the code, not of how the sound goes.",
@@ -1165,6 +1234,7 @@ export const roles: Record<string, { word: string; gloss: string }> = {
   "forked from": { word: "forked from", gloss: "the stage this one was cut from" },
   licence: { word: "licence", gloss: "the terms it was shared under, as the maker wrote them" },
   declaration: { word: "declaration", gloss: "what the maker said about sharing it" },
+  note: { word: "note", gloss: "the maker's own words about it" },
   rights: { word: "rights", gloss: "whether the right to share it is established" },
   cut: { word: "the cut", gloss: "the part that was kept" },
   speed: { word: "speed", gloss: "how fast it was played back" },

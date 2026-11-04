@@ -259,7 +259,7 @@ async fn every_cut_and_speed_refusal_names_its_rule_and_writes_nothing() {
         (body(&parent, 100, 100, 1, 1, 1), "cut", "inverted"),
         (body(&parent, 200, 100, 1, 1, 2), "cut", "inverted"),
         (body(&parent, 0, 479, 1, 1, 3), "cut", "too_short"),
-        (body(&parent, 0, 480_001, 1, 1, 4), "cut", "too_long"),
+        (body(&parent, 0, 1_440_001, 1, 1, 4), "cut", "too_long"),
         (body(&parent, 0, 48_001, 1, 1, 5), "cut", "beyond_parent"),
         (body(&parent, 0, 1000, 1, 5, 6), "speed", "out_of_range"),
         (body(&parent, 0, 1000, 5, 1, 7), "speed", "out_of_range"),
@@ -290,10 +290,10 @@ async fn every_cut_and_speed_refusal_names_its_rule_and_writes_nothing() {
 }
 
 #[tokio::test]
-async fn an_output_longer_than_twenty_seconds_is_refused() {
+async fn an_output_longer_than_sixty_seconds_is_refused() {
     let h = Harness::new().await;
-    // 240,001 frames at 1/4 would be 960,001 output frames, one past the 960,000 limit.
-    let parent = match h.seed_frames("seed:long", 300_000, 0).await {
+    // 720,001 frames at 1/4 would be 2,880,001 output frames, one past the 2,880,000 limit.
+    let parent = match h.seed_frames("seed:long", 800_000, 0).await {
         graft_storage::Outcome::Created(s) | graft_storage::Outcome::Existing(s) => {
             s.id.to_string()
         }
@@ -301,14 +301,14 @@ async fn an_output_longer_than_twenty_seconds_is_refused() {
     };
     refused(
         &h,
-        body(&parent, 0, 240_001, 1, 4, 1),
+        body(&parent, 0, 720_001, 1, 4, 1),
         StatusCode::UNPROCESSABLE_ENTITY,
         "urn:graft:problem:invalid-field",
         Some(("speed", "output_too_long")),
     )
     .await;
     let (status, _, res) = h
-        .post("/v1/publications", &body(&parent, 0, 240_000, 1, 4, 2))
+        .post("/v1/publications", &body(&parent, 0, 720_000, 1, 4, 2))
         .await;
     assert_eq!(
         status,

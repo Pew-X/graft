@@ -152,6 +152,11 @@ pub struct AdminReport {
     pub author: String,
     /// The publication's state now: `visible`, `withdrawn` or `rights`.
     pub state: String,
+    /// The maker's note on it now, as typed.
+    pub maker_note: Option<String>,
+    /// When the maker last changed that note after publishing (milliseconds since the Unix epoch), or
+    /// null. A note changed after `created_at_ms` is not the note that was reported.
+    pub maker_note_updated_at_ms: Option<i64>,
 }
 
 /// The reports list.
@@ -191,6 +196,8 @@ pub async fn list_reports(
                 title: r.title,
                 author: r.author,
                 state: r.hidden.map_or("visible", HideReason::as_str).to_owned(),
+                maker_note: r.maker_note,
+                maker_note_updated_at_ms: r.maker_note_updated_ms,
             })
             .collect(),
     }))
@@ -331,6 +338,10 @@ pub struct SwitchView {
     pub publishing: bool,
     /// Whether visitors may publish their own sources.
     pub uploads: bool,
+    /// Whether a flip may carry a maker's note, and a maker may edit it. Always true from the version
+    /// that has notes; a page treats a missing field as false, so it never sends a note to a service
+    /// that would refuse the field.
+    pub notes: bool,
 }
 
 /// Whether publishing is open right now, and whether uploads are on.
@@ -340,6 +351,7 @@ pub async fn get_switch(State(state): State<AppState>) -> Json<SwitchView> {
     Json(SwitchView {
         publishing,
         uploads: state.uploads_enabled,
+        notes: true,
     })
 }
 
@@ -366,5 +378,6 @@ pub async fn set_switch(
     Ok(Json(SwitchView {
         publishing: request.publishing,
         uploads: state.uploads_enabled,
+        notes: true,
     }))
 }

@@ -1941,3 +1941,24 @@ button:disabled {
   background: var(--focus);
   color: var(--bg);
 }
+
+/* calmer credit lines: the honesty state is a small tag beside the value, not a line of its own */
+.face .line dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0.6em;
+}
+.face .line dd em {
+  flex-basis: 100%;
+  order: 2;
+}
+.face .line .state {
+  order: 1;
+  display: inline-block;
+  margin-top: 0;
+  padding: 1px 6px;
+  border: 1px solid var(--hair);
+  border-radius: 2px;
+  font-size: 9px;
+}

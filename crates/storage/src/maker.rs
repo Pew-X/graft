@@ -19,6 +19,15 @@ pub struct StageFlags {
     pub hidden: Option<HideReason>,
 }
 
+/// What setting a note did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NoteChange {
+    /// The note was set, changed or cleared.
+    Set,
+    /// The publication is hidden (withdrawn, or held for rights): its note is left as it was.
+    Hidden,
+}
+
 impl Store {
     /// SHA-256 of the manage key of a publication; `None` if it does not exist or has no key (a
     /// seeded source has none, so nobody can manage it).
@@ -75,6 +84,62 @@ impl Store {
     ) -> Result<StageFlags, StoreError> {
         self.change_flags(id, wait, Change::Hide(id.clone(), reason))
             .await
+    }
+
+    /// Set the maker's note on a publication, or clear it with `None`. A hidden publication keeps the
+    /// note it had. Takes the same lock as the flag changes, so a withdrawal and a note edit cannot
+    /// interleave. Writing the text it already has changes nothing, not even the time.
+    pub async fn set_note(
+        &self,
+        id: &PublicationId,
+        note: Option<String>,
+        wait: Duration,
+    ) -> Result<NoteChange, StoreError> {
+        let store = self.clone();
+        let id = id.clone();
+        tokio::spawn(async move { store.apply_note(&id, note, wait).await })
+            .await
+            .map_err(|_| StoreError::Db("the write task failed".into()))?
+    }
+
+    async fn apply_note(
+        &self,
+        id: &PublicationId,
+        note: Option<String>,
+        wait: Duration,
+    ) -> Result<NoteChange, StoreError> {
+        let mut locked = Locked::acquire(&self.pool, id, wait).await?;
+        let result = async {
+            let conn = locked.connection()?;
+            let row = sqlx::query("SELECT hidden_reason, note FROM publications WHERE id = $1")
+                .bind(id.as_str())
+                .fetch_optional(&mut *conn)
+                .await
+                .map_err(db)?
+                .ok_or(StoreError::NotFound)?;
+            if row
+                .try_get::<Option<String>, _>("hidden_reason")
+                .map_err(db)?
+                .is_some()
+            {
+                return Ok(NoteChange::Hidden);
+            }
+            let was: Option<String> = row.try_get("note").map_err(db)?;
+            if was != note {
+                sqlx::query(
+                    "UPDATE publications SET note = $2, note_updated_at = now() WHERE id = $1",
+                )
+                .bind(id.as_str())
+                .bind(note.as_deref())
+                .execute(&mut *conn)
+                .await
+                .map_err(db)?;
+            }
+            Ok(NoteChange::Set)
+        }
+        .await;
+        locked.release(id).await;
+        result
     }
 
     async fn change_flags(

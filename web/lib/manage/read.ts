@@ -3,6 +3,8 @@ export interface Shown {
   state: string;
   title: string;
   author: string;
+  /** The maker's note, or null when there is none. */
+  note: string | null;
   forkPermitted: boolean | null;
 }
 
@@ -22,6 +24,7 @@ export async function readPublication(
     state: String(entry["state"]),
     title: String(entry["title"] ?? ""),
     author: String(entry["author"] ?? ""),
+    note: typeof entry["note"] === "string" && entry["note"] !== "" ? entry["note"] : null,
     forkPermitted: typeof entry["fork_permitted"] === "boolean" ? entry["fork_permitted"] : null,
   };
 }

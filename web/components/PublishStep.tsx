@@ -10,7 +10,7 @@ import {
   type Refusal,
   publishWithRetries,
 } from "../lib/publish/client.ts";
-import { NAME_MAX, TITLE_MAX, hintFor } from "../lib/publish/hints.ts";
+import { NAME_MAX, NOTE_MAX, TITLE_MAX, hintFor } from "../lib/publish/hints.ts";
 import { forgetKey, keepKey } from "../lib/publish/keep.ts";
 import { Trace } from "./Trace.tsx";
 import { newRetryKey } from "../lib/publish/retry-key.ts";
@@ -92,6 +92,8 @@ export function PublishStep({
   stage = null,
   fromTitle = null,
   folded = false,
+  noteEnabled = false,
+  initialNote = "",
   children,
 }: {
   /** What is being published, as a string: a different thing is a different attempt, with its own key. */
@@ -99,6 +101,8 @@ export function PublishStep({
   buildBody: (fields: {
     title: string;
     author: string;
+    /** The note, cleaned of surrounding space; empty when there is none (or notes are off). */
+    note: string;
     retryKey: string;
   }) => PublishBody | PublishSourceBody;
   path?: string;
@@ -121,6 +125,10 @@ export function PublishStep({
   fromTitle?: string | null;
   /** A newer stage stands on this one: show one line instead of the whole panel (never while its key is unsafe). */
   folded?: boolean;
+  /** The service has notes, so the form offers one. Off for an older service, which would refuse the field. */
+  noteEnabled?: boolean;
+  /** A note to start from (a sketch's own). */
+  initialNote?: string;
   /** Extra fields between the name and the button. */
   children?: ReactNode;
 }) {
@@ -129,6 +137,7 @@ export function PublishStep({
   const [warned, setWarned] = useState(false);
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
+  const [note, setNote] = useState(initialNote);
   const [phase, setPhase] = useState<Phase>({ name: "form" });
   const [copied, setCopied] = useState<"no" | "yes" | "failed">("no");
   const [keyCopied, setKeyCopied] = useState<"no" | "yes" | "failed">("no");
@@ -164,7 +173,12 @@ export function PublishStep({
     try {
       const outcome = await publishWithRetries(
         wireFor(apiUrl, path),
-        buildBody({ title, author, retryKey: attempt.current.key }),
+        buildBody({
+          title,
+          author,
+          note: noteEnabled ? note.trim() : "",
+          retryKey: attempt.current.key,
+        }),
         {
           sleep,
           onAttempt: (n, of) => setPhase({ name: "publishing", attempt: n, of }),
@@ -297,7 +311,11 @@ export function PublishStep({
             {fill(copy.publish.adjusted, {
               fields: outcome.adjusted
                 .map((f) =>
-                  f === "author" ? copy.publish.fields.author : copy.publish.fields.title,
+                  f === "author"
+                    ? copy.publish.fields.author
+                    : f === "note"
+                      ? copy.publish.fields.note
+                      : copy.publish.fields.title,
                 )
                 .join(" and "),
             })}
@@ -419,6 +437,16 @@ export function PublishStep({
           max={NAME_MAX}
           onChange={setAuthor}
         />
+        {noteEnabled ? (
+          <Field
+            id={`${uid}-note`}
+            label={copy.publish.note}
+            gloss={copy.publish.noteGloss}
+            value={note}
+            max={NOTE_MAX}
+            onChange={setNote}
+          />
+        ) : null}
         {children}
         <div className="actions">
           <button

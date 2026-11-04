@@ -168,3 +168,18 @@ test("playing one sound once while a loop plays replaces the loop: only one is e
   p.stop();
   await once;
 });
+
+test("the playhead fraction follows the clock through the loop, and is null when nothing loops", async () => {
+  const f = fake();
+  const p = new Previewer(() => f.Ctor);
+  assert.equal(p.fraction(), null);
+  (f.context as { currentTime: number }).currentTime = 10;
+  await p.play(new Int16Array(48_000)); // one second
+  assert.equal(p.fraction(), 0);
+  (f.context as { currentTime: number }).currentTime = 10.25;
+  assert.equal(p.fraction(), 0.25);
+  (f.context as { currentTime: number }).currentTime = 12.5; // two loops later
+  assert.equal(p.fraction(), 0.5);
+  p.stop();
+  assert.equal(p.fraction(), null);
+});

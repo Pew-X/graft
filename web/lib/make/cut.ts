@@ -8,10 +8,10 @@ import { copy, fill } from "../copy.ts";
 export const LIMITS = {
   /** The shortest cut and the shortest output: 10 ms, so the two 5 ms fades never overlap. */
   minFrames: 480,
-  /** The longest cut: 10 seconds. */
-  maxCutFrames: 480_000,
-  /** The longest output: 20 seconds. */
-  maxOutputFrames: 960_000,
+  /** The longest cut: 30 seconds. */
+  maxCutFrames: 1_440_000,
+  /** The longest output: 60 seconds. */
+  maxOutputFrames: 2_880_000,
 } as const;
 
 /** The largest term of a speed ratio (2^20). */
@@ -30,7 +30,7 @@ export type Problem =
 
 /** How many frames the renderer makes from a cut of `frames` at speed p/q: floor((L - 1) q / p) + 1. */
 export function outputFrames(frames: number, p: number, q: number): number {
-  const numerator = (frames - 1) * q; // at most 480,000 x 2^20: exact in a double
+  const numerator = (frames - 1) * q; // at most 1,440,000 x 2^20: exact in a double
   return (numerator - (numerator % p)) / p + 1;
 }
 

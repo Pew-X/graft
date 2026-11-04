@@ -1,6 +1,6 @@
 //! What a maker can do to their own publication without an account: close or reopen it to new
-//! flips, and withdraw it. The only credential is the manage key shown once when the publication
-//! was created. It is not an identity: it grants these two actions on that one publication and
+//! flips, withdraw it, and write or change the note under its title. The only credential is the manage key shown once when the publication
+//! was created. It is not an identity: it grants these actions on that one publication and
 //! nothing else, and losing it means only that the flags can no longer be changed.
 //!
 //! The key travels in the `X-Graft-Manage-Key` header, never in a URL or a body, and is never
@@ -32,6 +32,25 @@ pub const MANAGE_KEY_HEADER: &str = "x-graft-manage-key";
 pub struct ForkPermissionRequest {
     /// True to allow new flips of this stage, false to close it. Existing flips are untouched.
     pub permitted: bool,
+}
+
+/// A note to set on a publication, or to clear.
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct NoteRequest {
+    /// The note as typed: one short line of plain text under the title rules (links and handles are
+    /// removed, and the response says so). Empty or absent clears the note.
+    #[serde(default)]
+    pub note: Option<String>,
+}
+
+/// The note after an edit.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+pub struct NoteState {
+    /// The note now, or null when there is none.
+    pub note: Option<String>,
+    /// True when a link or a handle was removed from what was typed.
+    pub adjusted: bool,
 }
 
 /// The state of a stage after a maker action.
@@ -145,6 +164,61 @@ pub async fn set_fork_permission(
         .await
         .map_err(|e| store_problem(&e))?;
     Ok(Json(flags.into()))
+}
+
+/// Write, change or clear the note on a publication. It is the one part of a publication that can
+/// change after it is published, so it follows the same text rules as a title, it is closed with
+/// the rest of publishing when the operator closes it, and a hidden publication keeps the note it had.
+#[utoipa::path(
+    put,
+    path = "/v1/publications/{id}/note",
+    params(
+        ("id" = String, Path, description = "Public id of the publication"),
+        ("x-graft-manage-key" = String, Header, description = "The manage key shown once when the publication was created"),
+    ),
+    request_body = NoteRequest,
+    responses(
+        (status = 200, description = "The note now; repeating the request changes nothing", body = NoteState),
+        (status = 403, description = "The manage key was not accepted (the same answer for every reason)", body = Problem, content_type = "application/problem+json"),
+        (status = 409, description = "The publication is withdrawn or held, so its note is left as it was", body = Problem, content_type = "application/problem+json"),
+        (status = 422, description = "The note breaks a rule; `field` and `rule` say which", body = Problem, content_type = "application/problem+json"),
+        (status = 429, description = "This visitor published or edited too often; `Retry-After` says when to try again", body = Problem, content_type = "application/problem+json"),
+        (status = 503, description = "Busy, send the same request again; or publishing is switched off (`publishing-off`)", body = Problem, content_type = "application/problem+json"),
+    )
+)]
+pub async fn set_note(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    uri: Uri,
+    headers: HeaderMap,
+    body: axum::body::Body,
+) -> Result<Json<NoteState>, Problem> {
+    let id = authorize(&state, &id, &headers, &uri).await?;
+    let body = axum::body::to_bytes(body, MAX_BODY_BYTES)
+        .await
+        .map_err(|e| {
+            if crate::problem::body_timed_out(&e) {
+                Problem::request_timeout()
+            } else {
+                Problem::too_large()
+            }
+        })?;
+    let request: NoteRequest = serde_json::from_slice(&body).map_err(|_| {
+        Problem::bad_request("the body must be JSON with exactly the documented fields")
+    })?;
+    let cleaned =
+        crate::publish::clean_note(request.note.as_deref(), state.limits.max_note_chars, &state)?;
+    let adjusted = cleaned.as_ref().is_some_and(|c| c.adjusted);
+    let note = cleaned.map(|c| c.value);
+    match state
+        .store
+        .set_note(&id, note.clone(), state.publish.lock_wait)
+        .await
+        .map_err(|e| store_problem(&e))?
+    {
+        graft_storage::NoteChange::Set => Ok(Json(NoteState { note, adjusted })),
+        graft_storage::NoteChange::Hidden => Err(Problem::note_locked()),
+    }
 }
 
 /// Withdraw a publication. It stays in every chain as "no longer here" with its credit; its audio
