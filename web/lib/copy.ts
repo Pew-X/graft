@@ -738,7 +738,7 @@ export const copy = {
     /** Own sounds are switched on or off by the service, so the page says it with a condition. */
     own: {
       heading: "your own sound",
-      body: "when own sounds are switched on, the make page can start from your own recording or an audio file of up to thirty minutes, and you pick up to 15 seconds of it to keep. the microphone asks your browser for permission first. the sound stays on your device until you publish it, and what is published is the sound as your browser read it. publish only sounds you made or may share: graft cannot check that for you.",
+      body: "when own sounds are switched on, the make page can start from your own recording or an audio file of up to thirty minutes, and you pick up to 30 seconds of it to keep. the microphone asks your browser for permission first. the sound stays on your device until you publish it, and what is published is the sound as your browser read it. publish only sounds you made or may share: graft cannot check that for you.",
     },
     whatItIs: {
       heading: "what a flip is",
@@ -794,7 +794,7 @@ export const copy = {
     gloss: "stays on this device until you publish it",
     record: "record with the microphone",
     stop: "stop recording",
-    recording: "recording. it stops by itself at 15 seconds.",
+    recording: "recording. it stops by itself at 30 seconds.",
     pick: "pick an audio file",
     working: "reading the sound.",
     denied:
@@ -816,9 +816,9 @@ export const copy = {
     trimWhereValue: "{at} of {total}",
     trimHear: "hear this part",
     trimStopHear: "stop",
-    trimGloss: "a source is at most 15 seconds. the rest is left out.",
+    trimGloss: "a source is at most 30 seconds. the rest is left out.",
     trimUse: "use this part",
-    trimTooLong: "that part is too long. a source is at most {max} frames, 15 seconds.",
+    trimTooLong: "that part is too long. a source is at most {max} frames, 30 seconds.",
     trimWhy: "why this part cannot be used",
     honesty:
       "what is published is the sound as your browser read it, worked out here and shown to you. graft cannot tell whether a recording is what you say it is, and the same compressed file can come out slightly different in another browser.",
@@ -873,7 +873,7 @@ export const copy = {
         body: "when you publish you get a key. it is the only way to close or withdraw that flip later, and graft has no accounts, so keep it.",
       },
     ],
-    own: "have a recording of your own? add it here, pick up to 15 seconds of it, and it starts a new lineage.",
+    own: "have a recording of your own? add it here, pick up to 30 seconds of it, and it starts a new lineage.",
     open: "show how graft works",
     close: "hide how graft works",
   },
@@ -982,14 +982,14 @@ export const copy = {
     hear: { play: "hear it", pause: "pause", why: "why you cannot hear it yet" },
     refusals: {
       cutShort: "the cut is too short. keep at least 10 milliseconds.",
-      cutLong: "the cut is too long. keep at most 10 seconds.",
+      cutLong: "the cut is too long. keep at most 30 seconds.",
       cutInverted: "the cut ends before it starts. move the end handle to the right of the start.",
       cutOutside: "the cut reaches outside the sound. pull the handles back inside it.",
       speedRange: "that speed is out of range. it has to be between a quarter and four times.",
       speedTerms: "that speed cannot be sent. pick another.",
       outputShort:
         "this flip would come out too short, under 10 milliseconds. cut a longer part or play it slower.",
-      outputLong: "this flip would come out too long, over 20 seconds. cut less or play it faster.",
+      outputLong: "this flip would come out too long, over 60 seconds. cut less or play it faster.",
     },
   },
   end: {

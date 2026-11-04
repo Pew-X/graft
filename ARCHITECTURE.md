@@ -85,7 +85,7 @@ exports: memory, graft_version() -> u32,
          graft_render(in_ptr, in_len, p, q, method, out_ptr, out_cap) -> i32
 ```
 
-Speed is an exact fraction `p/q` between 1/4 and 4 (each term up to 2^20). Interpolation is cubic Hermite with Q30 integer weights, with 5 ms linear fades at both ends. There are no floats, no libm, no allocation and no global state inside the render call. Limits: 2^21 input frames, 15 s source, 10 s cut, 20 s output.
+Speed is an exact fraction `p/q` between 1/4 and 4 (each term up to 2^20). Interpolation is cubic Hermite with Q30 integer weights, with 5 ms linear fades at both ends. There are no floats, no libm, no allocation and no global state inside the render call. Limits: 2^21 input frames (about 43.7 s), 30 s source, 30 s cut, 60 s output.
 
 **Identity and the pin.** A content record names its renderer as `{name, version, wasm_sha256}`. A host reads the version from the loaded artefact, hashes the exact bytes, and compares both with the line for that version in `fixtures/renderer/PINS`, compiled into the binary. A mismatch stops the start-up. The pin file is append-only; changing any output byte means a new version and new vectors. The build is reproducible: `scripts/build-wasm.sh` fixes the profile and remaps paths, and CI builds from two directories with different `CARGO_HOME` and compares hashes.
 
@@ -97,7 +97,7 @@ Speed is an exact fraction `p/q` between 1/4 and 4 (each term up to 2^20). Inter
 
 ### Render host
 
-`graft-render-host` exposes one call, `Render::render(cut, ratio, method)`, and returns audio or a typed `RenderError`. Loading refuses a module that imports anything or lacks an export, then applies the pin check. Every render gets a fresh store and instance; nothing a render does survives it. Memory is capped at 64 MiB by default (the worst accepted render needs about 6 MiB), and execution is bounded by fuel, not by wall-clock, so the limit is deterministic (default 1e9; the worst accepted render uses about 4.1e8). Hostile modules written by hand (endless loop, `unreachable`, memory growth, imports, SIMD, shared memory) each map to a typed error and leave the host usable. Measured on a CI runner: load and compile about 36 ms; the worst accepted render about 27 ms.
+`graft-render-host` exposes one call, `Render::render(cut, ratio, method)`, and returns audio or a typed `RenderError`. Loading refuses a module that imports anything or lacks an export, then applies the pin check. Every render gets a fresh store and instance; nothing a render does survives it. Memory is capped at 64 MiB by default (the worst accepted render, a 30 s cut at half speed giving the 60 s output cap, needs about 9.3 MiB), and execution is bounded by fuel, not by wall-clock, so the limit is deterministic (default 1e9; that worst accepted render uses about 6.2e8, measured with `render-measure`). Hostile modules written by hand (endless loop, `unreachable`, memory growth, imports, SIMD, shared memory) each map to a typed error and leave the host usable. Measured on a CI runner before the 30 s limits: load and compile about 36 ms; the worst accepted render about 27 ms. Measured on a laptop with the 30 s limits: the worst accepted render about 24 ms.
 
 *Read:* `crates/render-host/src`.
 
@@ -321,7 +321,7 @@ stateDiagram-v2
 | Roll and record | The chain as credit blocks beside a canvas record; the needle scrubs time (radius is stage, groove is time). A governor holds 60 fps and sheds detail before frames | `web/components/{RollPlayer,Disc}.tsx`, `web/lib/record/` |
 | First visit | One sentence, a narrated first play, then three quiet hints; replayable from "how it works" | `web/lib/coach/` |
 | Make flow | Pick a sound, drag a cut, turn a speed, hear it through the same `.wasm`; publish is optional and last. The editor says which stage the flip will be and what it is made from; a published stage is named, and an older panel folds to one line once a newer stage stands on it, so exactly one next-stage button remains | `web/components/{Make,PublishStep}.tsx`, `web/lib/make/` |
-| Own sounds | Microphone or file, decoded in the browser to canonical audio; recordings up to 30 minutes are trimmed to a 15 s source | `web/lib/own/` |
+| Own sounds | Microphone or file, decoded in the browser to canonical audio; recordings up to 30 minutes are trimmed to a 30 s source | `web/lib/own/` |
 | Sketches | A private flip held in `localStorage` (specs only, versioned, up to 40); a bank of up to 12 plays like pads; "publish these" sends a set in order through the ordinary publish call | `web/lib/sketch/`, `web/components/{YourSketches,SetPublisher}.tsx` |
 | Your flips | Manage keys the browser kept (on by default, removable), listed at `/flips`, grouped by the source each lineage begins with, each row saying its stage and what it was made from; any of them can be played together as pads (up to twelve, across lineages), with the same cut and overlap rules and rec and loop, and nothing published | `web/components/YourFlips.tsx`, `web/lib/flips/` |
 | Operator | `/admin`: reports, hide, the switch, rollups; the secret is held in memory and sent in a header | `web/app/admin`, `web/components/AdminPanel.tsx` |
@@ -377,7 +377,7 @@ Every value is read from the environment at start-up; only the database URL is r
 |---|---|
 | Required | `GRAFT_DATABASE_URL` (TLS with `sslmode=require` or `verify-full`), `GRAFT_RENDERER_WASM` |
 | Listen and origins | `GRAFT_BIND` (`127.0.0.1:8080`), `GRAFT_CORS_ORIGINS` (none), `GRAFT_TRUSTED_PROXY_HOPS` (0) |
-| Limits | `GRAFT_MAX_CHAIN_DEPTH` 12, `GRAFT_MAX_SOURCE_FRAMES` 720,000, `GRAFT_MAX_CUT_FRAMES` 480,000, `GRAFT_MAX_OUTPUT_FRAMES` 960,000, `GRAFT_MIN_FRAMES` 480, `GRAFT_MAX_TITLE_CHARS` 60, `GRAFT_MAX_AUTHOR_CHARS` 32 |
+| Limits | `GRAFT_MAX_CHAIN_DEPTH` 12, `GRAFT_MAX_SOURCE_FRAMES` 1,440,000, `GRAFT_MAX_CUT_FRAMES` 1,440,000, `GRAFT_MAX_OUTPUT_FRAMES` 2,880,000, `GRAFT_MIN_FRAMES` 480, `GRAFT_MAX_TITLE_CHARS` 60, `GRAFT_MAX_AUTHOR_CHARS` 32 |
 | Rates | `GRAFT_PUBLISH_PER_IP` 20/3600 s, `GRAFT_REPORT_PER_IP` 10/3600 s, `GRAFT_ADMIN_FAILURES_PER_IP` 10/900 s, `GRAFT_MAX_FORKS_PER_STAGE_PER_HOUR` 20, `GRAFT_GLOBAL_PUBLISH_PER_HOUR` 120 with `GRAFT_GLOBAL_PUBLISH_BURST` 30, `GRAFT_INGEST_*` |
 | Switches | `GRAFT_PUBLISHING` (`on`), `GRAFT_UPLOADS` (`off`), `GRAFT_EVENT_PIPELINE` (`on`), `GRAFT_EVENT_QUEUE_URL` (unset) |
 | Rendering | `GRAFT_MAX_CONCURRENT_RENDERS` 4 (a request waiting over 5 s gets 503), `GRAFT_LOCK_WAIT_MS` 10000, `GRAFT_SERIALIZATION_RETRIES` 5 |
@@ -526,7 +526,7 @@ Stated so it is not discovered.
 - **One environment, one task.** No failover, no staging.
 - **No test on a real phone in CI**, no real Safari, and Firefox does not launch on the maintainer's machine, so it is covered in CI only.
 - **The publish tail at about 50 flips a second** is explained by a hypothesis that was not tested.
-- **A stored source is capped at 15 s**: the storage guard's overshoot bound is the burst times the largest blob, and a longer source would push it past the storage limit and stop the service starting.
+- **A stored source is capped at 30 s, an output at 60 s**: the storage guard's overshoot bound is the burst times the largest blob, and a much longer one would push it past the storage limit and stop the service starting. A bank of twelve 60 s pads is about 138 MB of audio buffers on a phone.
 - **Slow header attacks** are left to the load balancer.
 - **Cost figures are list-price estimates**, not billing figures.
 
@@ -545,7 +545,7 @@ Small, in order. Nothing here is a promise. Each item says what it would change.
 4. **More chains, with a human behind them.** Seeded lineages built from real recordings, declared as the maker's own, with no audible speech and place only as a declared note. The seed path already accepts any curated source; this is content, not code.
 5. **A before and after toggle on a stage**, hearing the cut at the same start as its parent. Worth building only when a change is audible, so it follows item 4. It must never become a mode.
 6. **Split into pads.** Equal slices of the current cut put on the bank as sketches. No new concept: a chop is a sibling stage with another cut.
-7. **A longer stored source and more formats.** The 15 s cap is set by the storage guard (overshoot is the burst times the largest blob), so a longer source means changing the guard, the limits and the renderer's input ceiling together. `.ogg` is not decoded by every browser today.
+7. **More formats.** `.ogg` is not decoded by every browser today. A source past 30 s would mean changing the guard, the limits and the renderer's input ceiling (2^21 frames, about 43.7 s) together.
 
 **Later: only if there is a reason**
 

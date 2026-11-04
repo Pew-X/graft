@@ -671,11 +671,11 @@ mod tests {
             None
         );
         assert_eq!(
-            rule(check_cut_and_speed(&l, cut(0, 480_000), speed(1, 1))),
+            rule(check_cut_and_speed(&l, cut(0, 1_440_000), speed(1, 1))),
             None
         );
         assert_eq!(
-            rule(check_cut_and_speed(&l, cut(0, 480_001), speed(1, 1))),
+            rule(check_cut_and_speed(&l, cut(0, 1_440_001), speed(1, 1))),
             Some("too_long")
         );
     }

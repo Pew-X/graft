@@ -49,7 +49,7 @@ fn the_real_artefact_and_table_give_a_healthy_snapshot_with_the_numbers_we_need(
     assert!(doc["checks"]["total"].as_u64().expect("count") > 100);
     assert_eq!(doc["renderer"]["version"], 1);
     assert_eq!(doc["instance"]["region"], "test");
-    assert_eq!(doc["measurements"].as_array().expect("array").len(), 5);
+    assert_eq!(doc["measurements"].as_array().expect("array").len(), 6);
     assert!(
         doc["cold_start_ms"]["load_and_compile_and_pin_check"]
             .as_f64()

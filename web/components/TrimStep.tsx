@@ -21,7 +21,7 @@ import { CutEditor } from "./CutEditor.tsx";
 const OVERVIEW_BUCKETS = 600;
 
 /**
- * A recording longer than a source may be: pick the part to keep, up to 15 seconds, and hear it before using
+ * A recording longer than a source may be: pick the part to keep, up to 30 seconds, and hear it before using
  * it. A recording of a minute or less is shown whole. A longer one (up to thirty minutes) is shown through a
  * window of a minute that is moved along it with a labelled control, over a small picture of the whole, so a
  * part can be found by ear and placed with the same brackets as a cut.

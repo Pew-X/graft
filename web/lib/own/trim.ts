@@ -1,6 +1,6 @@
 /**
- * Choosing 15 seconds out of a long recording. A recording of a few minutes is shown whole; a longer one is
- * shown through a window of a minute that the maker moves along it, because a 15 second part is too small
+ * Choosing 30 seconds out of a long recording. A recording of a few minutes is shown whole; a longer one is
+ * shown through a window of a minute that the maker moves along it, because a 30 second part is too small
  * to place on a waveform of thirty minutes. The part kept is worked out in the recording's own frames, so
  * `checkTrim` still decides what may be used.
  */
@@ -32,7 +32,7 @@ export function windowAt(total: number, position: number): { start: number; end:
   return { start, end: Math.min(total, start + VIEW_FRAMES) };
 }
 
-/** Where the brackets start in a window: its first 15 seconds, or all of it when it is shorter. */
+/** Where the brackets start in a window: its first 30 seconds, or all of it when it is shorter. */
 export const startingCut = (windowFrames: number): { start: number; end: number } => ({
   start: 0,
   end: Math.min(windowFrames, MAX_FRAMES),

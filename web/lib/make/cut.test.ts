@@ -27,11 +27,11 @@ test("output length stays exact at the largest cut and the most awkward ratios (
   const exact = (l: number, p: number, q: number) =>
     Number((BigInt(l - 1) * BigInt(q)) / BigInt(p)) + 1;
   for (const [l, p, q] of [
-    [480_000, 1_048_576, 1_048_575],
-    [480_000, 1_048_575, 1_048_576],
+    [1_440_000, 1_048_576, 1_048_575],
+    [1_440_000, 1_048_575, 1_048_576],
     [479_999, 262_145, 1_048_576],
-    [480_000, 1, 4],
-    [480_000, 4, 1],
+    [1_440_000, 1, 4],
+    [1_440_000, 4, 1],
     [123_457, 7, 11],
   ] as const) {
     assert.equal(outputFrames(l, p, q), exact(l, p, q), `${l} at ${p}/${q}`);
@@ -47,19 +47,19 @@ test("a cut shorter than 480 frames is refused, and the message says the limit i
 });
 
 test("the limits the messages name in words are the limits the checks use", () => {
-  // the copy says 10 milliseconds, 10 seconds and 20 seconds; these are those, in frames at 48 kHz
+  // the copy says 10 milliseconds, 30 seconds and 60 seconds; these are those, in frames at 48 kHz
   assert.equal(LIMITS.minFrames, 0.01 * 48_000);
-  assert.equal(LIMITS.maxCutFrames, 10 * 48_000);
-  assert.equal(LIMITS.maxOutputFrames, 20 * 48_000);
+  assert.equal(LIMITS.maxCutFrames, 30 * 48_000);
+  assert.equal(LIMITS.maxOutputFrames, 60 * 48_000);
   const says = (kind: Parameters<typeof refusal>[0]["kind"]) => refusal({ kind } as never);
-  assert.match(says("cutLong"), /10 seconds/);
-  assert.match(says("outputLong"), /20 seconds/);
+  assert.match(says("cutLong"), /30 seconds/);
+  assert.match(says("outputLong"), /60 seconds/);
   assert.match(says("outputShort"), /10 milliseconds/);
 });
 
-test("a cut longer than 10 seconds is refused; exactly 480,000 frames is allowed", () => {
-  assert.equal(checkCut({ start: 0, end: 480_001 }, 720_000)?.kind, "cutLong");
-  assert.equal(checkCut({ start: 0, end: 480_000 }, 720_000), null);
+test("a cut longer than 30 seconds is refused; exactly 1,440,000 frames is allowed", () => {
+  assert.equal(checkCut({ start: 0, end: 1_440_001 }, 1_440_000 + 1)?.kind, "cutLong");
+  assert.equal(checkCut({ start: 0, end: 1_440_000 }, 1_440_000), null);
 });
 
 test("an inverted or empty cut is refused as inverted, not as short", () => {
@@ -87,23 +87,23 @@ test("a ratio outside 1/4 to 4, or with a term over 2^20, or not whole numbers, 
   assert.equal(checkSpeed(1.5, 1)?.kind, "speedTerms");
 });
 
-test("an output under 480 or over 960,000 frames is refused before anything is sent", () => {
+test("an output under 480 or over 2,880,000 frames is refused before anything is sent", () => {
   assert.equal(checkOutput(479)?.kind, "outputShort");
   assert.equal(checkOutput(480), null);
-  assert.equal(checkOutput(960_000), null);
-  assert.equal(checkOutput(960_001)?.kind, "outputLong");
+  assert.equal(checkOutput(2_880_000), null);
+  assert.equal(checkOutput(2_880_001)?.kind, "outputLong");
 });
 
 test("every refusal has a plain sentence naming the limit it hit, with no placeholder left over", () => {
   const all = [
     checkCut({ start: 0, end: 10 }, 48_000),
-    checkCut({ start: 0, end: 480_001 }, 720_000),
+    checkCut({ start: 0, end: 1_440_001 }, 1_440_001),
     checkCut({ start: 5, end: 2 }, 48_000),
     checkCut({ start: 0, end: 50_000 }, 48_000),
     checkSpeed(1, 9),
     checkSpeed(0, 1),
     checkOutput(10),
-    checkOutput(960_001),
+    checkOutput(2_880_001),
   ];
   for (const p of all) {
     assert.ok(p);
@@ -114,7 +114,7 @@ test("every refusal has a plain sentence naming the limit it hit, with no placeh
 });
 
 test("the limits are the service's (spec 4.2)", () => {
-  assert.deepEqual(LIMITS, { minFrames: 480, maxCutFrames: 480_000, maxOutputFrames: 960_000 });
+  assert.deepEqual(LIMITS, { minFrames: 480, maxCutFrames: 1_440_000, maxOutputFrames: 2_880_000 });
 });
 
 test("the slice a cut names is [start, end): the first frame in, the end frame out", () => {

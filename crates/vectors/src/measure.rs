@@ -23,11 +23,17 @@ pub struct CaseResult {
 }
 
 /// Name, input frames, p, q for the cases that bound what the renderer will accept.
-pub const CASES: [(&str, usize, u32, u32); 5] = [
-    ("cut cap at speed 1", 480_000, 1, 1),
-    ("speed 1/4, output at the 20 s cap", 240_000, 1, 4),
-    ("speed 1/4, cut cap (beyond the output cap)", 480_000, 1, 4),
-    ("speed 4, cut cap", 480_000, 4, 1),
+pub const CASES: [(&str, usize, u32, u32); 6] = [
+    ("cut cap at speed 1", 1_440_000, 1, 1),
+    ("speed 1/4, output at the 60 s cap", 720_000, 1, 4),
+    (
+        "speed 1/2, cut cap, output at the 60 s cap",
+        1_440_000,
+        1,
+        2,
+    ),
+    ("speed 4, cut cap", 1_440_000, 4, 1),
+    ("speed 1/4, the old 10 s cut cap", 480_000, 1, 4),
     ("speed 4, renderer input ceiling", 1 << 21, 4, 1),
 ];
 

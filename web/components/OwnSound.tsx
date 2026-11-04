@@ -18,7 +18,7 @@ const problemText = (reason: Extract<Decoded, { ok: false }>["reason"]): string 
 
 /**
  * Start from the maker's own sound: the microphone, or a picked file. It is read and made canonical
- * here, in memory. A recording of more than 15 seconds is handed on to be trimmed; nothing is sent
+ * here, in memory. A recording of more than 30 seconds is handed on to be trimmed; nothing is sent
  * anywhere.
  */
 export function OwnSound({
