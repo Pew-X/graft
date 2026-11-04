@@ -10,10 +10,11 @@
  */
 import { checkSpeed, type Cut } from "../make/cut.ts";
 import { ID_SHAPE } from "../flips/list.ts";
+import { NOTE_MAX } from "../publish/hints.ts";
 
 export const TITLE_MAX = 60;
 /** The longest note, in characters. */
-export const NOTE_MAX = 140;
+export { NOTE_MAX };
 /** Most sketches this browser keeps, and most on one bank. */
 export const MOST_SKETCHES = 40;
 export const MOST_ON_BANK = 12;

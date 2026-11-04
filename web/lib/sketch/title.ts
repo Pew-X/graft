@@ -7,9 +7,11 @@
  * title it refuses for that reason is met when the sketch is published.
  */
 
+import { NOTE_MAX } from "../publish/hints.ts";
+
 export const TITLE_LIMIT = 60;
 /** A note is a short line of the same plain text, in characters. */
-export const NOTE_LIMIT = 140;
+export const NOTE_LIMIT = NOTE_MAX;
 
 export type TitleRule = "empty" | "too_long" | "character" | "mixed_scripts" | "denied_word";
 

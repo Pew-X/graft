@@ -1,5 +1,5 @@
 //! What a maker can do to their own publication without an account: close or reopen it to new
-//! flips, withdraw it, and write or change the note that sits under its title. The only credential is the manage key shown once when the publication
+//! flips, withdraw it, and write or change the note under its title. The only credential is the manage key shown once when the publication
 //! was created. It is not an identity: it grants these actions on that one publication and
 //! nothing else, and losing it means only that the flags can no longer be changed.
 //!

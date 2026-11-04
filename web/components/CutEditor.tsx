@@ -280,7 +280,10 @@ export function CutEditor({
           const which = dragging.current;
           dragging.current = null;
           if (!which) return;
-          set(which, snapToZeroCrossing(samples, at(e.clientX), SNAP_WINDOW));
+          // A zoomed view is for placing a bracket exactly, so it is left where it was put; the snap is
+          // the whole view's aid, and at the narrowest zoom it could move a bracket across the window.
+          const frame = at(e.clientX);
+          set(which, zoomed ? frame : snapToZeroCrossing(samples, frame, SNAP_WINDOW));
         }}
         onPointerCancel={(e) => {
           fingers.current.delete(e.pointerId);

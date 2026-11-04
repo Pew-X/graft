@@ -1,4 +1,4 @@
-// The maker's two actions, sent with the manage key in a header and nowhere else. Every way of being
+// The maker's actions, sent with the manage key in a header and nowhere else. Every way of being
 // refused reads the same, so the page cannot tell a wrong key from a missing publication.
 import assert from "node:assert/strict";
 import { test } from "node:test";

@@ -637,7 +637,7 @@ export const copy = {
     manage: "manage",
     forget: "forget",
     forgetAsk:
-      "forget this key? you will not be able to close or withdraw this flip from here again. the flip stays published.",
+      "forget this key? you will not be able to close, withdraw or change the note of this flip from here again. the flip stays published.",
     forgetYes: "yes, forget it",
     forgetNo: "keep it",
     forgottenOne: "forgotten.",
@@ -899,7 +899,7 @@ export const copy = {
       },
       {
         name: "your key",
-        body: "when you publish you get a key. it is the only way to close or withdraw that flip later, and graft has no accounts, so keep it.",
+        body: "when you publish you get a key. it is the only way to close, withdraw or add a note to that flip later, and graft has no accounts, so keep it.",
       },
     ],
     own: "have a recording of your own? add it here, pick up to 30 seconds of it, and it starts a new lineage.",
