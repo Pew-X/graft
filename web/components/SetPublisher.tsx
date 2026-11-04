@@ -11,6 +11,7 @@ import { markPublished, readBook, rename } from "../lib/sketch/book.ts";
 import { leasedElsewhere, refreshLease, releaseLease, takeLease } from "../lib/sketch/lease.ts";
 import { type ItemState, type StopWhy, planSet, runSet } from "../lib/sketch/set.ts";
 import type { Sketch } from "../lib/sketch/sketch.ts";
+import { readFeatures } from "../lib/own/features.ts";
 import { cleanTitle } from "../lib/sketch/title.ts";
 import { announceSketchChange, sketchStorage, useSketchBook } from "./useSketchBook.ts";
 import { useSketchSet } from "./useSketchSet.ts";
@@ -64,11 +65,8 @@ export function SetPublisher({
   apiUrl,
   render,
   onStarted,
-  notes = false,
 }: {
   apiUrl: string;
-  /** The service has notes, so each sketch's note is sent with it. */
-  notes?: boolean;
   /** The visitor started a set: the make guide's last lines follow it. */
   onStarted?: () => void;
   /** The hash of the sound a sketch renders to here: sent as the preview, so a differing render is caught. */
@@ -157,7 +155,10 @@ export function SetPublisher({
           announceSketchChange();
         },
         author: chosen.author.trim(),
-        notes,
+        // asked when the set is sent, not before: an older service would refuse the field
+        notes: await readFeatures(apiUrl)
+          .then((f) => f.notes)
+          .catch(() => false),
         signal: controller.signal,
         // a resumed run adds to what the first showed, so the screen counts the whole set
         onUpdate: (next, got) => {

@@ -146,13 +146,16 @@ export function Make({
           ? { kind: "live", id: targetId }
           : null;
 
-  // Asked when the page opens, so the own-sound block can say up front whether publishing a sound of
-  // one's own is open, and the publish step knows whether the service has notes (an older one would
-  // refuse the field): nothing more than this one read leaves the device before a publish. If that read
-  // failed, choosing a sound of one's own asks once more. A service that cannot be asked says nothing,
-  // and then no note is offered.
+  // Asked when the page opens at the picker (a page opened on a stage, `?from=`, has no own-sound block
+  // and asks nothing), so the own-sound block can say up front whether publishing a sound of one's own
+  // is open and the editor can use the same answer: nothing more than this one read leaves the device
+  // before a publish. If that read failed, choosing a sound of one's own asks once more. A service that
+  // cannot be asked says nothing. (A page opened on a stage asks later, when the publish step opens: see
+  // the editor.)
   const [featuresTry, setFeaturesTry] = useState(0);
-  const features = useAsync(`features:${featuresTry}`, (signal) => readFeatures(apiUrl, signal));
+  const features = useAsync(from === null ? `features:${featuresTry}` : null, (signal) =>
+    readFeatures(apiUrl, signal),
+  );
 
   const [engineTry, setEngineTry] = useState(0);
   const engine = useAsync(`renderer:${engineTry}`, browserRenderer);
@@ -679,12 +682,7 @@ export function Make({
         <SketchBankPanel bank={bank} status={bankStatus} />
       ) : null}
       {book.sketches.length >= 2 || sketchSet.chosen.ids.length > 0 ? (
-        <SetPublisher
-          apiUrl={apiUrl}
-          render={hashOf}
-          notes={features.status === "ready" && features.value.notes}
-          onStarted={() => send("published")}
-        />
+        <SetPublisher apiUrl={apiUrl} render={hashOf} onStarted={() => send("published")} />
       ) : null}
       <MoveSketches />
       <p className="local">{copy.make.local}</p>
@@ -765,7 +763,16 @@ function Editor({
   const [basis, setBasis] = useState<Basis>("own_recording");
   const [confirmed, setConfirmed] = useState(false);
   const flipParent = own ? sourceId : sketchParent ? publishedParent(sketchParent) : parentId;
-  const notesOn = features.status === "ready" && features.value.notes;
+  // Whether the service has notes (an older one would refuse the field). Asked of the page's own read where
+  // there is one, and otherwise only when the publish step opens, so a page that is only being used to
+  // cut and hear makes no request.
+  const lateFeatures = useAsync(
+    publishing && features.status === "idle" ? "late-features" : null,
+    (signal) => readFeatures(apiUrl, signal),
+  );
+  const notesOn =
+    (features.status === "ready" && features.value.notes) ||
+    (lateFeatures.status === "ready" && lateFeatures.value.notes);
   const closedWhy =
     !own || features.status !== "ready"
       ? null
