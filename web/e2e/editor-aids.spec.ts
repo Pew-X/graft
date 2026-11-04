@@ -145,6 +145,7 @@ test("a note on a sketch is kept with it, shown, edited and removed, and is stor
 }) => {
   await page.goto(link());
   await ready(page);
+  await page.getByTestId("sketch-note-add").click();
   await page.getByTestId("sketch-note").fill("from the tape at the lake");
   await page.getByRole("button", { name: "keep as sketch" }).click();
   await expect(page.getByTestId("sketch-note-text")).toHaveText("from the tape at the lake");
@@ -175,6 +176,7 @@ test("a note on a sketch is kept with it, shown, edited and removed, and is stor
 test("a note that breaks the rules is not kept and says why", async ({ page }) => {
   await page.goto(link());
   await ready(page);
+  await page.getByTestId("sketch-note-add").click();
   await page.getByTestId("sketch-note").fill("x".repeat(139) + "​");
   await page.getByRole("button", { name: "keep as sketch" }).click();
   await expect(page.getByText(/the note has a character that is not allowed/)).toBeVisible();

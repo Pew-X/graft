@@ -21,7 +21,7 @@ test("with no link the whole sound opens at a fifth up", () => {
   assert.deepEqual({ p, q }, DEFAULT_SPEED);
 });
 
-test("a sound longer than the longest cut opens on its first ten seconds", () => {
+test("a sound longer than the longest cut opens on its first thirty seconds", () => {
   const e = startEditing(2_000_000, { cut: null, speed: null });
   assert.deepEqual(e.cut, { start: 0, end: LIMITS.maxCutFrames });
 });

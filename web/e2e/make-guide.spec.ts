@@ -313,7 +313,9 @@ test("the sketch lines never cover the editor, the strip or the bank, and are a 
   await expect(guide(page)).toContainText(ANOTHER);
   await expect(guide(page).getByRole("status")).toHaveText(ANOTHER);
   // The line is pinned while it runs, so while the page is scrolled it floats over whatever passes under
-  // it. What is checked is its own slot: at the top of the page nothing else is drawn in it.
+  // it (by design: it stays in view down at the controls). What is checked is its own slot: at the top of
+  // the page nothing else is drawn in it. (Measured while scrolled, the answer only follows how far the
+  // browser happened to scroll to reach the keep button, which moves whenever a control is added above.)
   await page.evaluate(() => window.scrollTo(0, 0));
   const slot = (await guide(page).boundingBox())!;
   for (const target of [".panel.result", '[data-testid="your-sketches"]']) {

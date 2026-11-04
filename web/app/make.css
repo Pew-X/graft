@@ -620,6 +620,7 @@
 
 /* the manage screen, the report dialog and the about page */
 .manage input[type="password"],
+.manage input[type="text"],
 .report-dialog textarea {
   width: 100%;
   min-height: 44px;
@@ -773,7 +774,8 @@
 .report-dialog .hint {
   margin-bottom: 0.75rem;
 }
-.manage input[type="password"] {
+.manage input[type="password"],
+.manage input[type="text"] {
   margin-top: 0.5rem;
 }
 

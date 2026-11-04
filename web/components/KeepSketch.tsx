@@ -37,6 +37,7 @@ export function KeepSketch({
   const c = copy.sketch;
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
+  const [noteOpen, setNoteOpen] = useState(false);
   const [said, setSaid] = useState("");
   const [offer, setOffer] = useState<Sketch | null>(null);
 
@@ -83,6 +84,7 @@ export function KeepSketch({
       setSaid(fill(adjusted ? c.keptAdjusted : c.kept, { title: made.sketch.title }));
       setTitle("");
       setNote("");
+      setNoteOpen(false);
       onKept?.(made.sketch);
       return;
     }
@@ -110,21 +112,23 @@ export function KeepSketch({
           onChange={(e) => setTitle(e.target.value)}
         />
       </div>
-      <div className="field">
-        <label htmlFor={`${uid}-note`}>
-          {c.noteLabel} <span className="gloss">{c.noteGloss}</span>
-        </label>
-        <input
-          id={`${uid}-note`}
-          type="text"
-          value={note}
-          maxLength={NOTE_LIMIT}
-          autoComplete="off"
-          spellCheck={false}
-          data-testid="sketch-note"
-          onChange={(e) => setNote(e.target.value)}
-        />
-      </div>
+      {noteOpen ? (
+        <div className="field">
+          <label htmlFor={`${uid}-note`}>
+            {c.noteLabel} <span className="gloss">{c.noteGloss}</span>
+          </label>
+          <input
+            id={`${uid}-note`}
+            type="text"
+            value={note}
+            maxLength={NOTE_LIMIT}
+            autoComplete="off"
+            spellCheck={false}
+            data-testid="sketch-note"
+            onChange={(e) => setNote(e.target.value)}
+          />
+        </div>
+      ) : null}
       <div className="actions">
         <button
           type="button"
@@ -136,6 +140,16 @@ export function KeepSketch({
         >
           {label ?? c.keep}
         </button>
+        {noteOpen ? null : (
+          <button
+            type="button"
+            className="pill"
+            data-testid="sketch-note-add"
+            onClick={() => setNoteOpen(true)}
+          >
+            {c.noteAdd}
+          </button>
+        )}
       </div>
       <p id={`${uid}-said`} role="status" className="hint">
         {parent === null ? c.needSource : said}
