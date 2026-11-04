@@ -216,7 +216,7 @@ function Row({
             const done = setNote(sketchStorage(), sketch.id, cleaned.value);
             announceSketchChange();
             if (done.ok) {
-              setProblem("");
+              setProblem(cleaned.adjusted ? c.noteAdjusted : "");
               setMode("idle");
             } else setProblem(c.failed.invalid);
           }}

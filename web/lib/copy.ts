@@ -87,6 +87,7 @@ export const copy = {
     kept: "kept as a sketch: {title}. nothing is published.",
     keptAdjusted:
       "kept as a sketch: {title}. a link or a handle in the title was removed, as it would be when published.",
+    noteAdjusted: "a link or a handle was removed from the note, as it would be when published.",
     noteLabel: "a note",
     noteGloss:
       "optional: a line to remember it by, up to 140 characters. it is sent with the flip if you publish this sketch.",
@@ -727,6 +728,8 @@ export const copy = {
     closedDone: "closed to new flips.",
     reopenedDone: "open to new flips again.",
     withdrawnDone: "withdrawn.",
+    fixedWithdrawn:
+      "a published flip's sound is fixed. this one is withdrawn, so its note is left as it was.",
     note: {
       heading: "the note",
       gloss:

@@ -1443,7 +1443,8 @@
   margin-top: 0.4rem;
 }
 .sketch-rename input {
-  flex: 1 1 12rem;
+  /* wide enough to read a note of 140 characters while it is edited */
+  flex: 1 1 min(100%, 24rem);
   min-height: 44px;
 }
 .keep-sketch {

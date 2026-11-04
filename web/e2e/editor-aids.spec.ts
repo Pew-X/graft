@@ -127,7 +127,10 @@ test("a speed typed as a percentage moves the speed control, and says when it sn
 
   await field.fill("148");
   await field.press("Enter");
-  await expect(said).toContainText("snapped to");
+  await expect(said).toHaveText("set to 148%");
+  await field.fill("210");
+  await field.press("Enter");
+  await expect(said).toContainText("snapped to 209%");
   await expect(said).toContainText("the nearest speed there is");
 
   await field.fill("abc");
@@ -157,9 +160,10 @@ test("a note on a sketch is kept with it, shown, edited and removed, and is stor
   expect(book.sketches[0]?.note).toBe("from the tape at the lake");
 
   await page.getByTestId("sketch-note-open").click();
-  await page.getByTestId("sketch-note-edit").fill("second thoughts");
+  await page.getByTestId("sketch-note-edit").fill("second thoughts, see example.com");
   await page.getByRole("button", { name: "save the note" }).click();
-  await expect(page.getByTestId("sketch-note-text")).toHaveText("second thoughts");
+  await expect(page.getByTestId("sketch-note-text")).toHaveText("second thoughts, see");
+  await expect(page.getByText("a link or a handle was removed from the note")).toBeVisible();
 
   await page.getByTestId("sketch-note-open").click();
   await page.getByTestId("sketch-note-edit").fill("");

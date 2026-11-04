@@ -19,12 +19,20 @@ test("a percent sign, spaces and a decimal comma are accepted", () => {
   }
 });
 
-test("a number between two stops snaps to the nearest and says so", () => {
-  const r = typedSpeed("148");
+test("a number whose nearest stop reads differently snaps and says so", () => {
+  const r = typedSpeed("210");
   assert.ok(r.ok);
   assert.equal(r.snapped, true);
-  assert.match(r.percent, /^1(4[89]|50)%$/);
+  assert.equal(r.percent, "209%");
   assert.equal(typedSpeed("150").ok && (typedSpeed("150") as { snapped: boolean }).snapped, false);
+});
+
+test("a number whose nearest stop reads the same is just that speed, not a correction", () => {
+  for (const typed of ["148", "133", "47.3", "149.6"]) {
+    const r = typedSpeed(typed);
+    assert.ok(r.ok, typed);
+    assert.equal(r.snapped, false, typed);
+  }
 });
 
 test("the ends of the range are the ends of the table", () => {

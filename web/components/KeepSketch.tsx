@@ -81,7 +81,8 @@ export function KeepSketch({
     });
     announceSketchChange();
     if (made.ok) {
-      setSaid(fill(adjusted ? c.keptAdjusted : c.kept, { title: made.sketch.title }));
+      const said = fill(adjusted ? c.keptAdjusted : c.kept, { title: made.sketch.title });
+      setSaid(cleanedNote.adjusted ? `${said} ${c.noteAdjusted}` : said);
       setTitle("");
       setNote("");
       setNoteOpen(false);
