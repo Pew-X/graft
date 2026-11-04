@@ -197,7 +197,7 @@ fn the_most_expensive_accepted_render_is_interrupted_when_its_fuel_budget_is_too
 fn the_costliest_render_the_service_accepts_fits_the_default_fuel_budget_with_room() {
     // A 30 s cut at half speed is the longest output the service allows (60 s, 2,879,999 frames): measured
     // at about 6.2e8 fuel against the default budget of 1e9. It must render with the default limits.
-    use graft_render_host::{Limits, Method, Ratio, Render, RenderHost};
+    use graft_render_host::{Limits, Method, Ratio, RenderHost};
     let host = RenderHost::load(&artefact(), Limits::default()).expect("loads");
     let input = graft_vectors::measure::noise(1_440_000);
     let (out, stats) = host
