@@ -1,5 +1,5 @@
 /** The microphone, held only while recording, and never longer than the longest source. */
-export const MAX_SECONDS = 15;
+export const MAX_SECONDS = 30;
 
 export type MicProblem = "denied" | "unavailable";
 

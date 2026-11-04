@@ -213,13 +213,13 @@ test("a 44.1 kHz file is resampled by the browser to 48 kHz: informational, with
   expect(Math.abs(frames - 48_000)).toBeLessThanOrEqual(2);
 });
 
-test("a recording over 15 seconds is trimmed to a part before it becomes a source, and a part that is too long says so", async ({
+test("a recording over 30 seconds is trimmed to a part before it becomes a source, and a part that is too long says so", async ({
   page,
 }) => {
   await page.goto("/make");
   await pick(
     page,
-    wav({ rate: 48_000, channels: 1, frames: 20 * 48_000, sample: (i) => tone(i, 0) }),
+    wav({ rate: 48_000, channels: 1, frames: 40 * 48_000, sample: (i) => tone(i, 0) }),
   );
   await expect(page.getByRole("heading", { name: /pick the part to keep/ })).toBeVisible();
   const use = page.getByRole("button", { name: "use this part" });
@@ -228,7 +228,7 @@ test("a recording over 15 seconds is trimmed to a part before it becomes a sourc
   await end.focus();
   await page.keyboard.press("End");
   await expect(use).toBeDisabled();
-  await expect(page.locator("#trim-why")).toContainText("at most 720000 frames, 15 seconds");
+  await expect(page.locator("#trim-why")).toContainText("at most 1440000 frames, 30 seconds");
   await page.keyboard.press("Home");
   await expect(page.locator("#trim-why")).toContainText("ends before it starts");
   await page.keyboard.press("PageUp");
@@ -243,7 +243,7 @@ test("a recording over 15 seconds is trimmed to a part before it becomes a sourc
   await use.click();
   await expect(page.getByRole("slider", { name: "end of the cut" })).toHaveAttribute(
     "aria-valuemax",
-    /^(4800|[1-7]\d{5})/,
+    /^(4800|[1-9]\d{5,6})/,
   );
 });
 
@@ -281,7 +281,7 @@ test("recording stops on request and the recording becomes a sound to cut and fl
 }) => {
   await page.goto("/make");
   await page.getByRole("button", { name: "record with the microphone" }).click();
-  await expect(page.getByText("recording. it stops by itself at 15 seconds.")).toBeVisible();
+  await expect(page.getByText("recording. it stops by itself at 30 seconds.")).toBeVisible();
   await page.waitForTimeout(1500);
   await page.getByRole("button", { name: "stop recording" }).click();
   await expect(page.getByRole("slider", { name: "start of the cut" })).toBeVisible({

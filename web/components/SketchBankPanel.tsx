@@ -1,11 +1,12 @@
 "use client";
 
 import { copy, fill } from "../lib/copy.ts";
+import { bankSeconds, isLongBank } from "../lib/sketch/bank-size.ts";
 import { moveInBank, removeFromBank } from "../lib/sketch/book.ts";
 import { MOST_ON_BANK } from "../lib/sketch/sketch.ts";
 import { PadBank } from "./PadBank.tsx";
 import type { useSketchBank } from "./useBank.ts";
-import { announceSketchChange, sketchStorage } from "./useSketchBook.ts";
+import { announceSketchChange, sketchStorage, useSketchBook } from "./useSketchBook.ts";
 
 type Bank = ReturnType<typeof useSketchBank>;
 
@@ -17,6 +18,11 @@ type Bank = ReturnType<typeof useSketchBank>;
  */
 export function SketchBankPanel({ bank, status }: { bank: Bank; status: string }) {
   const c = copy.sketch.bank;
+  const book = useSketchBook();
+  const seconds = bankSeconds(
+    book.sketches,
+    bank.pads.map((p) => p.id),
+  );
   const act = (fn: () => unknown): void => {
     fn();
     announceSketchChange();
@@ -61,6 +67,11 @@ export function SketchBankPanel({ bank, status }: { bank: Bank; status: string }
             {c.keysWhy}
           </p>
           {bank.pads.length === 1 ? <p className="hint">{c.once}</p> : null}
+          {isLongBank(seconds) ? (
+            <p className="hint" data-testid="bank-long">
+              {fill(c.long, { n: Math.round(seconds) })}
+            </p>
+          ) : null}
           <ol className="bank-order" aria-label={c.pads}>
             {bank.pads.map((pad, i) => (
               <li key={pad.id}>

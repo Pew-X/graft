@@ -183,6 +183,7 @@ export const copy = {
       full: "the bank holds at most {max} sketches.",
       empty: "nothing on the bank yet. press put on the bank on a sketch above.",
       preparing: "getting the sound ready",
+      long: "this bank holds about {n} seconds of sound. on a phone that is a lot to keep ready, and the page may run short of memory. shorter flips keep it light.",
       keysOff: "number keys: off",
       keysOn: "number keys: on",
       keysWhy:
@@ -978,7 +979,7 @@ export const copy = {
         fit: "fit the cut",
         whole: "whole sound",
         hint: "scroll or pinch to zoom around the pointer. hold shift and scroll to slide.",
-        showing: "showing {from} to {to} seconds",
+        showing: "showing {from} to {to} seconds.",
         offscreen: "out of view",
       },
     },

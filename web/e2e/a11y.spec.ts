@@ -79,7 +79,7 @@ const screens: Screen[] = [
       await page.goto("/make");
       await page
         .locator("input[type=file]")
-        .setInputFiles({ name: "long.wav", mimeType: "audio/wav", buffer: wav(20 * 48000) });
+        .setInputFiles({ name: "long.wav", mimeType: "audio/wav", buffer: wav(40 * 48000) });
       await expect(page.getByRole("heading", { name: /pick the part to keep/ })).toBeVisible();
     },
   },
