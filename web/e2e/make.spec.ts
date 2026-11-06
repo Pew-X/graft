@@ -339,6 +339,37 @@ test.describe("arriving from the header's make a flip", () => {
     await expect(main.locator(".cut-editor .help")).toBeVisible();
   });
 
+  for (const size of [
+    { name: "laptop 1366x650", width: 1366, height: 650 },
+    { name: "phone 390x750", width: 390, height: 750 },
+    { name: "small phone 360x640", width: 360, height: 640 },
+  ]) {
+    test(`hear it and publish are in reach on entering the editor: ${size.name}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: size.width, height: size.height });
+      const inView = async (name: string | RegExp) => {
+        const box = await page
+          .getByRole("button", { name, exact: typeof name === "string" })
+          .boundingBox();
+        expect(box, `${name} has a box`).not.toBeNull();
+        expect(box!.y).toBeGreaterThanOrEqual(0);
+        expect(box!.y + box!.height).toBeLessThanOrEqual(size.height);
+      };
+      // the ready-made flip the header opens
+      await page.goto(link(chain.at(-1)!.id, [0, 43200], 3, 2));
+      await ready(page);
+      await inView("hear it");
+      await inView("publish this flip");
+      // and a sound picked from the list
+      await page.goto("/make");
+      await page.getByRole("button", { name: `flip this sound: ${sources[0]!.title}` }).click();
+      await ready(page);
+      await inView("hear it");
+      await inView("publish this flip");
+    });
+  }
+
   test("a returning visitor finds the explanation folded, and it opens when asked", async ({
     page,
   }) => {
@@ -353,11 +384,15 @@ test.describe("arriving from the header's make a flip", () => {
 
   test.describe("a first visit", () => {
     test.use({ storageState: { cookies: [], origins: [] } });
-    test("the picker explains the idea in five steps and the steps read pick, cut and speed, share", async ({
+    test("the picker keeps the five-step explanation one tap away, folded so the first choice is on the first screen, and the steps read pick, cut and speed, share", async ({
       page,
     }) => {
       await page.goto("/make");
       const card = page.getByTestId("how-card");
+      // folded on a first visit (decided 2026-11-06: the line above already says what to do, and an open
+      // card pushed the choice below the fold), and it opens when asked
+      await expect(card).not.toHaveAttribute("open", "");
+      await card.getByText("how graft works").click();
       await expect(card).toHaveAttribute("open", "");
       await expect(card.locator(".how-name")).toHaveText([
         "a flip",

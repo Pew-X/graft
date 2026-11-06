@@ -253,6 +253,9 @@ export function PublishStep({
             {url}
           </a>
         </p>
+        <p className="hint">
+          {kind === "source" ? copy.publish.done.linkWhatSource : copy.publish.done.linkWhat}
+        </p>
         <div className="actions">
           {/* the next stage is made from this one, in this tab. The ticket below is shown once: when it is
               neither kept in this browser nor copied, the first press warns and the second leaves. */}

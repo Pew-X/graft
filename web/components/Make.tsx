@@ -169,7 +169,6 @@ export function Make({
   const [slot, setSlot] = useState(false);
   // "how it works" on the editor also opens the plain explanation above it (on the picker it is already there)
   const [showHow, setShowHow] = useState(false);
-  const [firstVisit, setFirstVisit] = useState(false);
   const send = useCallback(
     (event: MakeEvent) => setGuide((p) => nextGuide(p, event, PERFORM_ON)),
     [setGuide],
@@ -180,8 +179,6 @@ export function Make({
     // read after the page is up, in a microtask: the server cannot know what the browser has stored
     queueMicrotask(() => {
       const from = startPhase();
-      // the plain explanation is open on a first visit, and stays however a visitor leaves it after that
-      setFirstVisit(from === "pick");
       if (from === "done") return;
       setGuide(from);
       setSlot(true);
@@ -528,7 +525,7 @@ export function Make({
         </>
       )}
       {origin === null && own === null && toTrim === null ? (
-        <HowItWorks open={firstVisit} />
+        <HowItWorks open={false} />
       ) : showHow && editing ? (
         <HowItWorks open id="how-editor" />
       ) : null}
@@ -1011,6 +1008,9 @@ function Editor({
                   : copy.own.sourceDone)}
           </p>
         ) : null}
+      </section>
+      {/* the rest of the result's controls, below the bar that keeps hear it and publish in reach */}
+      <div className="result-rest">
         {ready ? (
           <details className="details">
             <summary>{copy.details.summary}</summary>
@@ -1056,7 +1056,7 @@ function Editor({
         {opened && flipParent !== null ? (
           <OpenedNotes opened={opened} apiUrl={apiUrl} parentId={flipParent} />
         ) : null}
-      </section>
+      </div>
       {own && publishingSource ? (
         <PublishStep
           signature="source"
