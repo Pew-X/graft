@@ -4,6 +4,8 @@ A sound has a past. Hear how this one was made, then make the next step.
 
 This manual is for anyone who opens graft: what it is, why it exists, and what every button does. It describes the live site. How it is built is in [ARCHITECTURE.md](ARCHITECTURE.md), and a quick look is in [README.md](README.md).
 
+**Short on time?** Read the next five sections (about three minutes): the idea, the words, the loop, your first few minutes, and what to do with a link. Everything after that is a reference: one table for each screen, to dip into when you wonder what a button does.
+
 ## What graft is
 
 Every sound here began as one short recording. Someone cut a piece out of it and changed its speed. Someone else did the same to that, and so on. Most sounds lose their past on the way. Graft keeps it.
@@ -68,21 +70,15 @@ A link to a flip opens the roll on that flip, with the whole lineage behind it. 
 | **"stage 4 of 4 · 1/2 · -12.0 st"** (top middle) | The stage you are on, its speed as a fraction of the stage before it, and its pitch change in semitones. |
 | **"make a flip"** | Opens the make page on a ready-made flip of the stage in view, so one tap on "hear it" gives sound. |
 | **"theme"** | Cycles system, light, dark. Remembered. |
-| The title and **"play this stage"** | Press the title to hear only that stage. |
-| The small green line beside the title | A line drawn from the sound's own code: the same sound always draws the same line. |
+| The title and **"play this stage"** | Press the title to hear only that stage. The small green line beside it is drawn from the sound's own code: the same sound always draws the same line. |
 | **"flip this"** | Opens the make page on the whole stage, with no cut made. |
 | **"cut on the record"** | Marks a part on the record to flip only that (below). |
-| The credits | One line per fact: who made it, what it was, the licence. Each is **"declared · not checked"** or **"computed"**. |
+| The credits | One line per fact: who made it, what it was, the licence. Each is **"declared · not checked"** or **"computed"**. **"more"** scrolls them when they are longer than the screen. |
 | **"+ rights and details"** | The cut, speed, length, ids, what is said about rights, and **"show the code"**, the audio's hash. |
-| **"more"** | Scrolls the credits when they are longer than the screen. |
 | **"report this sound"** | Opens the report form. |
 | **"flips of this stage"** | Flips others made from this stage, newest first. **"show more"** lists more. **"play these flips as pads"** puts them on pads, and **"put the pads away"** hides them. |
-| **"←"**, **"play"** / **"pause"**, **"→"** | Play and pause, and step to the stage before or after. |
-| **"perform"** | Turns the stages into pads (below). |
-| **"about"** | The about page. **"play the guide again"** there replays the first-visit captions. |
-| **"your flips"** | In the corner, only in a browser that holds a key. |
-| **"? how it works"** | Replays the first-visit captions from the start. |
-| **"keys"** | The keyboard controls for the page. Appears once the first play is over. |
+| **"←"**, **"play"** / **"pause"**, **"→"** | Play and pause, and step to the stage before or after. **"perform"** turns the stages into pads (below). |
+| Bottom corner: **"about"**, **"your flips"**, **"? how it works"**, **"keys"** | **"about"** opens the about page, where **"play the guide again"** replays the first-visit captions. **"your flips"** shows only in a browser that holds a key. **"? how it works"** also replays the captions. **"keys"** lists the keyboard controls and appears once the first play is over. |
 
 ### The record
 
@@ -144,10 +140,9 @@ A published flip is public and its sound cannot be changed, so try as many sketc
 | What you see | What it does |
 |---|---|
 | **"name of this try"** | Optional. Left empty, it is named from the speed. |
-| **"keep as sketch"**, **"add a note"** | Keeps the cut and speed as a sketch. A note is a line to remember it by, up to 140 characters, sent with the flip if you publish. |
-| **"your sketches"** | The list. Each shows what it is cut from, its speed, length and note. |
-| **"publish this one"** (a box on each) | Ticks it for **"publish these"**. |
-| **"open"** | Loads it into the editor. **"keep as another try"** saves a changed version as a new sketch. **"back to sketch"** returns. |
+| **"keep as sketch"**, **"add a note"** | Keeps the cut and speed. A note is a line to remember it by, up to 140 characters, sent with the flip if you publish. |
+| **"your sketches"** | The list: what each is cut from, its speed, length and note. A box on each, **"publish this one"**, ticks it for **"publish these"**. |
+| **"open"** | Loads a sketch into the editor. **"keep as another try"** saves a changed version as a new sketch, and **"back to sketch"** returns. |
 | **"go on from this"** | Starts a new try that builds on the sketch. |
 | **"rename"**, **"edit the note"**, **"discard"** | Change the name or note, or delete it (**"yes, discard"** confirms). |
 
@@ -168,19 +163,18 @@ Press **"publish this flip"**. What you publish is public: anyone with the link 
 
 Links and @handles are removed from what you type, and graft tells you when it does. If the network fails, graft tries again with the same request, so nothing is made twice.
 
-**Once it is published** you see the link to your flip, with a line saying what it is for: send it to anyone and they hear every step behind your flip and can make the next one. You also see:
+**Once it is published** you see the link to your flip, with a line saying what it is for: send it to anyone and they hear every step behind your flip and can make the next one. Beside it:
 
-- **"your ticket for this flip"**: your key, shown once. **"copy the key"** copies it. It is not a login and not who you are. Lose it and the only loss is that this flip's settings cannot be changed.
-- **"keep this key in this browser"**: ticked by default, so the flip is listed under "your flips".
+- **"your ticket for this flip"** is your key, shown once. **"copy the key"** copies it. It is not a login and not who you are. Lose it and the only loss is that this flip's settings cannot be changed. **"keep this key in this browser"** is ticked by default, so the flip is listed under "your flips".
 - **"flip this next"** makes the next stage from the one you published, in the same tab. **"open it in a new tab"**, **"copy the link"** and **"manage this publication"** do what they say.
 
 A published flip's sound is fixed. To change it, flip it again: that makes a new stage after it and leaves this one as it was. Only its note can change.
 
 ### Your own sound
 
-When own sounds are switched on, you can start from a recording of your own. **"record with the microphone"** asks your browser for permission and stops at 30 seconds. **"pick an audio file"** reads up to 30 minutes (up to 150 megabytes), then **"pick the part to keep"** lets you move along it, place the brackets and press **"use this part"**. A source is at most 30 seconds.
+When own sounds are switched on, you can start from a recording of your own. **"record with the microphone"** asks permission and stops at 30 seconds. **"pick an audio file"** reads up to 30 minutes (150 megabytes); **"pick the part to keep"** then lets you place the brackets, and **"use this part"** confirms. A source is at most 30 seconds.
 
-Your sound stays on your device until you publish it. To publish it, press **"publish your sound"**, say what you are saying (**"i made this sound"** or **"i have the right to share it"**) and confirm. It is printed as declared. Graft cannot check it, so publish only sounds you made or may share. Your sound becomes stage 1, and flips of it are stage 2 onward.
+It stays on your device until you publish it. To do that, press **"publish your sound"**, say what you are saying (**"i made this sound"** or **"i have the right to share it"**) and confirm. It is printed as declared. Graft cannot check it, so publish only sounds you made or may share. Your sound becomes stage 1, and flips of it are stage 2 onward.
 
 ## Your flips and managing them
 
@@ -198,7 +192,7 @@ On a manage page, use **"use the key kept in this browser"** or paste a key into
 
 Anyone can report a sound, without an account. Press **"report this sound"**, pick **what is wrong** (the right to share it is in doubt, it holds a private conversation, it is harmful, it is spam, or something else), add a note of up to 500 characters if you like, and press **"send the report"**. No account, name or contact details are asked for or kept, so you will not hear back.
 
-The operator reads it. A sound that breaks the rules, or whose right to share is in doubt, is hidden and stays in its lineage as "no longer here". Flips built on it are held while it is looked at. Links already issued for its audio expire on their own, and a copy someone already downloaded cannot be recalled.
+The operator reads it. A sound that breaks the rules, or whose right to share is in doubt, is hidden and stays in its lineage as "no longer here", and flips built on it are held while it is looked at. Links already issued for its audio expire on their own. A copy someone already downloaded cannot be recalled.
 
 ## Keys on the keyboard
 
