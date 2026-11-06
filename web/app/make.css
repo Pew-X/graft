@@ -56,6 +56,10 @@
   clip-path: none;
   transform: none;
 }
+/* a line of words that ends in a way out leaves a little air before it (the 404 page) */
+.make .local + .quiet-link {
+  margin-top: 1rem;
+}
 .quiet-link {
   display: inline-flex;
   align-items: center;
@@ -514,7 +518,9 @@
   color: var(--muted);
   border-style: dashed;
 }
+/* when the panel is scrolled to, its top lands below the steps bar and the line pinned under it */
 .publish {
+  scroll-margin-top: 8.5rem;
   margin: 0 0 1.5rem;
   padding: 1rem 0 0;
   border-top: 1px solid var(--hair);
