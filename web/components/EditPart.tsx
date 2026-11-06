@@ -87,11 +87,11 @@ export function EditPart({
 
   const note =
     speed === null
-      ? null
-      : fill(copy.mark.edit.note, {
+      ? copy.mark.edit.fine
+      : `${fill(copy.mark.edit.note, {
           from: ((cut.end - cut.start) / RATE).toFixed(2),
           to: (outputFrames(cut.end - cut.start, speed.p, speed.q) / RATE).toFixed(2),
-        });
+        })} ${copy.mark.edit.fine}`;
 
   return (
     <div className="mark-bar" role="group" aria-label={copy.mark.toggle}>
@@ -144,11 +144,10 @@ export function EditPart({
       <button type="button" onClick={onClear}>
         {copy.mark.clear}
       </button>
-      {note || failed ? (
-        <p className="edit-note" role="status">
-          <span>{failed ? copy.mark.edit.failed : note}</span>
-        </p>
-      ) : null}
+      {/* always present, so the line appearing never moves the buttons above it */}
+      <p className="edit-note" role="status">
+        {note || failed ? <span>{failed ? copy.mark.edit.failed : note}</span> : null}
+      </p>
     </div>
   );
 }

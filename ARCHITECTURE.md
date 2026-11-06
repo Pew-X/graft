@@ -546,13 +546,14 @@ Small, in order. Nothing here is a promise. Each item says what it would change.
 4. **More chains, with a human behind them.** Seeded lineages built from real recordings, declared as the maker's own, with no audible speech and place only as a declared note. The seed path already accepts any curated source; this is content, not code.
 5. **A before and after toggle on a stage**, hearing the cut at the same start as its parent. Worth building only when a change is audible, so it follows item 4. It must never become a mode.
 6. **Split into pads.** Equal slices of the current cut put on the bank as sketches. No new concept: a chop is a sibling stage with another cut.
-7. **More formats.** `.ogg` is not decoded by every browser today. A source past 30 s would mean changing the guard, the limits and the renderer's input ceiling (2^21 frames, about 43.7 s) together.
+7. **A loupe while dragging on the record.** A small waveform strip with a centre line, shown above the pointer while a bracket is dragged, so a long sound (20 to 30 s, about 10 to 15 ms a pixel on a ring) can be marked finely; Shift-drag for fine movement, as in the editor. No modifier to discover and it works by touch. Today the record is for a rough mark and the make page, where "flip this part" opens, is for an exact one (zoom, 1 ms keys).
+8. **More formats.** `.ogg` is not decoded by every browser today. A source past 30 s would mean changing the guard, the limits and the renderer's input ceiling (2^21 frames, about 43.7 s) together.
 
 **Later: only if there is a reason**
 
-8. **A prefiltered speed-up method** as renderer method 2, to remove the known aliasing. A new method id means new vectors and a new pin; old stages keep rendering with the old one.
-9. **Limits in the database.** When more than one service task runs, per-address windows should move from process memory to a shared table, so each visitor has one allowance, not one per task.
-10. **A sequencer** over the phrase recorder, if pressing pads is not enough. A step grid is a new instrument, not lineage, so it needs a real reason.
-11. **Several parents mixed into one sound.** Outside the one-parent model: it needs a mixing operation in a new pinned renderer version, turns the chain from a line into a graph, and reopens the roll, the thread, the pads, the phrase format and the held-descendant rules. Kept as a vision.
+9. **A prefiltered speed-up method** as renderer method 2, to remove the known aliasing. A new method id means new vectors and a new pin; old stages keep rendering with the old one.
+10. **Limits in the database.** When more than one service task runs, per-address windows should move from process memory to a shared table, so each visitor has one allowance, not one per task.
+11. **A sequencer** over the phrase recorder, if pressing pads is not enough. A step grid is a new instrument, not lineage, so it needs a real reason.
+12. **Several parents mixed into one sound.** Outside the one-parent model: it needs a mixing operation in a new pinned renderer version, turns the chain from a line into a graph, and reopens the roll, the thread, the pads, the phrase format and the held-descendant rules. Kept as a vision.
 
 **Vision.** A public record of how a sound came to be: every sound shows who made it and what it was made from, you can hear each step, and anyone can make the next one. Small, plain, and honest about what it knows and what it does not.

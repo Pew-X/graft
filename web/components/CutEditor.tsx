@@ -111,7 +111,10 @@ export function CutEditor({
       setWindow(wholeView(total));
     } else {
       setZoomed(true);
-      setWindow(viewAround(cut.start, cut.end, total));
+      // a cut that covers the sound would show the whole sound, and turning zoom on would look like
+      // nothing happened: start closer instead, at the start bracket, with the controls to move on
+      const around = viewAround(cut.start, cut.end, total);
+      setWindow(isWhole(around, total) ? zoomAt(wholeView(total), total, cut.start, 4) : around);
     }
   };
 

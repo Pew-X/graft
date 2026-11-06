@@ -314,8 +314,9 @@
 .cut-editor .track[data-zoomed="true"] {
   cursor: crosshair;
 }
-/* a bracket outside the zoomed window waits at the edge it left by, dimmed */
-.handle[data-offscreen] {
+/* a bracket outside the zoomed window waits at the edge it left by, its bracket dimmed (its label keeps
+   full strength: a dimmed label fails contrast) */
+.handle[data-offscreen] .grip {
   opacity: 0.55;
 }
 /* the line that follows what is playing: thin, in the ink, never covering a bracket's touch area */
