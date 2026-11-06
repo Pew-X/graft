@@ -353,11 +353,15 @@ test.describe("arriving from the header's make a flip", () => {
 
   test.describe("a first visit", () => {
     test.use({ storageState: { cookies: [], origins: [] } });
-    test("the picker explains the idea in five steps and the steps read pick, cut and speed, share", async ({
+    test("the picker keeps the five-step explanation one tap away, folded so the first choice is on the first screen, and the steps read pick, cut and speed, share", async ({
       page,
     }) => {
       await page.goto("/make");
       const card = page.getByTestId("how-card");
+      // folded on a first visit (decided 2026-11-06: the line above already says what to do, and an open
+      // card pushed the choice below the fold), and it opens when asked
+      await expect(card).not.toHaveAttribute("open", "");
+      await card.getByText("how graft works").click();
       await expect(card).toHaveAttribute("open", "");
       await expect(card.locator(".how-name")).toHaveText([
         "a flip",
