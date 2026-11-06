@@ -1008,6 +1008,9 @@ function Editor({
                   : copy.own.sourceDone)}
           </p>
         ) : null}
+      </section>
+      {/* the rest of the result's controls, below the bar that keeps hear it and publish in reach */}
+      <div className="result-rest">
         {ready ? (
           <details className="details">
             <summary>{copy.details.summary}</summary>
@@ -1053,7 +1056,7 @@ function Editor({
         {opened && flipParent !== null ? (
           <OpenedNotes opened={opened} apiUrl={apiUrl} parentId={flipParent} />
         ) : null}
-      </section>
+      </div>
       {own && publishingSource ? (
         <PublishStep
           signature="source"

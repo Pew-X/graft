@@ -453,8 +453,53 @@
     monospace;
   color: var(--ink);
 }
-.result .details {
+.result-rest .details {
   margin-top: 0.75rem;
+}
+/* THE BAR: what you hear (hear it, publish, how long it comes out) stays in reach at the foot of the window
+   while the cut and speed above it are being worked, and sits in its own place once it is scrolled to. It
+   only ever moves up to the window's foot, never past its own place, so it never rides over what follows.
+   The page's ground reaches past the column on both sides, as the pinned line's does. */
+.panel.result {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 1rem;
+  margin: 0;
+  padding: 0.5rem 0 calc(0.5rem + env(safe-area-inset-bottom, 0px));
+  background: var(--bg);
+  box-shadow: 0 0 0 100vmax var(--bg);
+  clip-path: inset(0 -100vmax);
+}
+.panel.result > .kicker {
+  margin: 0;
+}
+.panel.result > .actions {
+  flex: 1 1 auto;
+  gap: 0.5rem 1rem;
+}
+.panel.result > .hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+/* the buttons say what they are: the group keeps its name for a screen reader, and the bar stays one row */
+.panel.result > .kicker {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.result-rest {
+  margin: 1rem 0 1.5rem;
+}
+/* keyboard focus is never left under the bar */
+html:has(.panel.result) {
+  scroll-padding-bottom: 6.5rem;
 }
 /* a closed disclosure says it opens */
 .details summary::before {
@@ -490,7 +535,7 @@
   letter-spacing: 0.08em;
   text-decoration: none;
 }
-.result .details code {
+.result-rest .details code {
   overflow-wrap: anywhere;
   font-family: var(--f-mono), monospace;
   font-size: 12px;
