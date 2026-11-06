@@ -19,7 +19,7 @@ export type Cleaned =
   { ok: true; value: string; adjusted: boolean } | { ok: false; rule: TitleRule; detail: string };
 
 const PUNCTUATION = "-_'’.,:;!?&()+/\"";
-const BUILT_IN_DENY = ["admin", "administrator", "moderator", "riffle"];
+const BUILT_IN_DENY = ["admin", "administrator", "moderator"];
 const TLDS = new Set(
   "com net org io co me ly gg app dev xyz fm tv to link site online info biz in uk us de fr ru cn jp ai gl be page".split(
     " ",
