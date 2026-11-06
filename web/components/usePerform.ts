@@ -108,7 +108,12 @@ export function usePerform({
         return false;
       }
       if (!ok[stage]) {
-        say(fill(copy.perform.unplayable, { n: stage + 1, why: why[stage] ?? "" }));
+        say(
+          fill(copy.perform.unplayable, {
+            n: stage + 1,
+            why: (why[stage] ?? "").replace(/\.$/, ""),
+          }),
+        );
         return false;
       }
       // the sound is started here, in the same task as the key, before anything is drawn

@@ -121,7 +121,9 @@ test("forgetting a key asks twice, can be backed out of, and removes only that k
   await page.goto("/flips");
   const second = page.locator(".your-flip").filter({ hasText: "second" });
   await second.getByRole("button", { name: "forget", exact: true }).click();
-  await expect(second).toContainText("you will not be able to close or withdraw this flip");
+  await expect(second).toContainText(
+    "you will not be able to close, withdraw or change the note of this flip",
+  );
   await second.getByRole("button", { name: "keep it" }).click();
   expect(Object.keys(await stored(page)).sort()).toEqual([A, B]);
   await second.getByRole("button", { name: "forget", exact: true }).click();

@@ -103,8 +103,21 @@ export function useBank({
     idsRef.current = ids;
   });
 
-  // Each pad's sound is made when the sketch is put on the bank (and kept while it stays there).
+  // Each pad's sound is made when the sketch is put on the bank (and kept while it stays there). A pad that
+  // failed is made again when the maker changes: the usual failure is "the renderer is not ready yet" on a
+  // page that has only just loaded, and that is gone by the time the maker is a new one (a pad that failed
+  // for a reason that stays, such as a stage that is gone, simply fails again).
+  const madeWith = useRef(samplesOf);
   useEffect(() => {
+    if (madeWith.current !== samplesOf) {
+      madeWith.current = samplesOf;
+      const kept: Record<string, Made> = {};
+      for (const [id, m] of Object.entries(madeRef.current)) {
+        if (typeof m === "object" && m.ok) kept[id] = m;
+      }
+      madeRef.current = kept;
+      setMade(kept);
+    }
     for (const id of ids) {
       if (madeRef.current[id] !== undefined) continue;
       madeRef.current = { ...madeRef.current, [id]: "loading" };
@@ -254,7 +267,7 @@ export function useBank({
       const m = madeRef.current[id];
       if (typeof m !== "object" || !m.ok) {
         const why = m === undefined || m === "loading" ? wordsPreparing : m.why;
-        say(fill(copy.perform.unplayable, { n: index + 1, why }));
+        say(fill(copy.perform.unplayable, { n: index + 1, why: why.replace(/\.$/, "") }));
         return;
       }
       const sounded = (): void => {

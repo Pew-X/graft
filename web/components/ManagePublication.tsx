@@ -154,7 +154,7 @@ export function ManagePublication({ id, apiUrl }: { id: string; apiUrl: string }
         </h3>
         <p className="sound-title-plain">{shown.title}</p>
         <Trace id={id} label={copy.publish.done.traceLabel} />
-        <p className="hint">{copy.publish.done.fixed}</p>
+        <p className="hint">{withdrawn ? copy.manage.fixedWithdrawn : copy.publish.done.fixed}</p>
         <p className="hint">
           {withdrawn
             ? copy.manage.withdrawnNow

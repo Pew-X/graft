@@ -1,7 +1,7 @@
 /**
  * A speed typed as a percentage. The renderer accepts any ratio between 1/4 and 4, but the editor walks
  * a committed table of stops (25 cents apart), so a typed number is snapped to the nearest stop and
- * the snap is said: "snapped to 148%". Pure.
+ * the snap is said when it shows: typing 210 gives "snapped to 209%". Pure.
  */
 import { describeSpeed } from "../roll/speed.ts";
 import { entryAt, indexOf } from "./speed.ts";
@@ -33,5 +33,7 @@ export function typedSpeed(text: string): TypedSpeed {
   const stop = indexOf(h, 10_000);
   const row = entryAt(stop);
   const percent = describeSpeed(row.p, row.q).percent;
-  return { ok: true, stop, percent, snapped: row.p * 10_000 !== h * row.q };
+  // "snapped" is said only when the speed shown differs from the number typed (to a whole percent): typing 148
+  // and getting a stop that reads 148% is just that speed, not a correction.
+  return { ok: true, stop, percent, snapped: percent !== `${Math.round(h / 100)}%` };
 }
