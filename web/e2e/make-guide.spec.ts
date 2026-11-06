@@ -323,3 +323,24 @@ test("the sketch lines never cover the editor, the strip or the bank, and are a 
     expect(b.y >= slot.y + slot.height - 1 || b.y + b.height <= slot.y + 1).toBe(true);
   }
 });
+
+test("opening the publish step leaves its public warning clear of the line pinned at the top", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 1366, height: 650 });
+  await choose(page);
+  await expect(guide(page)).toBeVisible();
+  await page.getByRole("button", { name: "publish this flip" }).click();
+  const statement = page.locator(".publish .public");
+  await expect(statement).toBeVisible();
+  await expect(page.locator(".publish input").first()).toBeFocused();
+  // wherever the page settled, the warning is not under the pinned line
+  await expect
+    .poll(async () => {
+      const top = await statement.evaluate((el) => el.getBoundingClientRect().top);
+      const pinned = await guide(page).evaluate((el) => el.getBoundingClientRect().bottom);
+      return top - pinned;
+    })
+    .toBeGreaterThanOrEqual(0);
+});

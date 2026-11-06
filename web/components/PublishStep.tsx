@@ -151,8 +151,14 @@ export function PublishStep({
   const attempt = useRef<{ signature: string; key: string } | null>(null);
   const busy = useRef(false);
 
+  const panel = useRef<HTMLElement>(null);
   useEffect(() => {
-    titleInput.current?.querySelector("input")?.focus();
+    // Focus the title without letting the browser scroll it to the middle of the window: that leaves the
+    // heading under the line pinned at the top, and the heading says what is about to be made public. The
+    // panel is brought to the top instead, below the pinned line (its scroll-margin).
+    titleInput.current?.querySelector("input")?.focus({ preventScroll: true });
+    const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    panel.current?.scrollIntoView({ block: "start", behavior: calm ? "auto" : "smooth" });
   }, []);
   const name = phase.name;
   useEffect(() => {
@@ -407,7 +413,7 @@ export function PublishStep({
 
   const publishing = phase.name === "publishing";
   return (
-    <section className="publish" aria-labelledby={`${uid}-heading`}>
+    <section ref={panel} className="publish" aria-labelledby={`${uid}-heading`}>
       <h3 id={`${uid}-heading`} className="kicker">
         {headingText}
       </h3>

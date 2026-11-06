@@ -448,6 +448,11 @@ button:disabled {
 .more-cue {
   display: none;
 }
+/* while the first play's caption is on the screen it can sit over this word on a short window, and two
+   lines of text on top of each other read as a fault: the word waits until the caption has gone */
+.roll[data-guide="narrating"] .block[data-hero="true"] .more-cue {
+  visibility: hidden;
+}
 .block[data-hero="true"][data-more="true"] .more-cue {
   display: block;
   position: absolute;
@@ -1889,6 +1894,10 @@ button:disabled {
   /* the part's length is on the record beside its brackets and in the note under the buttons */
   .mark-bar .part-length {
     display: none;
+  }
+  /* the note wraps to two lines on a phone: both are held, so a speed chosen does not change the bar's size */
+  .mark-bar .edit-note {
+    min-height: calc(2 * 1.4 * 11px + 8px);
   }
 }
 /* the part's speed, chosen where it was marked: its own row, six chips, the chosen one filled */
