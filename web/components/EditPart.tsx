@@ -87,11 +87,11 @@ export function EditPart({
 
   const note =
     speed === null
-      ? null
-      : fill(copy.mark.edit.note, {
+      ? copy.mark.edit.fine
+      : `${fill(copy.mark.edit.note, {
           from: ((cut.end - cut.start) / RATE).toFixed(2),
           to: (outputFrames(cut.end - cut.start, speed.p, speed.q) / RATE).toFixed(2),
-        });
+        })} ${copy.mark.edit.fine}`;
 
   return (
     <div className="mark-bar" role="group" aria-label={copy.mark.toggle}>

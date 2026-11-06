@@ -1075,6 +1075,8 @@ export const copy = {
       hear: "hear it",
       stop: "stop",
       note: "{from} s becomes {to} s at this speed.",
+      /** The record is for a rough mark; the make page, where this opens, is for an exact one. */
+      fine: "you can trim it exactly on the next page.",
       failed: "the sound could not be made. try again.",
     },
   },

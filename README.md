@@ -71,6 +71,7 @@ Small steps, in the order that makes the most sense. Nothing here is a promise; 
 | **Next** | More chains, with a human behind them: seeded lineages from real recordings, declared as the maker's own | The home chain is one synthesized chord; a lineage of real sounds explains the idea faster |
 | **Next** | Hear a stage against its parent (A/B) | Only worth it once a change is audible, which needs the content above |
 | **Next** | Split a cut into several pads at once | A small kit in one tap, built from sketches that already exist |
+| **Next** | A small waveform loupe while dragging a mark on the record | Marking a 20 to 30 second sound finely; today the make page is the exact tool (zoom, 1 ms keys) |
 | **Next** | More file formats (starting with `.ogg`) | Some files cannot be read; a source is capped at 30 seconds, and longer would mean a new renderer ceiling |
 | **Later** | A faster-than-1x method with an anti-alias filter, as a new renderer version | Removes the known aliasing; needs new vectors and a new pin |
 | **Later** | A sequencer over the phrase recorder | Only if pressing pads is not enough |
