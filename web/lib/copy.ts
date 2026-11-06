@@ -149,6 +149,7 @@ export const copy = {
       room: "{n} more stages fit after this one.",
       roomOne: "one more stage fits after this one.",
       none: "no more stages fit: the chain is as long as the service allows.",
+      last: "this is the last stage that fits: the chain is as long as the service allows.",
       checking: "checking how many stages fit.",
       failed: "could not check how many stages fit. the service will tell you when you publish.",
     },

@@ -187,7 +187,7 @@ test("deleting a sketch that is being compared clears the comparison", async ({ 
   await expect(page.getByTestId("compare")).toHaveCount(0);
 });
 
-test("the budget is the service's rule: the seeded chain's last stage leaves room for eight more, a source eleven", async ({
+test("the budget is the service's rule: the seeded chain's last stage leaves room for eight more, a source ten", async ({
   page,
 }) => {
   await page.goto(link(LAST.id, "0-24000"));
@@ -202,7 +202,7 @@ test("the budget is the service's rule: the seeded chain's last stage leaves roo
   await expect(row(page, "on a source").locator(".sketch-room")).toHaveText(
     "10 more stages fit after this one.",
   );
-  await expect(page.locator(".sketch-budget")).toHaveText("11 more stages fit after this one.");
+  await expect(page.locator(".sketch-budget")).toHaveText("10 more stages fit after this one.");
 });
 
 test("at zero, go on from this is disabled with the reason", async ({ page }) => {

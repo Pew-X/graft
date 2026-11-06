@@ -415,12 +415,15 @@ export function Make({
       : editorDepth.state === "failed"
         ? copy.sketch.budget.failed
         : (() => {
+            // `remaining` counts the stage being made here, so the ones that fit after it are one fewer
             const room = remaining(editorDepth.stages, aboveEditor);
             return room === 0
               ? copy.sketch.budget.none
               : room === 1
-                ? copy.sketch.budget.roomOne
-                : fill(copy.sketch.budget.room, { n: room });
+                ? copy.sketch.budget.last
+                : room === 2
+                  ? copy.sketch.budget.roomOne
+                  : fill(copy.sketch.budget.room, { n: room - 1 });
           })();
 
   // The sketch bank: up to twelve sketches on pads, heard together. It shares the page's one audio context,
