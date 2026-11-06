@@ -53,7 +53,7 @@ impl TextError {
 }
 
 /// Words nobody may use as or inside a title or name: they imply staff or an affiliation.
-pub const BUILT_IN_DENY: &[&str] = &["admin", "administrator", "moderator", "riffle"];
+pub const BUILT_IN_DENY: &[&str] = &["admin", "administrator", "moderator"];
 
 /// Top-level domains that make a bare `name.tld` look like a link. Short and deliberate: a longer
 /// list would start stripping ordinary words.
@@ -367,7 +367,6 @@ mod tests {
     fn impersonation_words_are_refused_in_any_case_and_extra_words_can_be_added() {
         assert_eq!(rule("Admin"), "denied_word");
         assert_eq!(rule("the MODERATOR said"), "denied_word");
-        assert_eq!(rule("riffle official"), "denied_word");
         assert_eq!(rule("administrator!"), "denied_word");
         assert!(
             clean("a moderately good mix", 32, &[]).is_ok(),
