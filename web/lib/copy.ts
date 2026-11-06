@@ -577,12 +577,16 @@ export const copy = {
     done: {
       heading: "published",
       link: "the link to your flip",
+      /** What the link is for, said once, under it: the history travels with it and it invites the next step. */
+      linkWhat:
+        "send it to anyone. they hear every step behind your flip, and can make the next one.",
       /** The one line that says what was published and where it sits in the lineage. */
       namedSource: "the source: {title}",
       namedFlip: "stage {n}: {title}",
       namedFlipFrom: "stage {n}: {title}, made from {parent}",
       /** The link line for a sound of one's own (the source), which is not a flip. */
       linkSource: "the link to your sound",
+      linkWhatSource: "send it to anyone. they hear your sound, and can flip it.",
       /** An older published panel, folded to one line once a newer stage stands on it. */
       folded: "published",
       foldedNote: "built on below",
