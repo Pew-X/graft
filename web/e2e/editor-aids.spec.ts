@@ -109,6 +109,30 @@ test("zoom looks closer without changing what the brackets hold, and zooming out
   expect(await valueOf(page, "end")).toBe(end);
 });
 
+test("zoom on a cut that covers the whole sound visibly zooms in at once, brackets unchanged", async ({
+  page,
+}) => {
+  await page.goto(link(`0-${FIRST.frames}`));
+  await ready(page);
+  const [start, end] = [await valueOf(page, "start"), await valueOf(page, "end")];
+  await page.getByTestId("zoom-toggle").click();
+  const text = await page.getByTestId("zoom-window").innerText();
+  const [a, b] = text
+    .match(/(\d+\.\d{3}) to (\d+\.\d{3})/)!
+    .slice(1)
+    .map(Number) as [number, number];
+  // a quarter of the sound, from its start, so turning zoom on shows a change
+  expect(a).toBe(0);
+  expect(b).toBeGreaterThan(0);
+  expect(b).toBeLessThan((FIRST.frames / 48_000) * 0.3);
+  expect([await valueOf(page, "start"), await valueOf(page, "end")]).toEqual([start, end]);
+  // and fit the cut still comes back to the whole sound
+  await page.getByRole("button", { name: "fit the cut" }).click();
+  await expect(page.getByTestId("zoom-window")).toContainText(
+    `${(FIRST.frames / 48_000).toFixed(3)}`,
+  );
+});
+
 test("a speed typed as a percentage moves the speed control, and says when it snapped", async ({
   page,
 }) => {
