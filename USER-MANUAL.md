@@ -2,11 +2,11 @@
 
 A sound has a past. Hear how this one was made, then make the next step.
 
-This manual is for anyone who opens graft: what it is, why it exists, and what every button does. It describes the live site. How it is built is in [ARCHITECTURE.md](ARCHITECTURE.md), and a quick look is in [README.md](README.md).
+This manual is for anyone who opens graft. **The quick guide is one page: read it and you can start.** After it comes the full reference, one table for every screen and button of the live site. How graft is built is in [ARCHITECTURE.md](ARCHITECTURE.md), and a quick look is in [README.md](README.md).
 
-**Short on time?** Read the first five sections (about three minutes). The rest is a reference: one table per screen, for when you wonder what a button does.
+## The quick guide
 
-## What graft is
+### What graft is
 
 Every sound here began as one short recording. Someone cut a piece out of it and changed its speed. Someone else did the same to that, and so on. Most sounds lose their past on the way. Graft keeps it.
 
@@ -14,7 +14,7 @@ You open graft and hear a sound, then each step that led to it: where it began, 
 
 That is the whole idea: a small public record of how sounds come to be. Who made each one, what it was made from, and a way to hear every step.
 
-## An independent experiment, and a careful one
+### An independent experiment, and a careful one
 
 Graft is a small experiment. It is independent: not affiliated with or endorsed by any product or company. It tries to be careful about what it claims.
 
@@ -22,6 +22,33 @@ Graft is a small experiment. It is independent: not affiliated with or endorsed 
 - **It says what it knows and what it does not.** Every fact on a sound's credits is *declared* (a person typed it), *computed* (the system worked it out and could do so again) or *unknown* (nothing establishes it). Titles, names and rights statements are shown as typed, with "not checked" beside them. Graft does not check who made a sound or whether they may share it.
 - **Small on purpose.** A flip is one cut and one speed, with no layers or effects, and nothing to export. It is a way to hear a sound's past and add a step, not a studio.
 - **A demo on a small budget.** The server sleeps when nobody is around and wakes when someone arrives. If you land while it wakes, the page says so and opens by itself, usually within a minute.
+
+### How it fits together
+
+```mermaid
+flowchart LR
+  A["Hear a lineage<br/>on the roll"] --> B["Pick a sound<br/>and cut a piece"]
+  B --> C["Change its speed<br/>and hear it"]
+  C --> D["Keep tries<br/>as sketches"]
+  D --> E["Publish<br/>the one you like"]
+  E --> F["Send the link"]
+  F --> G["Anyone hears every step<br/>and can make the next one"]
+  G --> B
+```
+
+### Your first few minutes
+
+1. **Open graft.** You see the last stage of a lineage: a title, its credits, and a record. Press **"hear how it was made"**.
+2. **Listen.** Short captions tell the story. **"skip"** ends them. Then tap a ring to hear that step.
+3. **Press "make a flip"** at the top. You land on a ready-made flip of the stage you were on. Press **"hear it"**.
+4. **Change it.** Move a bracket on the waveform, or the speed. The sound follows as you move.
+5. **Keep or send.** **"keep as sketch"** keeps the try for you. **"publish this flip"** puts it in the lineage for everyone.
+
+Nothing leaves your device until you publish. If someone sends you a link to a flip, it opens the roll on that flip with the whole lineage behind it: press play, tap the rings, press **"flip this"** to make the next step.
+
+That is enough to start. Everything below is the reference.
+
+---
 
 ## The words
 
@@ -35,29 +62,6 @@ Graft is a small experiment. It is independent: not affiliated with or endorsed 
 | **Sketch** | A try only you can hear, kept in your browser until you publish it. |
 | **Key** | What you get when you publish. The only way to change or withdraw that flip later. |
 | **Operator** | The person who runs this site. They can hide a sound that breaks the rules and switch publishing off. |
-
-## How it fits together
-
-```mermaid
-flowchart LR
-  A["Hear a lineage<br/>on the roll"] --> B["Pick a sound<br/>and cut a piece"]
-  B --> C["Change its speed<br/>and hear it"]
-  C --> D["Keep tries<br/>as sketches"]
-  D --> E["Publish<br/>the one you like"]
-  E --> F["Send the link"]
-  F --> G["Anyone hears every step<br/>and can make the next one"]
-  G --> B
-```
-
-## Your first few minutes
-
-1. **Open graft.** You see the last stage of a lineage: a title, its credits, and a record. Press **"hear how it was made"**.
-2. **Listen.** Short captions tell the story. **"skip"** ends them. Then tap a ring to hear that step.
-3. **Press "make a flip"** at the top. You land on a ready-made flip of the stage you were on. Press **"hear it"**.
-4. **Change it.** Move a bracket on the waveform, or the speed. The sound follows as you move.
-5. **Keep or send.** **"keep as sketch"** keeps the try for you. **"publish this flip"** puts it in the lineage for everyone.
-
-Nothing leaves your device until you publish. If someone sends you a link to a flip, it opens the roll on that flip with the whole lineage behind it: press play, tap the rings, press **"flip this"** to make the next step.
 
 ## The roll (the home page)
 
