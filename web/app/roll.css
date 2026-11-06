@@ -911,6 +911,8 @@ button:disabled {
     Georgia,
     serif;
   color: var(--ink);
+  /* a line that wraps breaks evenly, not with one word left alone on the second line */
+  text-wrap: balance;
 }
 .notes .status[data-empty="true"] {
   display: none;
@@ -1907,6 +1909,8 @@ button:disabled {
 }
 .mark-bar .edit-note {
   flex-basis: 100%;
+  /* one line's height (its text and the padding of its pill), held while it is empty */
+  min-height: calc(1.4 * 11px + 8px);
   margin: 0;
   text-align: center;
   font:

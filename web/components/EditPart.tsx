@@ -144,11 +144,10 @@ export function EditPart({
       <button type="button" onClick={onClear}>
         {copy.mark.clear}
       </button>
-      {note || failed ? (
-        <p className="edit-note" role="status">
-          <span>{failed ? copy.mark.edit.failed : note}</span>
-        </p>
-      ) : null}
+      {/* always present, so the line appearing never moves the buttons above it */}
+      <p className="edit-note" role="status">
+        {note || failed ? <span>{failed ? copy.mark.edit.failed : note}</span> : null}
+      </p>
     </div>
   );
 }
