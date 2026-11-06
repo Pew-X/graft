@@ -4,11 +4,12 @@ import { checkFiles } from "./check-repo.mjs";
 
 const run = (files) => checkFiles(Object.keys(files), (p) => files[p]);
 
-test("code, scripts, the two allowed documents and config pass", () => {
+test("code, scripts, the three allowed documents and config pass", () => {
   assert.deepEqual(
     run({
       "README.md": "# graft\n",
       "ARCHITECTURE.md": "# Architecture\n",
+      "USER-MANUAL.md": "# the user manual\n",
       "crates/render/src/lib.rs": "pub fn drop_it() {}\n", // Rust code is not prose
       "package.json": "{}",
     }),
@@ -58,6 +59,10 @@ test("banned vocabulary is rejected in documentation and web copy, with the line
 
 test("vocabulary is also checked in any web source file, not only page components", () => {
   assert.match(run({ "web/lib/copy.ts": 'export const m = "chef special";' }).join("\n"), /web\/lib\/copy\.ts:1: "chef"/);
+});
+
+test("the user manual is prose too: a banned word in it is caught, with its line", () => {
+  assert.match(run({ "USER-MANUAL.md": "fine\nA flip is a recipe.\n" }).join("\n"), /USER-MANUAL\.md:2: "recipe"/);
 });
 
 test("words that only contain a banned word are fine", () => {

@@ -31,6 +31,8 @@ Light and dark themes follow your system.
 
 The demo is at https://graft-fawn-six.vercel.app. Press the main button. The first visit is narrated: one short caption per step of how the sound was made, then three hints (drag the needle, mark a part and change its speed, press perform and then 1 2 3). "make a flip" in the header opens a ready-made flip of the stage in view, so one tap on "hear it" gives sound.
 
+New to graft? [USER-MANUAL.md](USER-MANUAL.md) explains the idea and every button in plain words.
+
 The home page plays from a snapshot that ships with the site, so it works even when the service is asleep. The service sleeps when nobody is using it, to keep the bill small. Opening any page wakes it; a chain page opened in the meantime says so and opens by itself, usually within a minute.
 
 ## How it works
