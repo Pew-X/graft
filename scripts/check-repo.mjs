@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// Repository hygiene: only code, scripts, README.md, ARCHITECTURE.md and config are committed;
+// Repository hygiene: only code, scripts, README.md, USER-MANUAL.md, ARCHITECTURE.md and config are committed;
 // no email addresses; no private organisation or AWS account identity; graft vocabulary in prose
 // and user-facing copy.
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
-const ALLOWED_MARKDOWN = new Set(["README.md", "ARCHITECTURE.md"]);
+const ALLOWED_MARKDOWN = new Set(["README.md", "USER-MANUAL.md", "ARCHITECTURE.md"]);
 const PLANNING_DIRS = /(^|\/)(vault|\.claude|\.scratch|docs|\.obsidian)\//i;
 const DOCUMENT = /\.(md|mdx|markdown|txt|org|rst|pdf|docx?)$/i;
 const PLANNING_NAMES = /^(spec|glossary)[^/]*\.md$|\.local$/i;
@@ -44,7 +44,7 @@ export function checkFiles(files, read) {
       continue;
     }
     if (DOCUMENT.test(path) && !ALLOWED_MARKDOWN.has(path)) {
-      found.push(`${path}: only README.md and ARCHITECTURE.md may be committed as documents`);
+      found.push(`${path}: only README.md, USER-MANUAL.md and ARCHITECTURE.md may be committed as documents`);
       continue;
     }
     if (BINARY.test(path)) continue;
