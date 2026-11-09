@@ -29,6 +29,11 @@ docker exec graft-dev-pg psql -U postgres -tAc "select 1 from pg_database where 
   || docker exec graft-dev-pg psql -U postgres -q -c "create database $db"
 # The bucket may already exist; that is fine.
 curl -s -o /dev/null -X PUT --aws-sigv4 "aws:amz:us-east-1:s3" --user graftaccess:graftsecret12345 "$s3/graft-test" || true
+# The browser reads audio straight from the store, so the store must allow the site's origin (as the cloud bucket does).
+curl -s -o /dev/null -X PUT --aws-sigv4 "aws:amz:us-east-1:s3" --user graftaccess:graftsecret12345 \
+  -H "Content-Type: application/xml" \
+  --data-binary "<CORSConfiguration><CORSRule><AllowedOrigin>http://127.0.0.1:$site_port</AllowedOrigin><AllowedMethod>GET</AllowedMethod><AllowedMethod>HEAD</AllowedMethod><AllowedHeader>*</AllowedHeader><MaxAgeSeconds>3600</MaxAgeSeconds></CORSRule></CORSConfiguration>" \
+  "$s3/graft-test?cors" || true
 
 api_pid=""
 cleanup() { [ -n "$api_pid" ] && kill "$api_pid" 2>/dev/null || true; }

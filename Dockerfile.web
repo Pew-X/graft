@@ -1,0 +1,23 @@
+# The site, for trying graft with only Docker (see docker-compose.yml and README.md, "Try it with only Docker").
+# Build context is web/. The two build arguments are read at build time: the first is where a browser
+# reaches the service, the second is the origins the page's content security policy lets it connect to.
+#
+#   docker build -f Dockerfile.web -t graft-web \
+#     --build-arg GRAFT_PUBLIC_API_URL=http://127.0.0.1:3300 \
+#     --build-arg GRAFT_CONNECT_ORIGINS=http://127.0.0.1:3300,http://127.0.0.1:59000 web
+FROM node:24.19.0-bookworm-slim AS build
+WORKDIR /app
+RUN corepack enable
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
+COPY . .
+ARG GRAFT_PUBLIC_API_URL
+ARG GRAFT_CONNECT_ORIGINS
+ENV GRAFT_PUBLIC_API_URL=${GRAFT_PUBLIC_API_URL} \
+    GRAFT_CONNECT_ORIGINS=${GRAFT_CONNECT_ORIGINS}
+RUN pnpm build
+
+ENV NODE_ENV=production
+EXPOSE 3100
+USER node
+CMD ["pnpm", "start", "-H", "0.0.0.0", "-p", "3100"]
