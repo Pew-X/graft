@@ -490,9 +490,9 @@ Tests assert behaviour and a stated guarantee, not implementation. Three seams c
 
 - **The HTTP API against real Postgres and a real S3-compatible server** (a pinned `rustfs` image): data model, idempotency, races, guardrails, moderation, security. About 400 Rust tests, plus property tests (record hash stability, no cycles, hide/hold consistency, rollup equivalence).
 - **Renderer vectors across hosts** (above).
-- **Playwright against the built site**, and against the real service for the flows that need it: roll, record, make, publish, manage, sketches, perform, axe accessibility scans in both themes, target sizes, frame budgets under CPU slowdown, and failure fixtures (offline, slow network, no 48 kHz, audio fetch failure). Chromium runs the whole suite; Firefox and WebKit run the core loop.
+- **Playwright against the built site**, and against the real service for the flows that need it: roll, record, make, publish, manage, sketches, perform, axe accessibility scans in both themes, target sizes, frame budgets under CPU slowdown, and failure fixtures (offline, slow network, no 48 kHz, audio fetch failure). Chromium runs the whole suite. WebKit runs the specs where engines differ most (the core loop, perform, phrases, sketches, long recordings), and Firefox the core loop and the page-hide flush.
 
-As of 2026-11-01: about 650 unit tests and about 510 browser tests, run locally before each merge. `scripts/precheck.sh` runs the fast gates in about half a minute; `--full` adds the whole suite.
+As of 2026-11-09: 686 unit tests and 538 browser tests in Chromium (82 in WebKit, 4 in Firefox), run locally before each merge. `scripts/precheck.sh` runs the fast gates in about half a minute; `--full` adds the whole suite.
 
 **Not tested:** subjective taste and sound quality (judged by ear), decoder differences across browsers, real Safari, a real screen reader, anything on a real phone beyond manual checks.
 
@@ -533,27 +533,20 @@ Stated so it is not discovered.
 
 ## Roadmap
 
-Small, in order. Nothing here is a promise. Each item says what it would change.
+Features that follow naturally from what graft already is: a public record of how a sound was made, with a way to hear each step and make the next one. Nothing here is a promise. Hardening work (real-device checks, a repeatable deploy, the publish tail) is not listed here; it is under [Known debt](#known-debt).
 
-**Now: close the evidence gaps**
+**Next: make the idea easier to see and to use**
 
-1. **Real-device checks.** An iPhone with two fingers on two pads and the silent switch; Safari; a screen reader. Changes nothing in the design; it may find bugs automated browsers cannot.
-2. **A repeatable deploy.** A staging environment, and the deploy workflow (`.github/workflows/deploy.yml`, written, never run) run once with a deliberate rollback. Today `aws-dev.sh redeploy` does the same job by hand against the only environment.
-3. **Settle the publish tail.** The service runs at most 4 renders at once and a flip holds its permit about 80 ms, which predicts a ceiling near 50 flips a second, where the tail began. One more run on a clean copy with `GRAFT_MAX_CONCURRENT_RENDERS` raised would confirm or reject it. Until then no ceiling is claimed.
-
-**Next: make the idea easier to see**
-
-4. **More chains, with a human behind them.** Seeded lineages built from real recordings, declared as the maker's own, with no audible speech and place only as a declared note. The seed path already accepts any curated source; this is content, not code.
-5. **A before and after toggle on a stage**, hearing the cut at the same start as its parent. Worth building only when a change is audible, so it follows item 4. It must never become a mode.
-6. **Split into pads.** Equal slices of the current cut put on the bank as sketches. No new concept: a chop is a sibling stage with another cut.
-7. **A loupe while dragging on the record.** A small waveform strip with a centre line, shown above the pointer while a bracket is dragged, so a long sound (20 to 30 s, about 10 to 15 ms a pixel on a ring) can be marked finely; Shift-drag for fine movement, as in the editor. No modifier to discover and it works by touch. Today the record is for a rough mark and the make page, where "flip this part" opens, is for an exact one (zoom, 1 ms keys).
-8. **More formats.** `.ogg` is not decoded by every browser today. A source past 30 s would mean changing the guard, the limits and the renderer's input ceiling (2^21 frames, about 43.7 s) together.
+1. **More chains, with a human behind them.** Seeded lineages built from real recordings, declared as the maker's own, with no audible speech and place only as a declared note. Today the home chain is four steps of one synthesized chord; a lineage of real sounds explains the idea in one listen. The seed path already accepts any curated source, so this is content, not code.
+2. **Hear a stage beside its parent.** A before-and-after on a published stage: the cut at the same start as the sound it came from. (Sketches already have an A and B for comparing your own tries; this compares a stage with its parent.) Worth building only once a change is audible, so it follows item 1. It must never become a mode.
+3. **Split into pads.** Equal slices of the current cut put on the bank as sketches: a small kit in one tap. No new concept, since a chop is a sibling stage with another cut.
+4. **A loupe while dragging on the record.** A small waveform strip with a centre line, shown above the pointer while a bracket is dragged, so a long sound (20 to 30 s, about 10 to 15 ms a pixel on a ring) can be marked finely. Shift-drag for fine movement, as in the editor; no modifier to discover, and it works by touch. Today the record is for a rough mark and the make page for an exact one.
+5. **More formats and longer sources.** `.ogg` is not decoded by every browser today. A source past 30 s would mean changing the guard, the limits and the renderer's input ceiling (2^21 frames, about 43.7 s) together.
 
 **Later: only if there is a reason**
 
-9. **A prefiltered speed-up method** as renderer method 2, to remove the known aliasing. A new method id means new vectors and a new pin; old stages keep rendering with the old one.
-10. **Limits in the database.** When more than one service task runs, per-address windows should move from process memory to a shared table, so each visitor has one allowance, not one per task.
-11. **A sequencer** over the phrase recorder, if pressing pads is not enough. A step grid is a new instrument, not lineage, so it needs a real reason.
-12. **Several parents mixed into one sound.** Outside the one-parent model: it needs a mixing operation in a new pinned renderer version, turns the chain from a line into a graph, and reopens the roll, the thread, the pads, the phrase format and the held-descendant rules. Kept as a vision.
+6. **A cleaner way to speed a sound up.** A prefiltered method as renderer method 2, to remove the known aliasing. A new method id means new test vectors and a new pin; old stages keep rendering with the old one.
+7. **A sequencer** over the phrase recorder, if pressing pads is not enough. A step grid is a new instrument, not lineage, so it needs a real reason.
+8. **Several parents mixed into one sound.** Outside the one-parent model: it needs a mixing operation in a new pinned renderer version, turns the chain from a line into a graph, and reopens the roll, the thread, the pads, the phrase format and the held-descendant rules. Kept as a vision.
 
 **Vision.** A public record of how a sound came to be: every sound shows who made it and what it was made from, you can hear each step, and anyone can make the next one. Small, plain, and honest about what it knows and what it does not.

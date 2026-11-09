@@ -63,27 +63,35 @@ What bent is also on record: at 250 reads a second the 1-unit database was the l
 
 ## Roadmap
 
-Small steps, in the order that makes the most sense. Nothing here is a promise; the reasons and the costs are in [ARCHITECTURE.md](ARCHITECTURE.md#roadmap).
+Where it could go next, in order. Nothing here is a promise; the reasons and the costs are in [ARCHITECTURE.md](ARCHITECTURE.md#roadmap).
 
-| When | What | Why it is useful |
-|---|---|---|
-| **Now** | Test on real devices: two fingers on two pads on an iPhone, the silent switch, Safari, a screen reader | The core loop is covered by automated browsers and one laptop; a phone in a hand is the missing evidence |
-| **Now** | A repeatable deploy: a staging environment and the deploy workflow run once, with a rollback | Today a release is a script run by hand against the only environment |
-| **Now** | Settle the publish tail: re-run the load test with a higher render limit | One untested hypothesis says the ceiling is a setting, not the hardware |
-| **Next** | More chains, with a human behind them: seeded lineages from real recordings, declared as the maker's own | The home chain is one synthesized chord; a lineage of real sounds explains the idea faster |
-| **Next** | Hear a stage against its parent (A/B) | Only worth it once a change is audible, which needs the content above |
-| **Next** | Split a cut into several pads at once | A small kit in one tap, built from sketches that already exist |
-| **Next** | A small waveform loupe while dragging a mark on the record | Marking a 20 to 30 second sound finely; today the make page is the exact tool (zoom, 1 ms keys) |
-| **Next** | More file formats (starting with `.ogg`) | Some files cannot be read; a source is capped at 30 seconds, and longer would mean a new renderer ceiling |
-| **Later** | A faster-than-1x method with an anti-alias filter, as a new renderer version | Removes the known aliasing; needs new vectors and a new pin |
-| **Later** | A sequencer over the phrase recorder | Only if pressing pads is not enough |
-| **Later** | Several parents mixed into one sound | Turns the chain from a line into a graph; a vision, not a plan |
+| Next | Why it fits |
+|---|---|
+| **More chains, with a human behind them** | The home chain is one synthesized chord; a lineage of real recordings explains the idea in one listen |
+| **Hear a stage beside its parent** | A before-and-after on a published stage; worth building once a change is audible, so it follows the line above |
+| **Split a cut into several pads** | A small kit in one tap, built from sketches that already exist |
+| **A small loupe while dragging on the record** | Marking a 20 to 30 second sound finely, by touch too; today the make page is the exact tool |
+| **More file formats, longer sources** | Some files cannot be read today; `.ogg` first |
+
+Later, only if there is a reason: a cleaner speed-up method (a new renderer version), a sequencer over the phrase recorder, and several parents mixed into one sound (which turns the chain from a line into a graph).
 
 The idea underneath is a small public record of how sounds come to be: who made each one, what it was made from, and a way to hear every step and make the next one.
 
-## Run it
+## Try it with only Docker
 
-Needs the pinned Rust toolchain (installed from `rust-toolchain.toml` by rustup), Node 24 with pnpm, and Docker.
+Needs Docker with Compose, and nothing else: no Rust, no Node.
+
+```sh
+docker compose up --build     # builds the service (Rust) and the site; the first build needs a few minutes
+```
+
+When it settles, open http://127.0.0.1:3100. It runs Postgres, an S3-compatible store, the service with the chain already seeded, and the site, all bound to 127.0.0.1 with throwaway credentials. Visitor uploads are on; the operator page is at `/admin` with the local secret `local-admin-secret-0123456789`.
+
+`docker compose down` stops it; add `-v` to forget the database and the audio. The pieces are in `docker-compose.yml`, `Dockerfile.service` and `Dockerfile.web`.
+
+## Run it for development
+
+Needs Docker (for Postgres and the store), the Rust toolchain pinned in `rust-toolchain.toml` (rustup installs it: 1.97.1), Node 24.19 with pnpm 11 (`corepack enable` picks the version in `web/package.json`), and curl 7.75 or newer. The first run compiles the Rust workspace and builds the site, so allow a few minutes.
 
 Start two throwaway containers (Postgres and an S3-compatible store, bound to localhost), then everything at once:
 
@@ -92,11 +100,12 @@ docker run -d --name graft-dev-pg -e POSTGRES_PASSWORD=graft -p 127.0.0.1:55432:
 docker run -d --name graft-dev-s3 -p 127.0.0.1:59000:9000 \
   -e RUSTFS_ACCESS_KEY=graftaccess -e RUSTFS_SECRET_KEY=graftsecret12345 \
   rustfs/rustfs@sha256:9ca9559533b537d10482fe923288b676ad08f92a7069d9a17327fbae3cab688b
-curl -X PUT --aws-sigv4 "aws:amz:us-east-1:s3" --user graftaccess:graftsecret12345 http://127.0.0.1:59000/graft-test
+until curl -fsS -o /dev/null -X PUT --aws-sigv4 "aws:amz:us-east-1:s3" --user graftaccess:graftsecret12345 \
+  http://127.0.0.1:59000/graft-test; do sleep 1; done      # waits for the store, then makes the bucket
 sh scripts/dev-local.sh      # the site is then at http://127.0.0.1:3100
 ```
 
-Those are throwaway credentials for throwaway containers. `dev-local.sh` builds the renderer, starts the service with visitor uploads on (`--no-uploads` leaves them off), seeds the chain and serves the built site. It keeps its own database and bucket prefix and touches nothing else.
+Those are throwaway credentials for throwaway containers. If the containers already exist from an earlier run, start them with `docker start graft-dev-pg graft-dev-s3` (or remove them with `docker rm -f` and run the commands again). `dev-local.sh` builds the renderer, starts the service with visitor uploads on (`--no-uploads` leaves them off), seeds the chain and serves the built site. It keeps its own database and bucket prefix and touches nothing else.
 
 Run the tests:
 
