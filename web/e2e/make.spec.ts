@@ -386,6 +386,28 @@ test.describe("arriving from the header's make a flip", () => {
     });
   }
 
+  // The bar of hear it and publish sits over the foot of the page. On a short laptop window the waveform must
+  // not hide under it: whole at 650 high, and at least its top half (with the brackets) at 547.
+  test.describe("the waveform is not hidden under the bar on a short window (first visit)", () => {
+    test.use({ storageState: { cookies: [], origins: [] } });
+    for (const size of [
+      { height: 650, shown: 1 },
+      { height: 547, shown: 0.5 },
+    ]) {
+      test(`1366x${size.height}`, async ({ page }) => {
+        await page.setViewportSize({ width: 1366, height: size.height });
+        await page.goto(link(chain.at(-1)!.id, [0, 43200], 3, 2));
+        await ready(page);
+        const track = await page.locator(".cut-editor .track").boundingBox();
+        const bar = await page.locator(".panel.result").boundingBox();
+        expect(track).not.toBeNull();
+        expect(bar).not.toBeNull();
+        const visible = Math.min(track!.y + track!.height, bar!.y) - track!.y;
+        expect(visible / track!.height).toBeGreaterThanOrEqual(size.shown);
+      });
+    }
+  });
+
   test("a returning visitor finds the explanation folded, and it opens when asked", async ({
     page,
   }) => {
