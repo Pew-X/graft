@@ -1163,6 +1163,10 @@ button:disabled {
   flex: 1 1 0;
   text-align: left;
 }
+/* while recording the line is not shown, but it keeps its room: rec turns into stop rec where it stood */
+.bank-phrase .bank-help-how[data-recording="true"] {
+  visibility: hidden;
+}
 /* a narrow screen has no room for a line of its own under each group: the rule's sentence moves into the
    status pill under the bank (where the keys hint, useless without a keyboard, would be), and the
    line about play and loop goes; the buttons keep their titles */

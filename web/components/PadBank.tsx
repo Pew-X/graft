@@ -186,8 +186,13 @@ export const PadBank = memo(function PadBank({
             </button>
           </>
         ) : null}
-        {phrase.has || phrase.recording ? null : (
-          <p className="bank-help bank-help-how" data-testid="phrase-says">
+        {phrase.has ? null : (
+          // kept (but hidden) while recording, so rec keeps its place when it turns into stop rec
+          <p
+            className="bank-help bank-help-how"
+            data-testid="phrase-says"
+            data-recording={phrase.recording ? "true" : undefined}
+          >
             {copy.phrase.howTo}
           </p>
         )}

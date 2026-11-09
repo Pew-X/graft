@@ -52,6 +52,32 @@ async function enter(page: Page): Promise<void> {
   await expect(page.locator(".roll")).toHaveAttribute("data-latency", /\d/);
 }
 
+// rec turns into stop rec: it must stay where it was across the panel, or a second tap aimed at it misses.
+// (The status line below grows to two lines while recording, which lifts the whole panel a little: that is
+// not what this pins.)
+test("rec keeps its place across the panel when it turns into stop rec", async ({ page }) => {
+  await arrive(page);
+  await enter(page);
+  // let the panel finish opening before measuring
+  await expect
+    .poll(async () => {
+      const a = await rec(page).boundingBox();
+      await page.waitForTimeout(150);
+      const b = await rec(page).boundingBox();
+      return a !== null && b !== null && a.x === b.x && a.y === b.y;
+    })
+    .toBe(true);
+  const before = await rec(page).boundingBox();
+  await rec(page).click();
+  await expect(rec(page)).toHaveText(/stop rec/);
+  const during = await rec(page).boundingBox();
+  expect(before).not.toBeNull();
+  expect(during).not.toBeNull();
+  // the left edge is where it was, and the wider button still covers the old centre horizontally
+  expect(Math.abs(during!.x - before!.x)).toBeLessThan(1);
+  expect(during!.x + during!.width).toBeGreaterThan(before!.x + before!.width / 2);
+});
+
 test("rec keeps the pads pressed, the address carries them, play runs them again", async ({
   page,
 }) => {
