@@ -1586,6 +1586,15 @@ html:has(.panel.result) {
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
+/* a closed panel says it opens (the summary is a flex row, so it has no marker of its own) */
+.move-sketches summary::before {
+  content: "+";
+  display: inline-block;
+  width: 1.4em;
+}
+.move-sketches[open] summary::before {
+  content: "\2212";
+}
 .move-sketches .hint {
   overflow-wrap: anywhere;
   font:
@@ -2003,4 +2012,25 @@ html:has(.panel.result) {
   font-size: 0.9rem;
   color: var(--ink);
   overflow-wrap: anywhere;
+}
+
+/* a short window (a laptop with its toolbars): the bar of hear it and publish sits over the foot of the page, so
+   the editor is made a little more compact to keep the waveform above it. Everything stays; only the air
+   and the size of the title slab and the waveform give way. */
+@media (max-height: 700px) {
+  .make .steps {
+    margin-bottom: 0.5rem;
+  }
+  .make .stage-head {
+    margin-bottom: 0.5rem;
+  }
+  .make .slab-text {
+    font-size: clamp(32px, 6vw, 48px);
+  }
+  .make .making-from {
+    margin: 0.1rem 0 0.5rem;
+  }
+  .cut-editor .track {
+    height: 7rem;
+  }
 }

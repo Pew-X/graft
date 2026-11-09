@@ -63,6 +63,16 @@ async function seed(page: Page): Promise<void> {
   });
 }
 
+// The summary is a flex row with no marker of its own: it must still look like something that opens.
+test("the closed panel shows a plus and the open one a minus", async ({ page }) => {
+  await page.goto("/make");
+  const summary = page.getByTestId("move-sketches").locator("summary");
+  const marker = () => summary.evaluate((el) => getComputedStyle(el, "::before").content);
+  expect(await marker()).toBe('"+"');
+  await summary.click();
+  expect(await marker()).toBe('"\u2212"');
+});
+
 async function copiedLink(page: Page): Promise<string> {
   await page.goto("/make");
   await page.getByTestId("move-sketches").locator("summary").click();
