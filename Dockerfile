@@ -1,9 +1,8 @@
-# The throwaway check image for ticket 03b: it builds the canonical renderer artefact and the check
-# service, and runs the vector table inside whatever machine it is deployed to. The deploy pipeline
-# (ticket 34) replaces it with the real service image.
+# The host-check image: it builds the canonical renderer artefact and the check service, and runs the
+# vector table inside whatever machine it is deployed to. The service itself is Dockerfile.service.
 #
-# Base images are pinned by version tag. Pinning by digest needs registry access and is done when the
-# real image is written (ticket 34).
+# Base images are pinned by version tag; pinning by digest needs registry access and is done by the
+# deploy script, which records the digest it built from.
 FROM rust:1.97.1-bookworm AS build
 WORKDIR /src
 COPY . .
