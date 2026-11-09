@@ -477,6 +477,13 @@ export function Make({
     },
   };
   const picking = origin === null && own === null && toTrim === null;
+  // Leaving the list for the editor starts at the top of the editor, not wherever the list was
+  // scrolled to: a sound picked low in the list would otherwise open the editor half way down.
+  const wasPicking = useRef(picking);
+  useEffect(() => {
+    if (wasPicking.current && !picking) window.scrollTo({ top: 0, behavior: "instant" });
+    wasPicking.current = picking;
+  }, [picking]);
   useEffect(() => {
     if (guide === "pick" && editing) queueMicrotask(() => send("picked"));
   }, [guide, editing, send]);

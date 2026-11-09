@@ -53,6 +53,22 @@ test("recording or picking your own sound is on the first screen of the picker",
   await expect(page.locator("label.file")).toBeInViewport();
 });
 
+// A sound picked low in the list must open the editor at its top, not half way down the page.
+test("a sound picked low in the list opens the editor at the top of the page", async ({ page }) => {
+  await page.goto("/make");
+  const low = page.getByRole("button", { name: "flip this sound: trap hats" });
+  // keep the page tall while the list is swapped for the editor, so the browser cannot hide a
+  // missing scroll by clamping it to a shorter page
+  await page.evaluate(() => {
+    document.body.style.minHeight = "6000px";
+  });
+  await low.scrollIntoViewIfNeeded();
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(200);
+  await low.click();
+  await expect(page.getByRole("button", { name: "hear it" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+});
+
 test("choosing a sound opens the cut and the speed with a flip already sounding at a fifth up", async ({
   page,
 }) => {
