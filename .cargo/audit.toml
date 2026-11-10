@@ -1,0 +1,9 @@
+# Reviewed exceptions for `cargo audit`, each with the reason. `cargo deny check` reads the resolved
+# dependency graph and does not need them; `cargo audit` reads Cargo.lock, which lists more.
+[advisories]
+ignore = [
+  # libsqlite3-sys is in Cargo.lock only because sqlx's macro crate lists its optional SQLite driver.
+  # The service uses Postgres; the driver is never compiled or linked (`cargo tree -i libsqlite3-sys
+  # --target all` prints nothing). Remove when sqlx stops listing it or the lock moves past 0.39.
+  "RUSTSEC-2026-0459",
+]

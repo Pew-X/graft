@@ -300,7 +300,7 @@ jobs:
     name: cross-host vectors (macos-15)
     # macOS minutes cost ten times Linux minutes, so this runs only when started by hand (Actions,
     # "Run workflow"): before a release, or when a change could behave differently on arm64. The
-    # builder's own machine is macOS arm64 and runs the same tests locally.
+    # the author's own machine is macOS arm64 and runs the same tests locally.
     if: github.event_name == 'workflow_dispatch'
     runs-on: macos-15
     timeout-minutes: 25

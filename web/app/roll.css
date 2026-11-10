@@ -1,5 +1,4 @@
-/* The look: the locked direction, "the label + the beam" (vault/prototypes/t11-roll, variant E), as
-   production styles. Colours and dyes are the tokens in lib/theme/tokens.ts; fonts come from layout.tsx.
+/* The look: the locked direction, "the label + the beam", as production styles. Colours and dyes are the tokens in lib/theme/tokens.ts; fonts come from layout.tsx.
    Every decorative layer (paper grain, the torn edge, the dye split) can be switched off with
    <html data-decor="off"> and the page stays fully usable. Targets are 44px or larger. */
 *,
