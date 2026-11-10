@@ -261,7 +261,7 @@ async fn seeding_the_curated_set_twice_makes_no_duplicates() {
         .await
         .expect("seeded again");
     assert_eq!(first, second, "the same ids both times");
-    assert_eq!(first.len(), 10, "the ten sources the builder chose");
+    assert_eq!(first.len(), 10, "the ten curated sources");
     assert_eq!(h.count("publications").await, 10);
     assert_eq!(h.count("content_records").await, 10);
     assert_eq!(h.blobs.len(), 10, "each sound is stored once");
