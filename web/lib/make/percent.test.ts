@@ -48,7 +48,17 @@ test("out of range, empty and not a number are refused with a reason", () => {
   assert.deepEqual(typedSpeed("24.99"), { ok: false, why: "range" });
   assert.deepEqual(typedSpeed("401"), { ok: false, why: "range" });
   assert.deepEqual(typedSpeed("  "), { ok: false, why: "empty" });
-  for (const bad of ["abc", "1e3", "-50", "12345", "1.234", "10 0"]) {
+  for (const bad of ["abc", "1e3", "-50", "1.234", "10 0"]) {
     assert.deepEqual(typedSpeed(bad), { ok: false, why: "number" }, bad);
+  }
+});
+
+test("a number with many digits is out of range, not 'not a number'", () => {
+  for (const text of ["99999", "123456", "1234567", "123456789012345678"]) {
+    assert.deepEqual(typedSpeed(text), { ok: false, why: "range" }, text);
+  }
+  // still not numbers: a sign, letters, an empty digit run
+  for (const text of ["-5", "abc", "1e9", "12a"]) {
+    assert.deepEqual(typedSpeed(text), { ok: false, why: "number" }, text);
   }
 });
