@@ -2,6 +2,8 @@
 
 How graft is built, why, and what is known to be weak. For what graft is and how to try it, read the [README](README.md). Each section ends with the files to read; names are symbols and paths, not line numbers, so they stay true.
 
+**About "CI" in this document.** The checks it names are defined in `.github/workflows/ci.yml`, and `scripts/precheck.sh` runs the same gates on a laptop (`--full` adds the whole Rust and browser suites). GitHub Actions is paused on this repository to save build minutes: the last workflow run was on 2026-10-28, and every change since was checked locally before it was merged. So read "CI fails" as "the check fails when run".
+
 **Contents.** [Overview](#overview) · [Module boundaries](#module-boundaries) · [Determinism contract](#determinism-contract) · [Determinism evidence](#determinism-evidence) · [Data model](#data-model) · [Publishing a flip](#publishing-a-flip) · [Concurrency and idempotency](#concurrency-and-idempotency) · [Ownership and moderation](#ownership-and-moderation) · [Abuse guardrails](#abuse-guardrails) · [Blobs](#blobs) · [Events and the outbox](#events-and-the-outbox) · [First open and the static snapshot](#first-open-and-the-static-snapshot) · [Playback model](#playback-model) · [The web app](#the-web-app) · [Hosting and environments](#hosting-and-environments) · [Configuration](#configuration) · [Observability and operations](#observability-and-operations) · [Operator runbook](#operator-runbook) · [Security](#security) · [Measured numbers](#measured-numbers) · [Testing](#testing) · [Decisions and trade-offs](#decisions-and-trade-offs) · [Known debt](#known-debt) · [Roadmap](#roadmap)
 
 ## Overview
@@ -63,7 +65,7 @@ flowchart TD
 - The AWS SDK lives in `queue` and nowhere else, so the many test binaries that link other crates never build it.
 - Nothing depends on `api`.
 
-Conventions, all enforced in CI: pinned toolchain (`rust-toolchain.toml`, `.node-version`), `rustfmt`, clippy with warnings as errors, no `unwrap`/`expect`/`panic!` outside tests, `unsafe` denied except at the renderer's C boundary, TypeScript strict, ESLint, Prettier. Only code, scripts, this file and the README are committed (`scripts/check-repo.mjs`). Branches go feature → `dev` → `staging` → `main` by pull request. Migrations are plain numbered SQL in `crates/storage/migrations`, forward-only; a change that must be undone is a new migration, and shape changes go expand, ship, then contract.
+Conventions, all enforced in CI: pinned toolchain (`rust-toolchain.toml`, `.node-version`), `rustfmt`, clippy with warnings as errors, no `unwrap`/`expect`/`panic!` outside tests, `unsafe` denied except at the renderer's C boundary, TypeScript strict, ESLint, Prettier. Only code, scripts, config and four documents (the README, the user manual, this file and the security policy) are committed (`scripts/check-repo.mjs`). Branches go feature → `dev` → `staging` → `main` by pull request. Migrations are plain numbered SQL in `crates/storage/migrations`, forward-only; a change that must be undone is a new migration, and shape changes go expand, ship, then contract.
 
 *Read:* `Cargo.toml`, `scripts/check-crate-graph.mjs`, `scripts/check-repo.mjs`.
 
@@ -523,9 +525,10 @@ Stated so it is not discovered.
 - **Per-address limits are per process**; the global cap and storage threshold are the cross-instance controls.
 - **One shared operator secret**, no audit trail of who used it; the operator page sends it from the browser in a header.
 - **The site's policy allows inline scripts.** The defence is escaping and the character rules.
+- **GitHub Actions is paused**, so the workflows are not running; checks are run locally with `scripts/precheck.sh`.
 - **The deploy workflow has never run**; deploys are done by `aws-dev.sh redeploy`.
 - **One environment, one task.** No failover, no staging.
-- **No test on a real phone in CI**, no real Safari, and Firefox does not launch on the maintainer's machine, so it is covered in CI only.
+- **No test on a real phone**, no real Safari, and Firefox does not launch on the author's machine, so its core-loop spec only runs where the workflow can run it.
 - **The publish tail at about 50 flips a second** is explained by a hypothesis that was not tested.
 - **A stored source is capped at 30 s, an output at 60 s**: the storage guard's overshoot bound is the burst times the largest blob, and a much longer one would push it past the storage limit and stop the service starting. A bank of twelve 60 s pads is about 138 MB of audio buffers on a phone.
 - **Slow header attacks** are left to the load balancer.

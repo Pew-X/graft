@@ -5,6 +5,12 @@ allowBuilds:
 # braces <=3.0.3 (stack exhaustion on deeply nested glob patterns). No patched
 # release exists on npm. Reached only through eslint-config-next in dev tooling,
 # never from user input or the shipped bundle. Remove when a fix is published.
+#
+# minimatch >=7 <11.0.1 (denial of service through glob amplification). Reached only through
+# eslint-config-next and typescript-eslint in dev tooling, which match the repository's own file
+# globs, never user input, and it is not in the shipped bundle. Remove when eslint-config-next moves
+# to minimatch 11.
 auditConfig:
   ignoreGhsas:
     - GHSA-vfj7-8cjw-p6xm
+    - GHSA-g3hv-75wg-m249

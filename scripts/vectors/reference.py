@@ -142,7 +142,7 @@ def downmix(left, right):
     return (left + right + 1) >> 1
 
 
-# Recorded by the original renderer spike (2026-10-20, vault research notes): sha256 of the output for
+# Recorded by the original renderer spike (2026-10-20): sha256 of the output for
 # each of its 14 vectors, identical on wasmtime, native, Node, Chrome, WebKit and wazero.
 SPIKE_HASHES = {
     "id-lin": "7209eda4c9e3368aa83e6c41b5b98493aa1474479e8082ef56f3019d5c22e873",

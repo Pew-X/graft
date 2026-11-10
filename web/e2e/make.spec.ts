@@ -43,7 +43,7 @@ test("the picker offers the ten curated sources with their declared licence line
 });
 
 // A visitor who came to use their own sound must find the way in without scrolling past thirteen
-// rows (the builder did not see it when it sat below them).
+// rows (it was missed when it sat below them).
 test("recording or picking your own sound is on the first screen of the picker", async ({
   page,
 }) => {

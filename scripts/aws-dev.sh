@@ -53,7 +53,7 @@ PREFIX=graft-dev
 CIDR=10.42.0.0/16
 PUB_A_CIDR=10.42.0.0/24; PUB_B_CIDR=10.42.1.0/24; PRIV_A_CIDR=10.42.10.0/24; PRIV_B_CIDR=10.42.11.0/24
 ENGINE_VERSION=16.15
-# Graviton: native to the builder's machine, so the image builds without emulation, and cheaper on Fargate.
+# Graviton: native to the author's machine, so the image builds without emulation, and cheaper on Fargate.
 ARCH=ARM64
 MAX_ACU=1
 LOG_GROUP=/$PREFIX/service
@@ -636,7 +636,7 @@ phase_cool() {
 # A visit wakes the service; a five-minute check stops it when nobody has used it (tools/wake has the
 # decisions and their tests). One small Lambda with a web address, its own role that may touch only the
 # one service, a shared secret kept in the secrets store (the value is never printed), and a schedule. The
-# schedule is created OFF, so nothing can stop the service until the builder turns the check on.
+# schedule is created OFF, so nothing can stop the service until the operator turns the check on.
 WAKE_FN=$PREFIX-wake
 WAKE_RULE=$PREFIX-wake-check
 wake_lb_dimension() { # the load balancer's CloudWatch name, "app/<name>/<id>"; Express Mode keeps one shared load balancer
@@ -733,8 +733,8 @@ EOF
 # One monthly cost budget for this region, with an email when spend reaches the alarm amount and when it
 # is forecast to reach the limit. It only warns: nothing here stops spending (the cloud is stopped by park,
 # or by the idle check). The Budgets service is global (its endpoint is in us-east-1) and a budget is an
-# account-level object; the builder said yes to this one call on 2026-10-28 (the ledger has it). The cost
-# filter is the region, because the account also holds another project's resources elsewhere and this
+# account-level object, so creating it is a deliberate, separately confirmed call. The cost
+# filter is the region, because the account may hold other resources elsewhere and this
 # budget must not count them. The address is read from the environment, put only in a temporary file,
 # and never printed, so it appears in no output, ledger row or committed file.
 BUDGET=$PREFIX-month
@@ -759,7 +759,7 @@ EOF
 [{"Notification":{"NotificationType":"ACTUAL","ComparisonOperator":"GREATER_THAN","Threshold":$alarm,"ThresholdType":"ABSOLUTE_VALUE"},"Subscribers":[{"SubscriptionType":"EMAIL","Address":"$addr"}]},
  {"Notification":{"NotificationType":"FORECASTED","ComparisonOperator":"GREATER_THAN","Threshold":$limit,"ThresholdType":"ABSOLUTE_VALUE"},"Subscribers":[{"SubscriptionType":"EMAIL","Address":"$addr"}]}]
 EOF
-  mut "create the monthly budget $BUDGET: $limit USD for $REGION, an email at $alarm USD actual and at $limit USD forecast, to the builder's own address (not recorded)" \
+  mut "create the monthly budget $BUDGET: $limit USD for $REGION, an email at $alarm USD actual and at $limit USD forecast, to the operator's own address (not recorded)" \
     budgets create-budget --account-id "$ACCOUNT" --budget "file://$b" --notifications-with-subscribers "file://$n"
 }
 
@@ -957,7 +957,7 @@ phase_teardown() {
     for p in $(probe iam list-role-policies --role-name "$PREFIX-$r" --query 'PolicyNames'); do soft "delete inline policy $p of $PREFIX-$r" iam delete-role-policy --role-name "$PREFIX-$r" --policy-name "$p"; done
     soft "delete role $PREFIX-$r" iam delete-role --role-name "$PREFIX-$r"
   done
-  echo "skip: the GitHub sign-in provider in this account belongs to another project and is left alone" >&2
+  echo "skip: the GitHub sign-in provider in this account was not created by this script and is left alone" >&2
 
   vpc=$(vpc_id || true)
   if [ -n "$vpc" ]; then

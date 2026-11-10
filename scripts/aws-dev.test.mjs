@@ -599,7 +599,7 @@ test("the budget is 60 USD a month for this region, with a warning at 45 actual 
   assert.match(sent, /"BudgetName":"graft-dev-month"/);
   assert.match(sent, /"Amount":"60","Unit":"USD"/);
   assert.match(sent, /"TimeUnit":"MONTHLY"/);
-  assert.match(sent, /"CostFilters":\{"Region":\["ap-south-1"\]\}/, "this region only: the account holds another project elsewhere");
+  assert.match(sent, /"CostFilters":\{"Region":\["ap-south-1"\]\}/, "this region only: the account may hold other resources elsewhere");
   assert.match(sent, /"NotificationType":"ACTUAL".*"Threshold":45/);
   assert.match(sent, /"NotificationType":"FORECASTED".*"Threshold":60/);
   const custom = plan(sandbox().run(["budget", "--limit", "80", "--alarm", "50"], { DRY_RUN: "1", GRAFT_ALARM_EMAIL: ALARM }));

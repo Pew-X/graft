@@ -1,5 +1,5 @@
 /**
- * The record, drawn: the locked look (vault/prototypes/t11-roll, variant E) as production code.
+ * The record, drawn: the locked look, as production code.
  * A black disc, large enough to bleed off the screen, with a band of fine grooves for each stage in
  * that stage's dye. The grooves wobble with the stage's real waveform, the ones already played are
  * brighter, the part the next stage kept is brighter, the groove at the playhead glows phosphor green,

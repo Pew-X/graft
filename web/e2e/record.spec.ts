@@ -219,7 +219,7 @@ test("the disc keeps frames flowing while a stage plays", async ({ page }) => {
 
 // The frame budget, stated with numbers. Target: 60 frames a second (16.7 ms a frame). The CPU is slowed with
 // the browser's own throttle (Chrome's DevTools call 4x "mid-tier mobile" and 6x "low-tier mobile") while the
-// deepest chain (twelve stages, thirteen rings) plays. Measured on the builder's Mac, headless: the median
+// deepest chain (twelve stages, thirteen rings) plays. Measured on a laptop, headless: the median
 // stayed at 16.7 ms up to 40x. This is a proxy, not a phone: the real-phone check stays manual and is named
 // as open in ARCHITECTURE.md. The record degrades to cached bands when the median of 30 frames passes 26 ms
 // (lib/record/frames.ts).
