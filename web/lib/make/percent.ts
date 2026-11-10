@@ -19,9 +19,12 @@ function hundredths(text: string): number | null {
     .trim()
     .replace(/\s*%$/, "")
     .replace(",", ".")
-    .match(/^(\d{1,4})(?:\.(\d{1,2}))?$/);
+    .match(/^(\d+)(?:\.(\d{1,2}))?$/);
   if (!m) return null;
-  return Number(m[1]) * 100 + Number((m[2] ?? "").padEnd(2, "0"));
+  // digits of any length are a number; one too long to matter is simply far out of range
+  const digits = m[1] ?? "";
+  const whole = digits.length > 6 ? 1_000_000 : Number(digits);
+  return whole * 100 + Number((m[2] ?? "").padEnd(2, "0"));
 }
 
 export function typedSpeed(text: string): TypedSpeed {
