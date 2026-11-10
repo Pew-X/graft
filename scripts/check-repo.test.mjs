@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkFiles } from "./check-repo.mjs";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { checkFiles, loadPrivatePatterns } from "./check-repo.mjs";
 
 const run = (files) => checkFiles(Object.keys(files), (p) => files[p]);
 
@@ -80,19 +83,30 @@ test("the web app may not import or depend on the test tooling", () => {
   assert.doesNotMatch(found, /ok\.tsx/);
 });
 
-// The fixtures build their strings at run time so that this file does not trip the rule it tests.
-const org = ["trel", "lys"].join("");
-const account = ["7044", "2742", "7583"].join("");
+// Stand-ins: the real private patterns live in an untracked file, never here.
+const org = "acme-labs";
+// Not an AWS documented example id, so the check treats it like a real one.
+const account = "210987654321";
 
-test("the builder's other organisation never appears in a tracked file, in any case", () => {
-  const found = run({
-    "scripts/a.sh": `profile=${org}-dev`,
-    "web/lib/b.ts": `// ${org.toUpperCase()}`,
-    "scripts/ok.sh": "profile=graft-dev",
-  }).join("\n");
-  assert.match(found, /scripts\/a\.sh: names a private organisation/);
-  assert.match(found, /web\/lib\/b\.ts: names a private organisation/);
+test("a private pattern from the local file is refused wherever it appears, in any case", () => {
+  const found = checkFiles(
+    ["scripts/a.sh", "web/lib/b.ts", "scripts/ok.sh"],
+    (p) => ({ "scripts/a.sh": `profile=${org}-dev`, "web/lib/b.ts": `// ${org.toUpperCase()}`, "scripts/ok.sh": "profile=graft-dev" })[p],
+    [new RegExp(org, "i")],
+  ).join("\n");
+  assert.match(found, /scripts\/a\.sh: matches a private pattern/);
+  assert.match(found, /web\/lib\/b\.ts: matches a private pattern/);
   assert.doesNotMatch(found, /ok\.sh/);
+});
+
+test("the private patterns file: one regular expression per line, comments and blanks ignored, absent means none", () => {
+  const dir = mkdtempSync(join(tmpdir(), "graft-patterns-"));
+  const file = join(dir, "patterns");
+  writeFileSync(file, `# a comment\n\n${org}\n  other\\d+  \n`);
+  const patterns = loadPrivatePatterns(file);
+  assert.equal(patterns.length, 2);
+  assert.ok(patterns[0].test(org.toUpperCase()) && patterns[1].test("OTHER42"));
+  assert.deepEqual(loadPrivatePatterns(join(dir, "missing")), []);
 });
 
 test("a real AWS account id in an ARN is rejected; AWS's documented example ids are not", () => {

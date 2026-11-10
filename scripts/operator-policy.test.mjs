@@ -1,13 +1,13 @@
-// The operator role's permission files. The files hold the account id, so they live in the local vault
-// and are not committed: the rules below always run on small stand-in policies (so the check itself is
+// The operator role's permission files. The files hold the account id, so they are never committed (they live in
+// .deploy/iam/ on the operator's machine, or where GRAFT_OPERATOR_POLICY_DIR points): the rules below always run on small stand-in policies (so the check itself is
 // tested), and run on the real files when they are on this machine. They pin what the role may never
-// be able to do: act outside Mumbai (the one budget excepted), touch the other project, or change its
+// be able to do: act outside Mumbai (the one budget excepted), touch anything outside graft, or change its
 // own permissions.
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { test } from "node:test";
 
-const vault = new URL("../vault/deploy/iam/", import.meta.url).pathname;
+const policyDir = (process.env["GRAFT_OPERATOR_POLICY_DIR"] ?? new URL("../.deploy/iam", import.meta.url).pathname).replace(/\/?$/, "/");
 
 // Actions that cannot be scoped to a resource; they may sit on "*" only if they only read or list.
 const UNSCOPED_OK = /^(ec2:Describe|lambda:ListFunctions$|s3:ListAllMyBuckets$|ecr:GetAuthorizationToken$|iam:(Get|List)|kms:(DescribeKey|ListAliases)$|secretsmanager:(GetRandomPassword|ListSecrets)$)/;
@@ -121,8 +121,8 @@ test("every way of widening the role is caught", () => {
   );
 });
 
-const named = existsSync(vault) ? readdirSync(vault).filter((f) => f.endsWith(".json") && /permissions|wake/.test(f)) : [];
-const real = Object.fromEntries(named.map((f) => [f, JSON.parse(readFileSync(`${vault}${f}`, "utf8"))]));
+const named = existsSync(policyDir) ? readdirSync(policyDir).filter((f) => f.endsWith(".json") && /permissions|wake/.test(f)) : [];
+const real = Object.fromEntries(named.map((f) => [f, JSON.parse(readFileSync(`${policyDir}${f}`, "utf8"))]));
 // The files name the real account; the self-check names AWS's example one, so the real id is swapped for it.
 const example = (policy) =>
   JSON.parse(JSON.stringify(policy).replace(/(arn:aws:[a-z0-9-]*:[a-z0-9-]*:)\d{12}:/g, "$1123456789012:"));
@@ -131,13 +131,13 @@ const absent = (why) => (why ? { skip: why } : {});
 
 test(
   "the wake permissions add only scoped Mumbai functions, the wake role's pass and the one budget",
-  absent(wake === undefined && "the vault is not on this machine"),
+  absent(wake === undefined && "the real policy files are not on this machine"),
   () => assert.deepEqual(problems([example(wake)]), []),
 );
 
 test(
   "no file of the operator's permissions lets the role change its own",
-  absent(named.length === 0 && "the vault is not on this machine"),
+  absent(named.length === 0 && "the real policy files are not on this machine"),
   () => {
     const all = Object.values(real).map(example);
     assert.deepEqual(problems(all).filter((p) => /own permissions|admin policy|people or keys/.test(p)), []);
