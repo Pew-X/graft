@@ -1,0 +1,455 @@
+{
+  "version": 1,
+  "stages": [
+    {
+      "id": "r86t6zh8c2bp",
+      "kind": "source",
+      "title": "808 sub",
+      "author": "graft",
+      "parent_id": null,
+      "lines": [
+        {
+          "role": "source",
+          "value": "808 sub",
+          "honesty": "declared"
+        },
+        {
+          "role": "licence",
+          "value": "own work, synthesized for graft",
+          "honesty": "declared"
+        },
+        {
+          "role": "by",
+          "value": "graft",
+          "honesty": "declared"
+        },
+        {
+          "role": "renderer",
+          "value": "graft-render 1",
+          "honesty": "computed"
+        },
+        {
+          "role": "rights",
+          "value": "not established",
+          "honesty": "unknown"
+        }
+      ],
+      "record_id": "675a48495f2849cf21b4205bf21bf4f0af15f573949fdeb011d0adb282ddaa1d",
+      "source_blob": "aa71c95442da8d6b1e92b8cc0d26f764ca19a929032ce5000430136783ef6b68",
+      "output_blob": "aa71c95442da8d6b1e92b8cc0d26f764ca19a929032ce5000430136783ef6b68",
+      "cut_start": 0,
+      "cut_end": 57600,
+      "speed_p": null,
+      "speed_q": null,
+      "renderer": "graft-render 1",
+      "renderer_wasm_sha256": "79a53dacac99d608f71f137a913a33d095851e01291059f6958b21db8835d1bd",
+      "frames": 57600,
+      "audio_path": "/seed/aa71c95442da8d6b1e92b8cc0d26f764ca19a929032ce5000430136783ef6b68.pcm"
+    },
+    {
+      "id": "3dd69ynvjz53",
+      "kind": "source",
+      "title": "chip arpeggio",
+      "author": "graft",
+      "parent_id": null,
+      "lines": [
+        {
+          "role": "source",
+          "value": "chip arpeggio",
+          "honesty": "declared"
+        },
+        {
+          "role": "licence",
+          "value": "own work, synthesized for graft",
+          "honesty": "declared"
+        },
+        {
+          "role": "by",
+          "value": "graft",
+          "honesty": "declared"
+        },
+        {
+          "role": "renderer",
+          "value": "graft-render 1",
+          "honesty": "computed"
+        },
+        {
+          "role": "rights",
+          "value": "not established",
+          "honesty": "unknown"
+        }
+      ],
+      "record_id": "7b4bf1fd2c67108f170b0cfa9eb02f1105ec7a4655511f9154a9aeac1ecc81e3",
+      "source_blob": "ab8a9b35a4ffa214ed7959a12619e4503a2f5bf57ab6c5ee3368928f7ebb8c1d",
+      "output_blob": "ab8a9b35a4ffa214ed7959a12619e4503a2f5bf57ab6c5ee3368928f7ebb8c1d",
+      "cut_start": 0,
+      "cut_end": 57600,
+      "speed_p": null,
+      "speed_q": null,
+      "renderer": "graft-render 1",
+      "renderer_wasm_sha256": "79a53dacac99d608f71f137a913a33d095851e01291059f6958b21db8835d1bd",
+      "frames": 57600,
+      "audio_path": "/seed/ab8a9b35a4ffa214ed7959a12619e4503a2f5bf57ab6c5ee3368928f7ebb8c1d.pcm"
+    },
+    {
+      "id": "1tpnd5t5fnxx",
+      "kind": "source",
+      "title": "power up",
+      "author": "graft",
+      "parent_id": null,
+      "lines": [
+        {
+          "role": "source",
+          "value": "power up",
+          "honesty": "declared"
+        },
+        {
+          "role": "licence",
+          "value": "own work, synthesized for graft",
+          "honesty": "declared"
+        },
+        {
+          "role": "by",
+          "value": "graft",
+          "honesty": "declared"
+        },
+        {
+          "role": "renderer",
+          "value": "graft-render 1",
+          "honesty": "computed"
+        },
+        {
+          "role": "rights",
+          "value": "not established",
+          "honesty": "unknown"
+        }
+      ],
+      "record_id": "eee6bf17f89bdd6786a14acdbe4fd977cc4b6991cf5faeb515f0873afcacbf94",
+      "source_blob": "6e47c405509f77e5ca846f078be508d65d1da8786d3df9eba267cfecf4e81046",
+      "output_blob": "6e47c405509f77e5ca846f078be508d65d1da8786d3df9eba267cfecf4e81046",
+      "cut_start": 0,
+      "cut_end": 57600,
+      "speed_p": null,
+      "speed_q": null,
+      "renderer": "graft-render 1",
+      "renderer_wasm_sha256": "79a53dacac99d608f71f137a913a33d095851e01291059f6958b21db8835d1bd",
+      "frames": 57600,
+      "audio_path": "/seed/6e47c405509f77e5ca846f078be508d65d1da8786d3df9eba267cfecf4e81046.pcm"
+    },
+    {
+      "id": "02em31vdp528",
+      "kind": "source",
+      "title": "saber hum",
+      "author": "graft",
+      "parent_id": null,
+      "lines": [
+        {
+          "role": "source",
+          "value": "saber hum",
+          "honesty": "declared"
+        },
+        {
+          "role": "licence",
+          "value": "own work, synthesized for graft",
+          "honesty": "declared"
+        },
+        {
+          "role": "by",
+          "value": "graft",
+          "honesty": "declared"
+        },
+        {
+          "role": "renderer",
+          "value": "graft-render 1",
+          "honesty": "computed"
+        },
+        {
+          "role": "rights",
+          "value": "not established",
+          "honesty": "unknown"
+        }
+      ],
+      "record_id": "d4f014573fb35b72e1953b43514fa3318027063da85d21e4f9ed2a38c74674a4",
+      "source_blob": "e02c05e11539495210865b44951d2e36413d74274df325e1b9e0ea9591fd131f",
+      "output_blob": "e02c05e11539495210865b44951d2e36413d74274df325e1b9e0ea9591fd131f",
+      "cut_start": 0,
+      "cut_end": 57600,
+      "speed_p": null,
+      "speed_q": null,
+      "renderer": "graft-render 1",
+      "renderer_wasm_sha256": "79a53dacac99d608f71f137a913a33d095851e01291059f6958b21db8835d1bd",
+      "frames": 57600,
+      "audio_path": "/seed/e02c05e11539495210865b44951d2e36413d74274df325e1b9e0ea9591fd131f.pcm"
+    },
+    {
+      "id": "vwy6kahh4n8e",
+      "kind": "source",
+      "title": "laser zap",
+      "author": "graft",
+      "parent_id": null,
+      "lines": [
+        {
+          "role": "source",
+          "value": "laser zap",
+          "honesty": "declared"
+        },
+        {
+          "role": "licence",
+          "value": "own work, synthesized for graft",
+          "honesty": "declared"
+        },
+        {
+          "role": "by",
+          "value": "graft",
+          "honesty": "declared"
+        },
+        {
+          "role": "renderer",
+          "value": "graft-render 1",
+          "honesty": "computed"
+        },
+        {
+          "role": "rights",
+          "value": "not established",
+          "honesty": "unknown"
+        }
+      ],
+      "record_id": "0e7c641029382485e48f35691e6a6534c3f7ffddd565f022ea51d14f092e1c73",
+      "source_blob": "c4f11f3dfbbe9d4132694813196c4f3de3707039529dd7c10dc9e336f59b4a02",
+      "output_blob": "c4f11f3dfbbe9d4132694813196c4f3de3707039529dd7c10dc9e336f59b4a02",
+      "cut_start": 0,
+      "cut_end": 57600,
+      "speed_p": null,
+      "speed_q": null,
+      "renderer": "graft-render 1",
+      "renderer_wasm_sha256": "79a53dacac99d608f71f137a913a33d095851e01291059f6958b21db8835d1bd",
+      "frames": 57600,
+      "audio_path": "/seed/c4f11f3dfbbe9d4132694813196c4f3de3707039529dd7c10dc9e336f59b4a02.pcm"
+    },
+    {
+      "id": "cptjpe8rjq8z",
+      "kind": "source",
+      "title": "metal clang",
+      "author": "graft",
+      "parent_id": null,
+      "lines": [
+        {
+          "role": "source",
+          "value": "metal clang",
+          "honesty": "declared"
+        },
+        {
+          "role": "licence",
+          "value": "own work, synthesized for graft",
+          "honesty": "declared"
+        },
+        {
+          "role": "by",
+          "value": "graft",
+          "honesty": "declared"
+        },
+        {
+          "role": "renderer",
+          "value": "graft-render 1",
+          "honesty": "computed"
+        },
+        {
+          "role": "rights",
+          "value": "not established",
+          "honesty": "unknown"
+        }
+      ],
+      "record_id": "d2f0ff6bceeaa15adb212721767457cc616d20dbcc03a5d5b3d77125a7bed9fd",
+      "source_blob": "b9ad5c367cbcd54bd78850d0524662d406647e4dea6e93f8adf1468ce1c22fc0",
+      "output_blob": "b9ad5c367cbcd54bd78850d0524662d406647e4dea6e93f8adf1468ce1c22fc0",
+      "cut_start": 0,
+      "cut_end": 57600,
+      "speed_p": null,
+      "speed_q": null,
+      "renderer": "graft-render 1",
+      "renderer_wasm_sha256": "79a53dacac99d608f71f137a913a33d095851e01291059f6958b21db8835d1bd",
+      "frames": 57600,
+      "audio_path": "/seed/b9ad5c367cbcd54bd78850d0524662d406647e4dea6e93f8adf1468ce1c22fc0.pcm"
+    },
+    {
+      "id": "hyrhre4r0wwk",
+      "kind": "source",
+      "title": "house stab",
+      "author": "graft",
+      "parent_id": null,
+      "lines": [
+        {
+          "role": "source",
+          "value": "house stab",
+          "honesty": "declared"
+        },
+        {
+          "role": "licence",
+          "value": "own work, synthesized for graft",
+          "honesty": "declared"
+        },
+        {
+          "role": "by",
+          "value": "graft",
+          "honesty": "declared"
+        },
+        {
+          "role": "renderer",
+          "value": "graft-render 1",
+          "honesty": "computed"
+        },
+        {
+          "role": "rights",
+          "value": "not established",
+          "honesty": "unknown"
+        }
+      ],
+      "record_id": "294713436199b59896ba7b23708039c69158e6dee8b9f37519ba5c91fcf818af",
+      "source_blob": "9cc26dc64b5a8c46ed739b6318d20c14f65732abe38e6cb9eb79e2819511c27b",
+      "output_blob": "9cc26dc64b5a8c46ed739b6318d20c14f65732abe38e6cb9eb79e2819511c27b",
+      "cut_start": 0,
+      "cut_end": 57600,
+      "speed_p": null,
+      "speed_q": null,
+      "renderer": "graft-render 1",
+      "renderer_wasm_sha256": "79a53dacac99d608f71f137a913a33d095851e01291059f6958b21db8835d1bd",
+      "frames": 57600,
+      "audio_path": "/seed/9cc26dc64b5a8c46ed739b6318d20c14f65732abe38e6cb9eb79e2819511c27b.pcm"
+    },
+    {
+      "id": "e790b6ycz0yd",
+      "kind": "source",
+      "title": "dm9 chord",
+      "author": "graft",
+      "parent_id": null,
+      "lines": [
+        {
+          "role": "source",
+          "value": "dm9 chord",
+          "honesty": "declared"
+        },
+        {
+          "role": "licence",
+          "value": "own work, synthesized for graft",
+          "honesty": "declared"
+        },
+        {
+          "role": "by",
+          "value": "graft",
+          "honesty": "declared"
+        },
+        {
+          "role": "renderer",
+          "value": "graft-render 1",
+          "honesty": "computed"
+        },
+        {
+          "role": "rights",
+          "value": "not established",
+          "honesty": "unknown"
+        }
+      ],
+      "record_id": "e7ab3bbc98570695f0357db4ef95ec4bfe9352f197cb9085b71b8c7cf98c6f19",
+      "source_blob": "4e22bb6233c6783823d2f94fb1593dab34ee5a32816524de0ad019d6e4c6d38c",
+      "output_blob": "4e22bb6233c6783823d2f94fb1593dab34ee5a32816524de0ad019d6e4c6d38c",
+      "cut_start": 0,
+      "cut_end": 57600,
+      "speed_p": null,
+      "speed_q": null,
+      "renderer": "graft-render 1",
+      "renderer_wasm_sha256": "79a53dacac99d608f71f137a913a33d095851e01291059f6958b21db8835d1bd",
+      "frames": 57600,
+      "audio_path": "/seed/4e22bb6233c6783823d2f94fb1593dab34ee5a32816524de0ad019d6e4c6d38c.pcm"
+    },
+    {
+      "id": "dm7z8pmxs6zj",
+      "kind": "source",
+      "title": "upright bass",
+      "author": "graft",
+      "parent_id": null,
+      "lines": [
+        {
+          "role": "source",
+          "value": "upright bass",
+          "honesty": "declared"
+        },
+        {
+          "role": "licence",
+          "value": "own work, synthesized for graft",
+          "honesty": "declared"
+        },
+        {
+          "role": "by",
+          "value": "graft",
+          "honesty": "declared"
+        },
+        {
+          "role": "renderer",
+          "value": "graft-render 1",
+          "honesty": "computed"
+        },
+        {
+          "role": "rights",
+          "value": "not established",
+          "honesty": "unknown"
+        }
+      ],
+      "record_id": "de14f20e179e0d1995d4e4e7d9fdccfde52f3e2a4d510e3069caf84db2221c32",
+      "source_blob": "98cc49c23dc078313bbf3a4c6420afa14432f89994ca48908da0914fd58865ba",
+      "output_blob": "98cc49c23dc078313bbf3a4c6420afa14432f89994ca48908da0914fd58865ba",
+      "cut_start": 0,
+      "cut_end": 57600,
+      "speed_p": null,
+      "speed_q": null,
+      "renderer": "graft-render 1",
+      "renderer_wasm_sha256": "79a53dacac99d608f71f137a913a33d095851e01291059f6958b21db8835d1bd",
+      "frames": 57600,
+      "audio_path": "/seed/98cc49c23dc078313bbf3a4c6420afa14432f89994ca48908da0914fd58865ba.pcm"
+    },
+    {
+      "id": "5xr9t3hvx37j",
+      "kind": "source",
+      "title": "trap hats",
+      "author": "graft",
+      "parent_id": null,
+      "lines": [
+        {
+          "role": "source",
+          "value": "trap hats",
+          "honesty": "declared"
+        },
+        {
+          "role": "licence",
+          "value": "own work, synthesized for graft",
+          "honesty": "declared"
+        },
+        {
+          "role": "by",
+          "value": "graft",
+          "honesty": "declared"
+        },
+        {
+          "role": "renderer",
+          "value": "graft-render 1",
+          "honesty": "computed"
+        },
+        {
+          "role": "rights",
+          "value": "not established",
+          "honesty": "unknown"
+        }
+      ],
+      "record_id": "473dfa4f1b289c59af6bea97158559b5c13d21f168a5436dc7a7ac82531677d9",
+      "source_blob": "c535a2a4c12907fe1b94b4d5b0be4d889c329eed0ca4c0f4745f3c28b9ae25eb",
+      "output_blob": "c535a2a4c12907fe1b94b4d5b0be4d889c329eed0ca4c0f4745f3c28b9ae25eb",
+      "cut_start": 0,
+      "cut_end": 57600,
+      "speed_p": null,
+      "speed_q": null,
+      "renderer": "graft-render 1",
+      "renderer_wasm_sha256": "79a53dacac99d608f71f137a913a33d095851e01291059f6958b21db8835d1bd",
+      "frames": 57600,
+      "audio_path": "/seed/c535a2a4c12907fe1b94b4d5b0be4d889c329eed0ca4c0f4745f3c28b9ae25eb.pcm"
+    }
+  ]
+}

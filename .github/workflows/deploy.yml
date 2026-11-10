@@ -1,0 +1,131 @@
+name: deploy
+
+# NOT READY TO ENABLE. Three known gaps, found by review after the first deploy was done by script
+# (scripts/aws-dev.sh, whose `redeploy` is the tested path):
+#   1. Architecture: the service runs on ARM64, and this builds on an x86 runner with no --platform, so
+#      the image would not start. It needs an ARM64 build (an arm runner, or buildx with emulation).
+#   2. The image tag is the commit, and the repository's tags are immutable: a re-run for the same
+#      commit cannot push. It needs a tag that differs per attempt, or a skip when the tag exists.
+#   3. The roll uses plain `update-service`; the service is ECS Express, updated with
+#      `update-express-gateway-service --task-definition-arn`, and an Express roll takes ten minutes or
+#      more with two tasks, so the wait must be for the new revision to be primary and complete.
+# Also unproven: nothing here has run. Rework and run it once on dev before DEPLOY_ENABLED is set.
+#
+# WRITTEN, NEVER RUN. It is inert until the repository variable DEPLOY_ENABLED is "true" and each GitHub
+# environment (dev, staging, production) holds the variables listed below, so a push today only shows
+# a skipped job. Nothing here is a secret: the role is assumed through GitHub's OIDC token and
+# there are no AWS keys anywhere (the role's trust names this repository and the environment).
+#
+# A push to dev, staging or main deploys the environment of that name (main is "production"). The order:
+# build the image and push it; run the release task (migrate, seed, check the seeded chain against the
+# committed snapshot) as a one-off task of the NEW task definition; point the service at it; wait for the
+# service to settle and for /ready to answer; if any of that fails, put the service back on the
+# previous task definition and fail the run.
+#
+# Environment variables each GitHub environment needs (names only):
+#   AWS_ROLE_ARN, AWS_REGION, ECR_REPOSITORY, ECS_CLUSTER, ECS_SERVICE,
+#   RELEASE_SUBNETS (comma-separated), RELEASE_SECURITY_GROUPS (comma-separated), SERVICE_URL
+# The secrets themselves (database URL, operator secret, error tracker address) live in the task
+# definition's secret references, in the platform's store, never here.
+
+on:
+  push:
+    branches: [dev, staging, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: deploy ${{ github.ref_name == 'main' && 'production' || github.ref_name }}
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: ${{ github.ref_name == 'main' && 'production' || github.ref_name }}
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64 # v2.1.6
+
+      - name: build and push the image
+        id: image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+        run: |
+          image="$REGISTRY/$REPOSITORY:$GITHUB_SHA"
+          docker build -f Dockerfile.service -t "$image" .
+          docker push "$image"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+
+      - name: remember what is running now, then register the new task definition
+        id: taskdef
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+          CLUSTER: ${{ vars.ECS_CLUSTER }}
+          SERVICE: ${{ vars.ECS_SERVICE }}
+        run: |
+          # An Express service has no task definition on the service itself; the running revision is the
+          # primary deployment's (the service's own field reads None, found on the first deploy).
+          previous=$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" --query "services[0].deployments[?status=='PRIMARY'].taskDefinition | [0]" --output text)
+          echo "previous=$previous" >> "$GITHUB_OUTPUT"
+          # Based on the revision the service is running, not the family's latest: a failed earlier deploy
+          # leaves a newer revision registered that nothing should inherit.
+          aws ecs describe-task-definition --task-definition "$previous" --query taskDefinition \
+            | jq --arg image "$IMAGE" '.containerDefinitions[0].image = $image
+                | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
+            > taskdef.json
+          new=$(aws ecs register-task-definition --cli-input-json file://taskdef.json --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "new=$new" >> "$GITHUB_OUTPUT"
+
+      - name: release task (migrate, seed, check the seeded chain against the snapshot)
+        env:
+          CLUSTER: ${{ vars.ECS_CLUSTER }}
+          TASKDEF: ${{ steps.taskdef.outputs.new }}
+          SUBNETS: ${{ vars.RELEASE_SUBNETS }}
+          GROUPS_: ${{ vars.RELEASE_SECURITY_GROUPS }}
+        run: |
+          task=$(aws ecs run-task --cluster "$CLUSTER" --launch-type FARGATE --task-definition "$TASKDEF" \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$GROUPS_],assignPublicIp=ENABLED}" \
+            --overrides '{"containerOverrides":[{"name":"'"$(jq -r '.containerDefinitions[0].name' taskdef.json)"'","command":["graft-seed-chain","--manifest","seed/chain.json","--check-snapshot","web"]}]}' \
+            --query 'tasks[0].taskArn' --output text)
+          aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$task"
+          code=$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$task" --query 'tasks[0].containers[0].exitCode' --output text)
+          echo "release task exit code: $code"
+          [ "$code" = "0" ]
+
+      - name: point the service at it and wait for it to be ready
+        id: roll
+        env:
+          CLUSTER: ${{ vars.ECS_CLUSTER }}
+          SERVICE: ${{ vars.ECS_SERVICE }}
+          TASKDEF: ${{ steps.taskdef.outputs.new }}
+          SERVICE_URL: ${{ vars.SERVICE_URL }}
+        run: |
+          aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" --task-definition "$TASKDEF" >/dev/null
+          aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE"
+          for _ in $(seq 1 30); do curl -fsS "$SERVICE_URL/ready" && exit 0; sleep 5; done
+          echo "the new release never answered /ready"; exit 1
+
+      - name: roll back to the previous task definition
+        if: ${{ failure() && steps.roll.outcome == 'failure' }}
+        env:
+          CLUSTER: ${{ vars.ECS_CLUSTER }}
+          SERVICE: ${{ vars.ECS_SERVICE }}
+          PREVIOUS: ${{ steps.taskdef.outputs.previous }}
+        run: |
+          aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" --task-definition "$PREVIOUS" >/dev/null
+          aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE"
+          echo "rolled back to $PREVIOUS"

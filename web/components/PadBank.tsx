@@ -1,0 +1,207 @@
+"use client";
+
+import { memo, type PointerEvent as ReactPointerEvent } from "react";
+import { copy, fill } from "../lib/copy.ts";
+import { keyOfPad } from "../lib/perform/keys.ts";
+import { positionHint } from "../lib/perform/layout.ts";
+import type { Rule } from "../lib/perform/performer.ts";
+import type { PhraseControls } from "./phrase-controls.ts";
+
+/** What a pad needs to show: a key for the list, a dye and a title. A roll's credit block and a sketch both fit. */
+export interface PadItem {
+  id: string;
+  dye: 0 | 1 | 2 | 3;
+  title: string;
+}
+
+interface Props {
+  /** One pad for each of these, in order. */
+  pads: readonly PadItem[];
+  /** Whether each stage can be heard now. */
+  playable: readonly boolean[];
+  /** For a stage that cannot be heard, why, in words. */
+  reasons: readonly string[];
+  /** What is printed on each key where the browser can say; the US marks where it cannot. */
+  marks: Record<number, string> | null;
+  /** The stage last played: the one the page shows large. */
+  shown: number | null;
+  mode: Rule;
+  onMode: (rule: Rule) => void;
+  onPress: (stage: number) => void;
+  onStop: () => void;
+  phrase: PhraseControls;
+  /** A pad's name for a reader of the screen, with {n} and {title}; the roll's own words by default. */
+  padLabel?: string;
+}
+
+/**
+ * One pad for every stage, numbered like its ring and lit in its dye. A pad does what its number key does:
+ * it sounds on the press itself (not on its release), so a finger and a key feel the same, and every finger
+ * is its own pointer, so two fingers play two pads. The lit state is written by the performer straight onto
+ * the pads (`data-sounding`), so a press does not wait for the page to render. Pads are real buttons: a
+ * screen reader's own digit keys are taken by its browse mode, so Tab, Enter and Space are its way in.
+ */
+export const PadBank = memo(function PadBank({
+  pads,
+  playable,
+  reasons,
+  marks,
+  shown,
+  mode,
+  onMode,
+  onPress,
+  onStop,
+  phrase,
+  padLabel = copy.perform.pad,
+}: Props) {
+  return (
+    <div className="bank" data-count={pads.length}>
+      <div className="pads" role="group" aria-label={copy.perform.bank}>
+        {pads.map((block, i) => {
+          const ok = playable[i] === true;
+          const key = marks?.[i] ?? keyOfPad(i);
+          return (
+            <button
+              key={block.id}
+              type="button"
+              className="pad"
+              data-pad={i}
+              data-dye={block.dye}
+              data-sounding="false"
+              aria-current={shown === i ? "true" : undefined}
+              aria-disabled={ok ? undefined : "true"}
+              aria-keyshortcuts={key ?? undefined}
+              title={positionHint(i) ?? undefined}
+              aria-label={fill(padLabel, { n: i + 1, title: block.title })}
+              // the sound starts on the press itself; a key's Enter or Space arrives as a click with no detail
+              onPointerDown={(e: ReactPointerEvent<HTMLButtonElement>) => {
+                if (e.pointerType === "mouse" && e.button !== 0) return;
+                onPress(i);
+              }}
+              // a held Enter repeats keydown, and each repeat would be a click that restarts the stage: only
+              // the first press of a key plays (the number keys ignore repeats the same way)
+              onKeyDown={(e) => {
+                if (e.repeat && (e.key === "Enter" || e.key === " ")) e.preventDefault();
+              }}
+              onClick={(e) => {
+                if (e.detail === 0) onPress(i);
+              }}
+            >
+              <span className="pad-n" aria-hidden="true">
+                {i + 1}
+              </span>
+              {i >= 9 && key ? (
+                <span className="pad-key" aria-hidden="true">
+                  {key}
+                </span>
+              ) : null}
+              <span className="pad-t" aria-hidden="true">
+                {ok ? block.title : (reasons[i] ?? "")}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="bank-side">
+        <div role="group" aria-label={copy.perform.rule} className="rule">
+          {(["single", "overlap"] as const).map((rule) => (
+            <button
+              key={rule}
+              type="button"
+              aria-pressed={mode === rule}
+              title={copy.perform[`${rule}Says`]}
+              onClick={() => onMode(rule)}
+            >
+              {copy.perform[rule]}
+            </button>
+          ))}
+        </div>
+        <button type="button" className="stop" onClick={onStop}>
+          {copy.perform.stop}
+        </button>
+      </div>
+      <p className="bank-help bank-help-rule" data-testid="rule-says">
+        {copy.perform[`${mode}Says`]}
+      </p>
+      <div className="bank-phrase" role="group" aria-label={copy.phrase.group}>
+        <button
+          type="button"
+          className="rec"
+          aria-pressed={phrase.recording}
+          title={copy.phrase.recTitle}
+          onClick={phrase.record}
+        >
+          <span className="rec-dot" aria-hidden="true" />
+          {phrase.recording ? copy.phrase.recordStop : copy.phrase.record}
+        </button>
+        {phrase.has ? (
+          <>
+            <button
+              type="button"
+              aria-pressed={phrase.playing}
+              aria-label={phrase.playing ? undefined : copy.phrase.play}
+              title={phrase.playing ? undefined : copy.phrase.playTitle}
+              disabled={phrase.recording}
+              onClick={phrase.playing ? phrase.stop : () => void phrase.play()}
+            >
+              {phrase.playing ? (
+                copy.perform.stop
+              ) : (
+                <>
+                  <span className="long" aria-hidden="true">
+                    {copy.phrase.play}
+                  </span>
+                  <span className="short" aria-hidden="true">
+                    {copy.phrase.playShort}
+                  </span>
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              aria-pressed={phrase.loop}
+              title={copy.phrase.loopTitle}
+              onClick={() => phrase.setLoop(!phrase.loop)}
+            >
+              {copy.phrase.loop}
+            </button>
+            {phrase.canLink ? (
+              <button
+                type="button"
+                aria-label={copy.phrase.copy}
+                title={copy.phrase.copyTitle}
+                disabled={phrase.recording}
+                onClick={phrase.copyLink}
+              >
+                <span className="long" aria-hidden="true">
+                  {copy.phrase.copy}
+                </span>
+                <span className="short" aria-hidden="true">
+                  {copy.phrase.copyShort}
+                </span>
+              </button>
+            ) : null}
+            <button type="button" title={copy.phrase.clearTitle} onClick={phrase.clear}>
+              {copy.phrase.clear}
+            </button>
+          </>
+        ) : null}
+        {phrase.has ? null : (
+          // kept (but hidden) while recording, so rec keeps its place when it turns into stop rec
+          <p
+            className="bank-help bank-help-how"
+            data-testid="phrase-says"
+            data-recording={phrase.recording ? "true" : undefined}
+          >
+            {copy.phrase.howTo}
+          </p>
+        )}
+      </div>
+      {phrase.has ? (
+        <p className="bank-help bank-help-after" data-testid="phrase-says">
+          {copy.phrase.after}
+        </p>
+      ) : null}
+    </div>
+  );
+});

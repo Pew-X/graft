@@ -1,0 +1,9 @@
+{
+  "name": "graft-wake",
+  "private": true,
+  "type": "module",
+  "description": "The wake and park function. The Node runtime's own ECS client predates Express Mode, so a newer one (pinned, at least two weeks old) is shipped inside the package.",
+  "dependencies": {
+    "@aws-sdk/client-ecs": "3.1151.0"
+  }
+}

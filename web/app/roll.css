@@ -1,0 +1,1981 @@
+/* The look: the locked direction, "the label + the beam" (vault/prototypes/t11-roll, variant E), as
+   production styles. Colours and dyes are the tokens in lib/theme/tokens.ts; fonts come from layout.tsx.
+   Every decorative layer (paper grain, the torn edge, the dye split) can be switched off with
+   <html data-decor="off"> and the page stays fully usable. Targets are 44px or larger. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html {
+  background: var(--bg);
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font:
+    1rem/1.5 var(--f-sans),
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+button {
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 2px solid var(--line);
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+/* One ring for every page: three pixels, two pixels off the control, in the theme's focus colour. The
+   exceptions are the ones that say why (the record draws its own on the stylus; the title slab, the dark
+   footer and the pads below). */
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+/* the footer's panel is dark in both themes, and the light theme's ring is a dark green: on that panel the
+   ring is the bright green of the dark theme */
+.roll .footer :focus-visible,
+.bank :focus-visible {
+  outline-color: #5dff9c;
+}
+/* the title slab is cut to a torn shape, which would cut a ring drawn outside it: the ring is drawn inside,
+   in the colour of the lettering, clear of the torn corners */
+.slab button:focus-visible {
+  outline: 3px solid var(--dye-text);
+  outline-offset: -12px;
+}
+
+/* Pages outside the roll (the operator's page, not found, an error). */
+.masthead,
+.footer {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+.masthead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 1rem;
+  padding-top: 1.5rem;
+}
+.masthead h1 {
+  font:
+    800 clamp(3rem, 14vw, 6rem) / 1 var(--f-serif),
+    ui-serif,
+    Georgia,
+    serif;
+  margin: 0;
+  letter-spacing: -0.03em;
+}
+.masthead p {
+  margin: 0;
+  flex: 1 1 14rem;
+  color: var(--muted);
+}
+.footer {
+  margin-top: 3rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+.footer a {
+  color: inherit;
+  display: inline-block;
+  min-width: 44px;
+  min-height: 44px;
+  line-height: 44px;
+}
+
+/* ------------------------------------------------------------------ the roll */
+.roll {
+  --R: min(68dvh, 46vw);
+  --dye: var(--dye-0);
+  --dye-text: var(--dye-0-text);
+  position: fixed;
+  inset: 0;
+  height: 100dvh;
+  overflow: clip; /* never scrolls: the roll moves by transform, so focus cannot shift it */
+  background: var(--bg);
+  color: var(--ink);
+}
+/* paper grain on the gallery wall (decoration) */
+.roll::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: var(--grain);
+  mix-blend-mode: multiply;
+  z-index: 0;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/><feColorMatrix values='0 0 0 0 .5  0 0 0 0 .48  0 0 0 0 .44  0 0 0 .09 0'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>");
+}
+:root[data-decor="off"] .roll::before {
+  display: none;
+}
+
+.record {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+.record .disc {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+/* the canvas fills the screen, so a normal outline would frame the whole page in neon green; the focus
+   mark is a ring on the stylus, painted with the record (see paintOverlay) */
+.record .disc:focus-visible {
+  outline: none;
+}
+/* until the first play the two plain lines already say to drag the needle, so the caption waits */
+.roll[data-playback="idle"] .record-caption {
+  display: none;
+}
+/* while the guide is speaking (the captions, then the needle hint) it says the same thing, so the plain
+   caption waits: one voice at a time on the screen */
+.roll:is([data-guide="narrating"], [data-guide="hintNeedle"]) .record-caption {
+  display: none;
+}
+.record-caption {
+  position: absolute;
+  right: 3vw;
+  bottom: 130px;
+  margin: 0;
+  font:
+    500 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #ece6d8;
+  /* it sits over the black disc; its own backing keeps it legible wherever it lands */
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #0a0b0a;
+  pointer-events: none;
+}
+
+/* the thread: a patch cable from the stage's label to its ring. Between the record and the words, so
+   text is always drawn over it; a dark sheath under the glow keeps it clear on the light theme too */
+.thread {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  pointer-events: none;
+  overflow: visible;
+}
+.thread[data-shown="false"] {
+  display: none;
+}
+.thread path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* The live stage's colour: one colour means one live stage (set only while that stage sounds). */
+.roll[data-live="0"] {
+  --live: var(--dye-0);
+}
+.roll[data-live="1"] {
+  --live: var(--dye-1);
+}
+.roll[data-live="2"] {
+  --live: var(--dye-2);
+}
+.roll[data-live="3"] {
+  --live: var(--dye-3);
+}
+/* The thread exists only while its stage sounds, and fades in and out rather than snapping. */
+.thread {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.thread[data-on="true"] {
+  opacity: 1;
+}
+.roll[data-reduced="true"] .thread {
+  transition: none;
+}
+/* thin and crisp: a hairline in the stage's colour over a darker edge of the same colour, so it reads on
+   the dark record and on the cream page alike. It brightens a little with the stage's loudness (--amp). */
+.thread .edge {
+  stroke: color-mix(in srgb, var(--live, var(--dye)) 45%, #000);
+  stroke-width: 3.2;
+  stroke-opacity: 0.55;
+}
+.thread .beam {
+  stroke: var(--live, var(--dye));
+  stroke-width: calc(1.1px + var(--amp, 0) * 1.1px);
+  stroke-opacity: calc(0.72 + var(--amp, 0) * 0.28);
+}
+/* while something sounds, one soft light runs along the line toward the record, as bright as the sound */
+.thread .pulse {
+  stroke: #fff;
+  stroke-width: 1.6;
+  stroke-dasharray: 36 964;
+  opacity: 0;
+}
+.roll[data-sounding="true"] .thread .pulse {
+  opacity: calc(var(--amp, 0) * 0.85);
+  animation: thread-run 1.6s linear infinite;
+}
+@keyframes thread-run {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -1000;
+  }
+}
+.roll[data-reduced="true"] .thread .pulse {
+  animation: none;
+  opacity: 0;
+}
+.thread .jack {
+  fill: var(--live, var(--dye));
+  stroke: color-mix(in srgb, var(--live, var(--dye)) 45%, #000);
+  stroke-width: 1.5;
+}
+
+/* the oscilloscope tile takes the live stage's colour while it sounds, and is green again at rest */
+.roll[data-live] .block[data-hero="true"] .trace-face .trace {
+  --beam: var(--live);
+}
+
+/* the header over everything */
+.bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 10px 22px;
+  pointer-events: none;
+}
+.bar h1 {
+  margin: 0;
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.08em;
+  color: var(--ink);
+}
+.bar .meta {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  font:
+    500 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.bar .make-link {
+  pointer-events: auto;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 1.1rem;
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  font:
+    600 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.bar .theme {
+  white-space: nowrap;
+  pointer-events: auto;
+  margin-left: 0;
+  min-height: 44px;
+  font:
+    500 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  padding: 0.25rem 0.9rem;
+}
+
+/* a line break inside the bar, so the sentence always starts a row of its own */
+.bar .bar-break {
+  order: 8;
+  flex: 0 0 100%;
+  height: 0;
+}
+.bar .sentence {
+  order: 9;
+  flex: 0 1 auto;
+  margin: 0;
+  padding: 0 0 4px;
+  /* on a wide screen the record fills the right side: the sentence keeps to the left of it, and never
+     runs wider than a comfortable line */
+  max-width: min(44rem, calc(100vw - var(--R) * 0.96 - 44px));
+  font:
+    400 clamp(21px, 2.3vw, 28px) / 1.12 var(--f-brush),
+    cursive;
+  color: var(--ink);
+  text-wrap: balance;
+  transform: rotate(-0.5deg);
+  transform-origin: left center;
+}
+
+/* the screen-sized window the roll slides in (the fade in portrait is on it, so it stays on the screen) */
+.viewport {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* the stages below the one in view fade out above the pill instead of being cut by it */
+.viewport {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 calc(100% - 170px),
+    transparent calc(100% - 100px)
+  );
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 170px), transparent calc(100% - 100px));
+}
+/* the roll of credits: it slides so the current stage sits where the eye is */
+.sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 2;
+  pointer-events: none;
+  will-change: transform;
+  transition: transform 0.26s cubic-bezier(0.22, 0.7, 0.2, 1);
+}
+.sheet[data-placed="false"] {
+  transition: none;
+}
+.blocks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.block {
+  position: relative;
+  margin: 0 0 0 7vw;
+  max-width: min(520px, calc(100vw - var(--R) - 11vw));
+  /* a shorter gap above (the stage starts nearer the header), the full gap below (the next stage stays where it was) */
+  padding: min(12vh, 64px) 0 12vh;
+  /* The text does not catch the pointer, so the record under it stays touchable; its controls do. */
+  pointer-events: none;
+  transition: opacity 0.6s;
+}
+.block :is(button, summary, a) {
+  pointer-events: auto;
+}
+.block[data-dye="1"] {
+  --dye: var(--dye-1);
+  --dye-text: var(--dye-1-text);
+}
+.block[data-dye="2"] {
+  --dye: var(--dye-2);
+  --dye-text: var(--dye-2-text);
+}
+.block[data-dye="3"] {
+  --dye: var(--dye-3);
+  --dye-text: var(--dye-3-text);
+}
+.block[data-current="true"] > article,
+.block[data-hero="true"] > article {
+  position: relative;
+}
+/* The stage in view is its own scrolling region, capped to the room it has: above the controls, and in
+   portrait above the record. However tall it is (a long chain's details open, a short screen, large
+   text) every line and "flip this" can be reached by touch, mouse and keyboard. */
+.block[data-hero="true"] > article {
+  /* the room is measured by the page (--article-max): under the header, above the status pill and the controls, so nothing is drawn over the stage's text or buttons */
+  max-height: var(--article-max, 60dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  pointer-events: auto;
+  /* room for the torn slab's rotated corners, which the scroll region would otherwise clip */
+  margin: 0 -14px;
+  padding: 0 14px;
+}
+/* more than fits: the credit lines fade out at the bottom and a word says so, instead of a hard cut */
+.block[data-hero="true"] > article[data-more="true"] {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 48px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 48px), transparent);
+}
+.more-cue {
+  display: none;
+}
+/* while the first play's caption is on the screen it can sit over this word on a short window, and two
+   lines of text on top of each other read as a fault: the word waits until the caption has gone */
+.roll[data-guide="narrating"] .block[data-hero="true"] .more-cue {
+  visibility: hidden;
+}
+.block[data-hero="true"][data-more="true"] .more-cue {
+  display: block;
+  position: absolute;
+  left: 0;
+  top: calc(var(--article-top, 0px) + var(--article-max, 0px) + 2px);
+  margin: 0;
+  padding: 2px 10px 2px 0;
+  border: 0;
+  background: none;
+  font:
+    500 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink);
+  cursor: pointer;
+}
+.kicker {
+  margin: 0 0 12px;
+  font:
+    500 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* a stage's face: the kicker and its trace, the same line wherever this stage is shown */
+.kicker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 12px;
+}
+.kicker-row .kicker {
+  margin: 0;
+}
+.trace-face {
+  flex: none;
+  width: 104px;
+  height: 30px;
+  border-radius: 5px;
+  overflow: hidden;
+  cursor: pointer;
+}
+.trace-face .trace {
+  height: 100%;
+}
+
+/* the title: a torn slab of the stage's dye, lettered after what was done to the sound */
+.slab {
+  margin: 0 0 4.5vh;
+  font-size: inherit;
+  filter: url(#rough);
+}
+:root[data-decor="off"] .slab {
+  filter: none;
+}
+.slab button {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: left;
+  border: 0;
+  padding: 0.14em 0.38em 0.2em;
+  background: var(--dye);
+  color: var(--dye-text);
+  /* torn edges cut in pixels: in a percent of the height the bottom edge rose further on a tall title and
+     cut across the end of "play this stage" under it */
+  clip-path: polygon(0.8% 8px, 99% 0, 100% calc(100% - 6px), 0 100%);
+  transform: rotate(var(--rot, 0deg));
+}
+:root[data-decor="off"] .slab button {
+  clip-path: none;
+  transform: none;
+}
+/* --size is the title's own size; the small "play this stage" label under it keeps clear by a share of
+   it (an em on the label would be a share of the label's 10px, which is nothing under a 100px title) */
+.slab[data-k="src"] button {
+  --size: clamp(48px, 7vw, 84px);
+  font:
+    400 var(--size) / 1 var(--f-brush),
+    cursive;
+  --rot: -2deg;
+  --gap: 0.2;
+  padding-bottom: 6px;
+}
+.slab[data-k="up"] button {
+  --size: clamp(56px, 8.5vw, 108px);
+  font:
+    800 var(--size) / 0.9 var(--f-cond),
+    ui-sans-serif,
+    sans-serif;
+  --rot: -4deg;
+  --gap: 0.12;
+  letter-spacing: -0.02em;
+  padding: 0.08em 0.3em calc(0.02em + 6px);
+}
+.slab[data-k="down"] button {
+  --size: clamp(34px, 5.4vw, 66px);
+  font:
+    400 var(--size) / 1.05 var(--f-black),
+    ui-sans-serif,
+    sans-serif;
+  --rot: 2deg;
+  --gap: 0.06;
+  letter-spacing: -0.035em;
+  padding-bottom: calc(0.06em + 6px);
+}
+.slab .numeral {
+  display: inline-block;
+  margin-right: 0.5em;
+  font:
+    500 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.1em;
+  vertical-align: 0.6em;
+  opacity: 0.85;
+}
+.slab .title {
+  display: inline;
+  /* typed by a stranger: one long word breaks where it must, and right-to-left text keeps to its own box */
+  overflow-wrap: anywhere;
+  unicode-bidi: isolate;
+}
+/* the plain way to play a stage, kept small. It sits on a band of the slab's own paper, above the title:
+   a title typed with stacked combining marks (they spill above and below their letters) can then never
+   write over this label, and what spills past the slab is cut by the torn edge */
+.slab .play-word {
+  position: relative;
+  background: var(--dye);
+  display: block;
+  margin-top: calc(var(--size, 48px) * var(--gap, 0.1));
+  font:
+    500 10px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.9;
+}
+.empty-slab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0.14em 0.38em 0.2em;
+  border: 2px dashed var(--muted);
+  font:
+    400 clamp(34px, 5vw, 64px) / 1.05 var(--f-brush),
+    cursive;
+  color: var(--ink);
+  transform: rotate(-1.5deg);
+}
+/* the title splits into red and cyan for a moment when the stage changes */
+.block[data-hero="true"] .slab {
+  animation: split 0.42s steps(1, end) 1;
+}
+@keyframes split {
+  0%,
+  99% {
+    filter: url(#rough) drop-shadow(-5px 0 0 #1fb8c9) drop-shadow(5px 0 0 #e2362a);
+  }
+  100% {
+    filter: url(#rough);
+  }
+}
+/* the stages that are not the one in view: greyed titles, quieter text (still readable) */
+.block:not([data-hero="true"]) {
+  --muted: var(--ink);
+}
+.block:not([data-hero="true"]) .slab {
+  filter: url(#rough) grayscale(0.85);
+}
+.block:not([data-hero="true"]) :is(.face, .flipped, .details, .stage-note, .flip, .kicker) {
+  opacity: 0.62;
+}
+
+/* the credit lines: role, value, gloss, state */
+.face {
+  margin: 0;
+}
+.line {
+  padding: 10px 0;
+  border-top: 1px solid var(--hair);
+  /* a name typed with stacked combining marks cannot spill into the credit line above or below it:
+     the line's own padding is all the room ink may use */
+  overflow: clip;
+}
+.line dt {
+  margin: 0;
+  font:
+    500 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.line dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+  font:
+    500 clamp(18px, 3.6vw, 24px) / 1.25 var(--f-sans),
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
+  letter-spacing: -0.01em;
+}
+.line dd em {
+  display: block;
+  margin-top: 3px;
+  font:
+    italic 400 clamp(16px, 3.2vw, 19px) / 1.3 var(--f-serif),
+    ui-serif,
+    Georgia,
+    serif;
+  color: var(--muted);
+}
+.line .state {
+  display: block;
+  margin-top: 5px;
+  text-decoration: none;
+  font:
+    400 10px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+/* three-strip honesty: declared prints in register, computed is visibly misregistered, unknown is pencil */
+.line[data-honesty="computed"] .value {
+  font-weight: 400;
+  text-shadow:
+    0.8px 0 rgba(226, 54, 42, 0.6),
+    -0.8px 0 rgba(31, 184, 201, 0.6);
+}
+:root[data-decor="off"] .line[data-honesty="computed"] .value {
+  text-shadow: none;
+}
+.line[data-honesty="unknown"] .value {
+  color: var(--muted);
+  font-style: italic;
+  font-weight: 400;
+}
+.line code {
+  font:
+    400 0.8em/1.4 var(--f-mono),
+    ui-monospace,
+    monospace;
+  overflow-wrap: anywhere;
+}
+.flipped {
+  margin: 0.5rem 0 0;
+  color: var(--muted);
+  font:
+    400 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.details {
+  margin-top: 0.25rem;
+}
+/* the flips made from this stage: one quiet line that opens a list */
+.flips-of {
+  margin-top: 0.25rem;
+}
+.flips-of-toggle {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font:
+    500 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.flips-of-toggle::after {
+  content: "+";
+  margin-left: 0.6em;
+}
+.flips-of-toggle[aria-expanded="true"]::after {
+  content: "\2212";
+}
+.flips-of-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.flips-of-item {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-top: 1px solid var(--hair);
+}
+.flips-of-trace {
+  flex: none;
+  width: 72px;
+}
+.flips-of-trace .trace {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 300 / 84;
+}
+.flips-of-text {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.flips-of-title {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-weight: 600;
+}
+.flips-of-by,
+.flips-of-facts {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font:
+    400 12px/1.4 var(--f-mono),
+    ui-monospace,
+    monospace;
+}
+.flips-of-note {
+  margin: 0.5rem 0 0;
+  color: var(--muted);
+  font:
+    400 12px/1.4 var(--f-mono),
+    ui-monospace,
+    monospace;
+}
+.block:not([data-hero="true"]) .flips-of {
+  opacity: 0.62;
+}
+.details summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  cursor: pointer;
+  font:
+    500 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.details dl {
+  margin: 0;
+}
+/* a code, drawn: its line first, the written form on request */
+.details .print {
+  display: block;
+  width: min(100%, 240px);
+  margin: 0.25rem 0 0.4rem;
+}
+.details .print-note {
+  display: block;
+  margin-bottom: 0.25rem;
+  font:
+    italic 400 0.9rem/1.3 var(--f-serif),
+    serif;
+  color: var(--muted);
+}
+.details .code summary {
+  min-height: 44px;
+  font-size: 10px;
+}
+.details .code code {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.stage-note {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 2px dashed var(--line);
+  color: var(--ink);
+}
+.stage-note p {
+  margin: 0;
+}
+.stage-note p + p {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+.flip {
+  margin: 0.5rem 0 0;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  padding: 0.4rem 1.1rem;
+  font:
+    500 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.flip.primary {
+  min-height: 44px;
+  padding: 0 1.4rem;
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+  font-weight: 600;
+}
+.cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  background: var(--ink);
+  animation: blink 1s steps(1) infinite;
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* what the page says: the state of loading and playing, the order, a retry */
+.notes {
+  position: absolute;
+  left: 50%;
+  bottom: 84px;
+  transform: translateX(-50%);
+  z-index: 6;
+  width: max-content;
+  max-width: min(560px, calc(100vw - 32px));
+  text-align: center;
+  pointer-events: none;
+}
+/* the status is a pill, so it stays readable over the record */
+.notes .status {
+  display: inline-block;
+  margin: 0 0 0.35rem;
+  padding: 8px 22px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  font:
+    italic 400 clamp(18px, 2.2vw, 24px) / 1.2 var(--f-serif),
+    ui-serif,
+    Georgia,
+    serif;
+  color: var(--ink);
+  /* a line that wraps breaks evenly, not with one word left alone on the second line */
+  text-wrap: balance;
+}
+.notes .status[data-empty="true"] {
+  display: none;
+}
+.notes .hint {
+  margin: 0;
+  font:
+    400 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.notes .retry {
+  pointer-events: auto;
+  margin: 0.25rem 0 0.5rem;
+}
+
+/* the plain controls: a pill at the bottom */
+.controls {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+}
+.controls button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font:
+    500 13px var(--f-mono),
+    ui-monospace,
+    monospace;
+}
+/* The pads: matte, backlit squares in each stage's dye, numbered like its ring. They sit in the status
+   stack above the transport, so the stage in view makes room for them as it does for a caption. */
+.bank {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 0 auto 0.5rem;
+  padding: 8px;
+  width: max-content;
+  max-width: 100%;
+  /* a backlit panel, dark in both themes, so the pads and their switches read over the paper and the record */
+  border: 1px solid rgb(236 230 216 / 0.16);
+  border-radius: 16px;
+  background: #0a0b0a;
+  color: #ece6d8;
+  pointer-events: auto;
+  /* fingers play pads: no browser pan, zoom or text selection on the bank (the rest of the page keeps them) */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.pads {
+  display: grid;
+  grid-template-columns: repeat(4, var(--pad));
+  gap: 6px;
+  --pad: clamp(46px, 4.4vw, 58px);
+}
+.pad {
+  --d: var(--dye-0);
+  position: relative;
+  display: block;
+  width: var(--pad);
+  height: var(--pad);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--d) 50%, #0c0b0a);
+  border-radius: 10px;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--d) 36%, #151311), #121110 78%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.12),
+    inset 0 0 14px color-mix(in srgb, var(--d) 16%, transparent);
+  color: #ece6d8;
+  text-align: left;
+  cursor: pointer;
+  touch-action: none;
+}
+.pad[data-dye="1"] {
+  --d: var(--dye-1);
+}
+.pad[data-dye="2"] {
+  --d: var(--dye-2);
+}
+.pad[data-dye="3"] {
+  --d: var(--dye-3);
+}
+.pad-n {
+  position: absolute;
+  left: 7px;
+  top: 3px;
+  font:
+    700 17px/1.1 var(--f-mono),
+    ui-monospace,
+    monospace;
+}
+/* from the tenth on the numeral has two digits, and the key's own mark sits beside it: both are smaller */
+.pad[data-pad="9"] .pad-n,
+.pad[data-pad="10"] .pad-n,
+.pad[data-pad="11"] .pad-n {
+  left: 6px;
+  top: 5px;
+  font-size: 14px;
+}
+.pad-key {
+  position: absolute;
+  right: 4px;
+  top: 5px;
+  padding: 0 3px;
+  border-radius: 4px;
+  background: rgb(255 255 255 / 0.14);
+  font:
+    600 8px/1.4 var(--f-mono),
+    ui-monospace,
+    monospace;
+}
+.pad-t {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 4px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font:
+    500 9px/1.2 var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.02em;
+  color: rgb(236 230 216 / 0.78);
+}
+/* the stage the page is showing */
+.pad[aria-current="true"] {
+  border-color: var(--d);
+}
+/* a pad that cannot play says why on its face, and is dimmer; it is still there, in its place */
+.pad[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+/* while its voice sounds the pad keeps a quiet glow from within */
+.pad[data-sounding="true"] {
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--d) 70%, #151311),
+    color-mix(in srgb, var(--d) 34%, #121110)
+  );
+  box-shadow:
+    inset 0 0 0 1px var(--d),
+    inset 0 0 18px color-mix(in srgb, var(--d) 55%, transparent),
+    0 0 14px color-mix(in srgb, var(--d) 50%, transparent);
+}
+/* pressed: the dye floods to full with a phosphor-green core that decays, light from within */
+.pad.hit {
+  animation: pad-hit 0.3s ease-out;
+}
+@keyframes pad-hit {
+  0% {
+    background: radial-gradient(circle at 50% 50%, #cffff0 0%, #5dff9c 18%, var(--d) 64%);
+    box-shadow:
+      inset 0 0 0 1px #5dff9c,
+      0 0 26px #5dff9c;
+  }
+  100% {
+    box-shadow: none;
+  }
+}
+.roll[data-reduced="true"] .pad.hit {
+  animation: none;
+}
+.bank-side {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+/* one at a time | overlap is one pill with two halves, and stop sits under it */
+.bank-side .rule {
+  display: flex;
+  border: 1px solid rgb(236 230 216 / 0.4);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.bank-side .rule button {
+  flex: 1 1 auto;
+  white-space: nowrap;
+  border: 0;
+  border-radius: 0;
+}
+.bank-side button {
+  min-width: 56px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid rgb(236 230 216 / 0.4);
+  border-radius: 999px;
+  background: transparent;
+  color: #ece6d8;
+  font:
+    500 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.06em;
+}
+.bank-side button[aria-pressed="true"] {
+  background: #ece6d8;
+  color: #0a0b0a;
+}
+
+/* one line of plain words under the rule and under the phrase buttons: what they do */
+.bank-help {
+  flex-basis: 100%;
+  margin: 0;
+  text-align: center;
+  color: rgb(236 230 216 / 0.78);
+  font:
+    400 11px/1.4 var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.04em;
+}
+.bank-help:empty {
+  display: none;
+}
+/* how-to sits beside rec while there is no phrase (the row has the room), so it adds no height */
+.bank-phrase .bank-help-how {
+  flex: 1 1 0;
+  text-align: left;
+}
+/* while recording the line is not shown, but it keeps its room: rec turns into stop rec where it stood */
+.bank-phrase .bank-help-how[data-recording="true"] {
+  visibility: hidden;
+}
+/* a narrow screen has no room for a line of its own under each group: the rule's sentence moves into the
+   status pill under the bank (where the keys hint, useless without a keyboard, would be), and the
+   line about play and loop goes; the buttons keep their titles */
+@media (max-width: 480px) {
+  .bank-help-rule,
+  .bank-help-after {
+    display: none;
+  }
+}
+
+/* a phrase: rec, play, loop, copy link and clear sit on a second row of the panel */
+.bank-phrase {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid rgb(236 230 216 / 0.12);
+}
+.bank-phrase button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 56px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid rgb(236 230 216 / 0.4);
+  border-radius: 999px;
+  background: transparent;
+  color: #ece6d8;
+  font:
+    500 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.06em;
+}
+.bank-phrase button[aria-pressed="true"] {
+  background: #ece6d8;
+  color: #0a0b0a;
+}
+.bank-phrase button:disabled {
+  opacity: 0.45;
+}
+.bank-phrase .short {
+  display: none;
+}
+/* a narrow screen: the five buttons share one row (short words show, the full names stay on the buttons),
+   so the bank keeps the height it has without a phrase and does not cover the stage's title */
+@media (max-width: 420px) {
+  .bank-phrase {
+    gap: 4px;
+    flex-wrap: nowrap;
+  }
+  .bank-phrase button {
+    min-width: 0;
+    padding: 0 9px;
+    gap: 5px;
+  }
+  .bank-phrase .long {
+    display: none;
+  }
+  .bank-phrase .short {
+    display: inline;
+  }
+}
+/* the recording light: a hot red dot, pulsing while a phrase is being kept */
+.bank-phrase .rec-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ff5a4a;
+  box-shadow: 0 0 8px #ff5a4a;
+}
+.bank-phrase .rec[aria-pressed="true"] {
+  background: #ff5a4a;
+  border-color: #ff5a4a;
+  color: #1a0503;
+}
+.bank-phrase .rec[aria-pressed="true"] .rec-dot {
+  background: #1a0503;
+  box-shadow: none;
+  animation: rec-pulse 1s steps(2, jump-none) infinite;
+}
+@keyframes rec-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+.roll[data-reduced="true"] .bank-phrase .rec-dot {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bank-phrase .rec-dot {
+    animation: none !important;
+  }
+}
+/* the quiet invitation of a link that carries a phrase: a line and two small buttons under the transport */
+.phrase-invite {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2px 8px;
+  margin: 0 auto 0.5rem;
+  width: max-content;
+  max-width: min(26rem, 100%);
+  padding: 6px 14px 8px;
+  /* the page's ground and a hairline, as the status line has, so the words hold over a ring that passes */
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: var(--bg);
+  text-align: center;
+  pointer-events: auto;
+}
+.phrase-invite p {
+  margin: 0;
+  flex-basis: 100%;
+  color: var(--ink);
+  font:
+    italic 400 15px / 1.25 var(--f-serif),
+    ui-serif,
+    Georgia,
+    serif;
+}
+.phrase-invite button {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.06em;
+}
+.phrase-invite button:first-of-type {
+  border-color: transparent;
+  background: var(--live, #5dff9c);
+  color: #04110a;
+}
+
+/* perform: a mode, so it is a pressed button; lit in the phosphor green (or the live stage's colour) */
+.controls .perform-toggle {
+  margin-left: 6px;
+  border: 1px solid var(--line);
+  letter-spacing: 0.06em;
+}
+.controls .perform-toggle[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--live, #5dff9c);
+  color: #04110a;
+}
+.controls .primary {
+  min-width: 88px;
+  /* the first visit's label is a short sentence: it stays on one line, and the pill grows to hold it */
+  white-space: nowrap;
+  background: var(--ink);
+  color: var(--bg);
+}
+
+/* a short phone: the header, the sentence and the independence line already fill a third of the screen,
+   so the stage tightens its own gaps to keep its flip button whole and clear of the fade */
+@media (max-aspect-ratio: 9/10) and (max-height: 700px) {
+  .slab {
+    margin-bottom: 1.6vh;
+  }
+  .kicker-row {
+    margin-bottom: 4px;
+  }
+  .bar .sentence {
+    line-height: 1.05;
+  }
+}
+
+/* the independence line */
+.roll .footer {
+  /* landscape: over the record, bottom right, on its own backing, so a tall stage never runs into it */
+  position: absolute;
+  right: 3vw;
+  bottom: 18px;
+  z-index: 6;
+  margin: 0;
+  padding: 6px 12px;
+  max-width: 36ch;
+  border-radius: 12px;
+  background: #0a0b0a;
+  text-align: right;
+  font:
+    400 10px/1.4 var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.04em;
+  color: #b9b2a4;
+}
+.roll .footer :is(a, .how-link, .keys-link) {
+  color: #ece6d8;
+}
+.roll .footer p {
+  margin: 0;
+}
+.roll .footer a {
+  min-height: 24px;
+  line-height: 24px;
+}
+
+/* portrait: the record is the bottom of the screen, the stage is the top */
+@media (max-aspect-ratio: 9/10) {
+  .roll {
+    --R: 0px;
+  }
+  .bar .meta {
+    display: none;
+  }
+  .block {
+    margin-left: 22px;
+    max-width: calc(100vw - 44px);
+  }
+  .block {
+    padding: 9vh 0;
+  }
+  /* Portrait: the stages around the one in view lie over the record, so only the one in view is touchable. */
+  .block:not([data-hero="true"]) :is(button, summary, a) {
+    pointer-events: none;
+  }
+  .viewport {
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 10%,
+      #000 13%,
+      #000 54%,
+      transparent 60%
+    );
+    mask-image: linear-gradient(to bottom, transparent 10%, #000 13%, #000 54%, transparent 60%);
+  }
+  .line {
+    padding: 6px 0;
+  }
+  .line dd {
+    font-size: 17px;
+  }
+  .line dd em {
+    font-size: 15px;
+  }
+  .notes .hint {
+    display: none;
+  }
+  .record-caption {
+    right: auto;
+    left: 22px;
+    bottom: 70px;
+  }
+  .bar .sentence {
+    font-size: clamp(19px, 5.2vw, 24px);
+    max-width: calc(100vw - 44px);
+    /* clear of the two buttons above it, which are on the same side */
+    margin-top: 6px;
+  }
+  .roll .footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 14px;
+    left: 22px;
+    right: 22px;
+    bottom: auto;
+    top: calc(var(--bar-h, 64px) + 2px);
+    max-width: none;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    text-align: left;
+    color: var(--muted);
+  }
+  .roll .footer :is(a, .how-link, .keys-link) {
+    color: inherit;
+  }
+  /* the note and its two links share a row, so the header does not crowd the stage's room */
+  .roll .footer p {
+    flex: 1 1 8rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sheet,
+  .block {
+    transition: none;
+  }
+  .block[data-hero="true"] .slab {
+    animation: none;
+  }
+  .cursor {
+    animation: none;
+  }
+}
+
+.quiet {
+  padding-top: 2rem;
+  padding-bottom: 2rem;
+}
+.quiet h2 {
+  font:
+    800 clamp(1.8rem, 8vw, 3rem)/1.05 ui-serif,
+    Georgia,
+    serif;
+  margin: 0 0 0.5rem;
+}
+.quiet a {
+  display: inline-block;
+  min-height: 44px;
+  line-height: 44px;
+  color: inherit;
+}
+
+/* The operator's page: plain, stacked, and usable on a phone. */
+.admin {
+  padding-bottom: 3rem;
+}
+.admin h2,
+.admin h3 {
+  margin: 1.25rem 0 0.5rem;
+}
+.admin-gate {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 24rem;
+  padding-top: 1rem;
+}
+.admin-gate input {
+  font: inherit;
+  min-height: 44px;
+  padding: 0.25rem 0.5rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 2px solid var(--line);
+}
+.admin-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.admin-bar h2 {
+  flex: 1 1 auto;
+  margin: 0;
+}
+.admin-switches {
+  display: flex;
+  gap: 1.5rem;
+  margin: 0 0 0.5rem;
+}
+.admin-switches dt {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+.admin-switches dd {
+  margin: 0;
+  font-weight: 700;
+}
+.admin-reports {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+}
+.admin-reports li {
+  border: 2px solid var(--line);
+  padding: 0.75rem;
+}
+.admin-reports p {
+  margin: 0 0 0.35rem;
+}
+.admin-title {
+  font-weight: 700;
+}
+.admin-note {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.admin-state {
+  font-weight: 700;
+}
+.admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.admin-actions a {
+  display: inline-block;
+  min-height: 44px;
+  line-height: 44px;
+  color: inherit;
+}
+.admin-table {
+  overflow-x: auto;
+}
+.admin-table table {
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.admin-table th,
+.admin-table td {
+  border: 1px solid var(--line);
+  padding: 0.25rem 0.5rem;
+  text-align: left;
+  white-space: nowrap;
+}
+
+/* a narrow screen: the two header buttons share the width, so their lettering is tighter and neither wraps */
+@media (max-width: 420px) {
+  .bar {
+    padding: 8px 14px;
+    gap: 0.5rem;
+  }
+  .bar .make-link,
+  .bar .theme {
+    padding: 0 0.8rem;
+    letter-spacing: 0.06em;
+  }
+}
+
+/* the footer's second link is a button that looks like the first */
+.footer-links {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px 14px;
+  align-items: center;
+}
+.how-link {
+  /* help should be easy to find: a pill with a question mark, a 44 px target, the same small type */
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid color-mix(in srgb, currentColor 50%, transparent);
+  border-radius: 999px;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.how-mark {
+  font-weight: 700;
+}
+.keys-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid color-mix(in srgb, currentColor 50%, transparent);
+  border-radius: 999px;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.keys-icon {
+  display: none;
+}
+@media (max-width: 420px) {
+  /* the keys button is a round keyboard here, still named "keys": the note beside it keeps its three lines */
+  .keys-link {
+    justify-content: center;
+    width: 44px;
+    padding: 0;
+  }
+  .keys-link .keys-icon {
+    display: block;
+  }
+  .keys-link .keys-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .footer-links {
+    gap: 8px;
+  }
+}
+@media (max-width: 420px) {
+  /* a narrow phone has no room for the words: a round question mark, still named "how it works" */
+  .how-link {
+    justify-content: center;
+    width: 44px;
+    padding: 0;
+  }
+  .how-mark {
+    font-size: 16px;
+  }
+  .how-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* THE FIRST PLAY'S CAPTION: a line in the marker hand, in the status slot, with a drawn underline. It
+   rides on the roll's own steps; where the record is, it keeps off it (the numbers come from the page). */
+.notes[data-caption="true"] {
+  left: var(--cap-left);
+  bottom: var(--cap-bottom);
+  transform: var(--cap-tf);
+  max-width: var(--cap-max);
+  width: var(--cap-max);
+  text-align: left;
+}
+.notes[data-caption="true"] .status {
+  display: none;
+}
+.caption {
+  display: flex;
+  align-items: flex-end;
+  gap: 0 8px;
+  /* two lines are always kept, so a longer caption does not move the stage above it */
+  min-height: calc(2 * 1.12em + 14px);
+  font-size: clamp(20px, 2.5vw, 30px);
+}
+.caption-text {
+  position: relative;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0 2px 12px;
+  font:
+    400 1em / 1.12 var(--f-brush),
+    cursive;
+  color: var(--ink);
+  /* the page's ground behind the words, so they read over a ring if one passes under */
+  text-shadow:
+    0 0 6px var(--bg),
+    0 0 12px var(--bg),
+    0 0 2px var(--bg);
+  transform: rotate(-0.6deg);
+  transform-origin: left bottom;
+  animation: caption-in 0.3s ease-out both;
+}
+.caption-text svg {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 12px;
+  overflow: visible;
+}
+.caption-text path {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: caption-draw 0.5s 0.15s cubic-bezier(0.4, 0.1, 0.2, 1) forwards;
+}
+@keyframes caption-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes caption-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px) rotate(-0.6deg);
+  }
+}
+.caption-skip {
+  pointer-events: auto;
+  flex: none;
+  align-self: flex-end;
+  min-width: 44px;
+  min-height: 44px;
+  margin-bottom: -6px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.1em;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* THE HINTS: a few words on an ink tag with a short marker arrow, beside the thing they point at. They
+   catch no press (the whole layer ignores the pointer) and go by themselves. */
+.hint-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  pointer-events: none;
+}
+.hint-arrow {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+.hint-arrow path {
+  fill: none;
+  /* chalk with a dark edge: it reads over the paper and over the record alike */
+  stroke: #f6f1e6;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  filter: drop-shadow(0 0 1px #14110e) drop-shadow(0 0 2px #14110e);
+  animation:
+    caption-draw 0.45s cubic-bezier(0.4, 0.1, 0.2, 1) forwards,
+    hint-life 7s linear forwards;
+}
+.hint-arrow path:nth-child(2) {
+  animation-delay: 0.4s, 0s;
+}
+.hint-note {
+  position: absolute;
+  box-sizing: border-box;
+  max-width: min(280px, calc(100vw - 24px));
+  margin: 0;
+  padding: 8px 14px 9px;
+  background: var(--ink);
+  color: var(--bg);
+  font:
+    400 clamp(21px, 2.2vw, 26px) / 1.1 var(--f-brush),
+    cursive;
+  transform: rotate(-1deg);
+  animation:
+    caption-in 0.3s ease-out both,
+    hint-life 7s linear forwards;
+}
+@keyframes hint-life {
+  0%,
+  86% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .caption-text,
+  .hint-note {
+    animation: none;
+  }
+  .caption-text path,
+  .hint-arrow path {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}
+
+/* WHAT GRAFT IS, in one line under the bar: the first thing a stranger reads. It is part of the bar, so
+   the stage's room is measured below it. */
+.bar {
+  flex-wrap: wrap;
+  row-gap: 0;
+}
+
+/* the stage's two ways to flip: the whole stage, or a part marked on the record */
+.flip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.mark-toggle {
+  min-height: 44px;
+  margin: 0.5rem 0 0;
+  padding: 0 1.2rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font:
+    500 11px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.mark-toggle[aria-pressed="true"] {
+  border-color: var(--focus);
+  background: var(--focus);
+  color: var(--bg);
+}
+/* the marked part's action: above the controls, and in portrait just under the stage so it never
+   sits on the brackets it belongs to */
+.mark-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 84px;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  align-items: center;
+  width: min(640px, calc(100vw - 32px));
+}
+@media (max-aspect-ratio: 9/10) {
+  .mark-bar {
+    bottom: auto;
+    top: 58%;
+  }
+  /* two rows must fit a phone: the speeds, then hear, flip and clear */
+  .mark-bar button {
+    padding: 0 12px;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+  }
+  .mark-bar .speed-chip {
+    padding: 0 6px;
+  }
+  /* the part's length is on the record beside its brackets and in the note under the buttons */
+  .mark-bar .part-length {
+    display: none;
+  }
+  /* the note wraps to two lines on a phone: both are held, so a speed chosen does not change the bar's size */
+  .mark-bar .edit-note {
+    min-height: calc(2 * 1.4 * 11px + 8px);
+  }
+}
+/* the part's speed, chosen where it was marked: its own row, six chips, the chosen one filled */
+.mark-bar .speeds {
+  display: flex;
+  flex-basis: 100%;
+  justify-content: center;
+  gap: 6px;
+}
+.mark-bar .speed-chip {
+  min-width: 44px;
+  padding: 0 10px;
+}
+.mark-bar button[aria-pressed="true"] {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+}
+.mark-bar .edit-note {
+  flex-basis: 100%;
+  /* one line's height (its text and the padding of its pill), held while it is empty */
+  min-height: calc(1.4 * 11px + 8px);
+  margin: 0;
+  text-align: center;
+  font:
+    400 11px/1.4 var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.mark-bar .edit-note span {
+  display: inline-block;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: var(--bg);
+}
+.mark-bar button {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--ink);
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+.mark-bar .primary {
+  border-color: var(--focus);
+  background: var(--focus);
+  color: var(--bg);
+}
+
+/* calmer credit lines: the honesty state is a small tag beside the value, not a line of its own */
+.face .line dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0.6em;
+}
+.face .line dd em {
+  flex-basis: 100%;
+  order: 2;
+}
+.face .line .state {
+  order: 1;
+  display: inline-block;
+  margin-top: 0;
+  padding: 1px 6px;
+  border: 1px solid var(--hair);
+  border-radius: 2px;
+  font-size: 9px;
+}

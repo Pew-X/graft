@@ -12,6 +12,8 @@
     "exactOptionalPropertyTypes": true,
     "isolatedModules": true,
     "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
     "allowJs": false,
     "skipLibCheck": true,
     "noEmit": true,

@@ -10,12 +10,25 @@ export const ALLOWED = {
   "graft-render": null,
   "graft-storage": ["graft-domain"],
   "graft-render-host": ["graft-domain"],
-  "graft-events": ["graft-domain"],
-  "graft-api": ["graft-domain", "graft-storage", "graft-render-host", "graft-events"],
+  "graft-events": ["graft-domain", "graft-storage"],
+  "graft-queue": ["graft-storage", "graft-events"],
+  "graft-vectors": ["graft-render", "graft-render-host"],
+  "graft-host-check": ["graft-render-host", "graft-vectors"],
+  "graft-api": ["graft-domain", "graft-storage", "graft-render-host", "graft-events", "graft-queue"],
+};
+
+/**
+ * External dependencies a crate is limited to. A crate listed here may use nothing else, which is how
+ * "no network surface" is enforced for the render host: no HTTP, socket or async-runtime crate can be
+ * added without changing this list in review.
+ */
+export const EXTERNAL_ONLY = {
+  "graft-render-host": ["sha2", "thiserror", "wasmtime", "wat"],
+  "graft-host-check": ["serde_json"],
 };
 
 /** @returns {string[]} one message per violation */
-export function violations(packages, allowed = ALLOWED) {
+export function violations(packages, allowed = ALLOWED, externalOnly = EXTERNAL_ONLY) {
   const known = new Set(Object.keys(allowed));
   const found = [];
   for (const pkg of packages) {
@@ -29,6 +42,12 @@ export function violations(packages, allowed = ALLOWED) {
         found.push(`${pkg.name}: must have no dependencies, found ${dep.name}`);
       } else if (known.has(dep.name) && !rule.includes(dep.name)) {
         found.push(`${pkg.name}: may not depend on ${dep.name} (${dep.kind ?? "normal"})`);
+      } else if (
+        !known.has(dep.name) &&
+        externalOnly[pkg.name] &&
+        !externalOnly[pkg.name].includes(dep.name)
+      ) {
+        found.push(`${pkg.name}: external dependency ${dep.name} is not on its allowlist`);
       }
     }
   }

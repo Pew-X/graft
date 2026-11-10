@@ -1,0 +1,40 @@
+# Extends gitleaks' default rules. The allowlist names only throwaway values that are deliberately in
+# the repository: the credentials of a local test container (documented in README.md and used by CI)
+# a fake operator secret that a test uses to prove secrets never reach the logs, and the fixed retry
+# keys two browser tests send to prove a closed stage refuses a new flip, and the two operator secrets
+# the local rehearsal script gives a private service it starts and removes. Nothing else is
+# allowed; a real credential anywhere still fails the scan.
+title = "graft"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "throwaway credentials of the local and CI test object store, a fake test secret, two fixed test retry keys, and the local rehearsal's two operator secrets"
+regexes = [
+  '''graftsecret12345''',
+  '''an-operator-secret-0123456789''',
+  '''e2e-(closed|reopened)-0123456789abcdef''',
+  '''rehearsal-secret-(one|two)-[0-9]{10}''',
+]
+
+# The builder's other organisation and real AWS account ids must never be committed. The regexes are
+# written so that this file does not match itself.
+[[rules]]
+id = "private-organisation"
+description = "names a private organisation"
+regex = '''(?i)trel{2}ys'''
+
+[[rules]]
+id = "aws-account-id"
+description = "a real AWS account id in an ARN"
+regex = '''arn:aws[a-z-]*:[a-z0-9-]*:[a-z0-9-]*:[0-9]{12}:'''
+[[rules.allowlists]]
+regexes = ['''arn:aws[a-z-]*:[a-z0-9-]*:[a-z0-9-]*:(123456789012|000000000000):''']
+
+[[rules]]
+id = "aws-account-id-registry"
+description = "a real AWS account id in a container registry address"
+regex = '''(?:^|[^0-9-])([0-9]{12})\.dkr\.ecr'''
+[[rules.allowlists]]
+regexes = ['''^(123456789012|000000000000)$''']

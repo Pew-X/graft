@@ -1,0 +1,41 @@
+# The service image: the HTTP service, the canonical renderer artefact it loads, and the tools the
+# release step runs (seed, rebuild the rollups, remove orphaned audio). One image, three uses; the
+# command says which. (Dockerfile, the host-check image, is separate: it runs the vector table on a host.)
+#
+# Built for the host it will run on (linux/amd64 on ECS with Fargate unless the task says arm64).
+# Base images are pinned by version tag; pinning by digest needs registry access and is done by the
+# deploy script, which records the digest it built from.
+#
+#   docker build -f Dockerfile.service -t graft-service .
+#   docker run --rm -p 8080:8080 -e GRAFT_DATABASE_URL=... graft-service          # the service
+#   docker run --rm -e GRAFT_DATABASE_URL=... ... graft-service graft-seed-chain --manifest seed/chain.json --check-snapshot web
+FROM rust:1.97.1-bookworm AS build
+WORKDIR /src
+COPY . .
+# rust-toolchain.toml names the exact toolchain and the wasm32 target; install them explicitly.
+RUN rustup toolchain install \
+ && sh scripts/build-wasm.sh \
+ && cargo build --release --locked -p graft-api \
+      --bin graft-api --bin graft-seed-chain --bin graft-rebuild-rollups --bin graft-blob-cleanup
+
+FROM debian:bookworm-slim
+# Certificates: the bucket and the database are reached over TLS.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
+ && useradd --system --no-create-home graft
+WORKDIR /app
+COPY --from=build /src/target/release/graft-api /src/target/release/graft-seed-chain \
+     /src/target/release/graft-rebuild-rollups /src/target/release/graft-blob-cleanup /usr/local/bin/
+COPY --from=build /src/target/wasm32-unknown-unknown/wasm/graft_render.wasm /app/graft_render.wasm
+# What the release step seeds from, and the snapshot (its data and its audio files) it checks the
+# seeded database against.
+COPY seed /app/seed
+COPY web/snapshot /app/web/snapshot
+COPY web/public/seed /app/web/public/seed
+ENV GRAFT_BIND=0.0.0.0:8080 \
+    GRAFT_RENDERER_WASM=/app/graft_render.wasm
+EXPOSE 8080
+USER graft
+# The service applies pending migrations when it starts. The platform's health check is GET /ready.
+CMD ["graft-api"]

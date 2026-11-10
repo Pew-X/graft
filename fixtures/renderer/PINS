@@ -1,0 +1,3 @@
+# Append-only. One line per renderer version: <version> <sha256 of the .wasm>.
+# A hash may not change without a new version, and a published line is never edited.
+1 79a53dacac99d608f71f137a913a33d095851e01291059f6958b21db8835d1bd
