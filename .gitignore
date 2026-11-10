@@ -31,5 +31,8 @@ web/test-results/
 .aws-dev.env
 .deploy/
 
+# Patterns the author never wants committed (read by scripts/check-repo.mjs)
+.private-patterns
+
 # Local convenience targets (park, unpark, status): never committed
 GNUmakefile

@@ -18,13 +18,7 @@ regexes = [
   '''rehearsal-secret-(one|two)-[0-9]{10}''',
 ]
 
-# The builder's other organisation and real AWS account ids must never be committed. The regexes are
-# written so that this file does not match itself.
-[[rules]]
-id = "private-organisation"
-description = "names a private organisation"
-regex = '''(?i)trel{2}ys'''
-
+# Real AWS account ids must never be committed; AWS's documented example ids are the only ones allowed.
 [[rules]]
 id = "aws-account-id"
 description = "a real AWS account id in an ARN"
