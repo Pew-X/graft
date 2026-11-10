@@ -592,7 +592,7 @@ button:disabled {
   display: block;
   margin-top: calc(var(--size, 48px) * var(--gap, 0.1));
   font:
-    500 10px var(--f-mono),
+    500 11px var(--f-mono),
     ui-monospace,
     monospace;
   letter-spacing: 0.14em;
@@ -681,7 +681,7 @@ button:disabled {
   margin-top: 5px;
   text-decoration: none;
   font:
-    400 10px var(--f-mono),
+    400 11px var(--f-mono),
     ui-monospace,
     monospace;
   letter-spacing: 0.14em;
@@ -836,7 +836,7 @@ button:disabled {
 }
 .details .code summary {
   min-height: 44px;
-  font-size: 10px;
+  font-size: 11px;
 }
 .details .code code {
   display: block;
@@ -1059,7 +1059,7 @@ button:disabled {
   white-space: nowrap;
   text-overflow: ellipsis;
   font:
-    500 9px/1.2 var(--f-mono),
+    500 10px/1.2 var(--f-mono),
     ui-monospace,
     monospace;
   letter-spacing: 0.02em;
@@ -1358,7 +1358,7 @@ button:disabled {
   background: #0a0b0a;
   text-align: right;
   font:
-    400 10px/1.4 var(--f-mono),
+    400 11px/1.4 var(--f-mono),
     ui-monospace,
     monospace;
   letter-spacing: 0.04em;
@@ -1976,5 +1976,5 @@ button:disabled {
   padding: 1px 6px;
   border: 1px solid var(--hair);
   border-radius: 2px;
-  font-size: 9px;
+  font-size: 10px;
 }
