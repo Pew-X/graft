@@ -1,0 +1,200 @@
+{
+  "version": 1,
+  "stages": [
+    {
+      "id": "e790b6ycz0yd",
+      "kind": "source",
+      "title": "dm9 chord",
+      "author": "graft",
+      "parent_id": null,
+      "lines": [
+        {
+          "role": "source",
+          "value": "dm9 chord",
+          "honesty": "declared"
+        },
+        {
+          "role": "licence",
+          "value": "own work, synthesized for graft",
+          "honesty": "declared"
+        },
+        {
+          "role": "by",
+          "value": "graft",
+          "honesty": "declared"
+        },
+        {
+          "role": "renderer",
+          "value": "graft-render 1",
+          "honesty": "computed"
+        },
+        {
+          "role": "rights",
+          "value": "not established",
+          "honesty": "unknown"
+        }
+      ],
+      "record_id": "e7ab3bbc98570695f0357db4ef95ec4bfe9352f197cb9085b71b8c7cf98c6f19",
+      "source_blob": "4e22bb6233c6783823d2f94fb1593dab34ee5a32816524de0ad019d6e4c6d38c",
+      "output_blob": "4e22bb6233c6783823d2f94fb1593dab34ee5a32816524de0ad019d6e4c6d38c",
+      "cut_start": 0,
+      "cut_end": 57600,
+      "speed_p": null,
+      "speed_q": null,
+      "renderer": "graft-render 1",
+      "renderer_wasm_sha256": "79a53dacac99d608f71f137a913a33d095851e01291059f6958b21db8835d1bd",
+      "frames": 57600,
+      "audio_path": "/seed/4e22bb6233c6783823d2f94fb1593dab34ee5a32816524de0ad019d6e4c6d38c.pcm"
+    },
+    {
+      "id": "q0yjjgng394w",
+      "kind": "flip",
+      "title": "up a fifth",
+      "author": "graft",
+      "parent_id": "e790b6ycz0yd",
+      "lines": [
+        {
+          "role": "flip",
+          "value": "up a fifth",
+          "honesty": "declared"
+        },
+        {
+          "role": "flipped by",
+          "value": "graft",
+          "honesty": "declared"
+        },
+        {
+          "role": "cut",
+          "value": "frames 0 to 43200",
+          "honesty": "computed"
+        },
+        {
+          "role": "speed",
+          "value": "3/2",
+          "honesty": "computed"
+        },
+        {
+          "role": "renderer",
+          "value": "graft-render 1",
+          "honesty": "computed"
+        },
+        {
+          "role": "rights",
+          "value": "not established",
+          "honesty": "unknown"
+        }
+      ],
+      "record_id": "6c6b1353b94a9bb9004368c3c7731431323d8502d8df8be71edcd6e3eb816307",
+      "source_blob": "4e22bb6233c6783823d2f94fb1593dab34ee5a32816524de0ad019d6e4c6d38c",
+      "output_blob": "287c7dc1680507b2a6ab0508f763639a6389d2d1e3c4f8a83e2bff03a18c32b1",
+      "cut_start": 0,
+      "cut_end": 43200,
+      "speed_p": 3,
+      "speed_q": 2,
+      "renderer": "graft-render 1",
+      "renderer_wasm_sha256": "79a53dacac99d608f71f137a913a33d095851e01291059f6958b21db8835d1bd",
+      "frames": 28800,
+      "audio_path": "/seed/287c7dc1680507b2a6ab0508f763639a6389d2d1e3c4f8a83e2bff03a18c32b1.pcm"
+    },
+    {
+      "id": "4bx1vhgn2dze",
+      "kind": "flip",
+      "title": "down a fifth",
+      "author": "graft",
+      "parent_id": "q0yjjgng394w",
+      "lines": [
+        {
+          "role": "flip",
+          "value": "down a fifth",
+          "honesty": "declared"
+        },
+        {
+          "role": "flipped by",
+          "value": "graft",
+          "honesty": "declared"
+        },
+        {
+          "role": "cut",
+          "value": "frames 960 to 24000",
+          "honesty": "computed"
+        },
+        {
+          "role": "speed",
+          "value": "2/3",
+          "honesty": "computed"
+        },
+        {
+          "role": "renderer",
+          "value": "graft-render 1",
+          "honesty": "computed"
+        },
+        {
+          "role": "rights",
+          "value": "not established",
+          "honesty": "unknown"
+        }
+      ],
+      "record_id": "8ac205e3b96848df9b4b8306246ea01813550a4e7100bb175f46f295285c81c9",
+      "source_blob": "287c7dc1680507b2a6ab0508f763639a6389d2d1e3c4f8a83e2bff03a18c32b1",
+      "output_blob": "21974b2a55f7b49c6d0ce93a926ada387eb58524df62e5852104c197056a635b",
+      "cut_start": 960,
+      "cut_end": 24000,
+      "speed_p": 2,
+      "speed_q": 3,
+      "renderer": "graft-render 1",
+      "renderer_wasm_sha256": "79a53dacac99d608f71f137a913a33d095851e01291059f6958b21db8835d1bd",
+      "frames": 34559,
+      "audio_path": "/seed/21974b2a55f7b49c6d0ce93a926ada387eb58524df62e5852104c197056a635b.pcm"
+    },
+    {
+      "id": "es1418qka9yt",
+      "kind": "flip",
+      "title": "down an octave",
+      "author": "graft",
+      "parent_id": "4bx1vhgn2dze",
+      "lines": [
+        {
+          "role": "flip",
+          "value": "down an octave",
+          "honesty": "declared"
+        },
+        {
+          "role": "flipped by",
+          "value": "graft",
+          "honesty": "declared"
+        },
+        {
+          "role": "cut",
+          "value": "frames 4800 to 33600",
+          "honesty": "computed"
+        },
+        {
+          "role": "speed",
+          "value": "1/2",
+          "honesty": "computed"
+        },
+        {
+          "role": "renderer",
+          "value": "graft-render 1",
+          "honesty": "computed"
+        },
+        {
+          "role": "rights",
+          "value": "not established",
+          "honesty": "unknown"
+        }
+      ],
+      "record_id": "609ad8fc437900094e578b6bcbe43ca2689df8a7c5c3b35885b19b917f68f255",
+      "source_blob": "21974b2a55f7b49c6d0ce93a926ada387eb58524df62e5852104c197056a635b",
+      "output_blob": "8bd4f562df12ed6e38a1e8ff6ef4179787a4365ace0263dd29be766bc1ffe3db",
+      "cut_start": 4800,
+      "cut_end": 33600,
+      "speed_p": 1,
+      "speed_q": 2,
+      "renderer": "graft-render 1",
+      "renderer_wasm_sha256": "79a53dacac99d608f71f137a913a33d095851e01291059f6958b21db8835d1bd",
+      "frames": 57599,
+      "audio_path": "/seed/8bd4f562df12ed6e38a1e8ff6ef4179787a4365ace0263dd29be766bc1ffe3db.pcm"
+    }
+  ]
+}

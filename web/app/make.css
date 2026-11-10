@@ -1,0 +1,2036 @@
+/* The make flow, in the roll's grammar (variant E): a torn slab for the sound, wall-label type,
+   one saturated dye for the speed, hairline panels. Tokens come from lib/theme/tokens.ts. */
+.make {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 3rem;
+  /* the end bracket's 44 px touch box sits past the right edge of the waveform: on a phone it made the
+     whole page scroll sideways by about 27 px (found by the hostile text test). Clipped, not hidden: no
+     scroll container is made. */
+  overflow-x: clip;
+}
+.make .kicker {
+  margin: 0 0 0.6rem;
+}
+.make .gloss {
+  margin-left: 0.5rem;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  font-family: var(--f-serif), serif;
+  font-style: italic;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+.stage-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 1.5rem;
+}
+.make .slab {
+  --dye: #d2342a;
+  --dye-text: #ffffff;
+  margin: 0;
+}
+.make .slab[data-dye="0"] {
+  --dye: #1e8c84;
+  --dye-text: #0c0b0a;
+}
+.slab-text {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  unicode-bidi: isolate;
+  padding: 0.14em 0.38em 0.2em;
+  background: var(--dye);
+  color: var(--dye-text);
+  clip-path: polygon(0.8% 9%, 99% 0, 100% 91%, 0 100%);
+  transform: rotate(-2deg);
+  font:
+    400 clamp(40px, 9vw, 72px) / 1 var(--f-brush),
+    cursive;
+}
+:root[data-decor="off"] .slab-text {
+  clip-path: none;
+  transform: none;
+}
+/* a line of words that ends in a way out leaves a little air before it (the 404 page) */
+.make .local + .quiet-link {
+  margin-top: 1rem;
+}
+.quiet-link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  min-height: 44px;
+  padding: 0 1rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.make .local,
+.make .notice {
+  margin: 1.5rem 0 0;
+  color: var(--muted);
+  font:
+    400 12px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.04em;
+}
+
+/* the picker */
+.picker-title {
+  margin: 0 0 1.25rem;
+  font:
+    800 clamp(40px, 9vw, 72px) / 0.95 var(--f-cond),
+    ui-sans-serif,
+    sans-serif;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+}
+.picker section {
+  margin-bottom: 1.5rem;
+}
+.picker ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.sound button {
+  display: grid;
+  gap: 0.1rem;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.7rem 0.9rem;
+  text-align: left;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+.sound-title {
+  justify-self: start;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  padding: 0.05em 0.35em 0.12em;
+  margin-bottom: 0.35rem;
+  background: var(--dye);
+  color: var(--dye-text);
+  clip-path: polygon(0.8% 9%, 99% 0, 100% 91%, 0 100%);
+  transform: rotate(-1.5deg);
+  font:
+    400 1.9rem/1.1 var(--f-brush),
+    cursive;
+}
+:root[data-decor="off"] .sound-title {
+  clip-path: none;
+  transform: none;
+}
+.sound:nth-child(4n + 1) {
+  --dye: #d2342a;
+  --dye-text: #ffffff;
+}
+.sound:nth-child(4n + 2) {
+  --dye: #1e8c84;
+  --dye-text: #0c0b0a;
+}
+.sound:nth-child(4n + 3) {
+  --dye: #e0a526;
+  --dye-text: #14110e;
+}
+.sound:nth-child(4n) {
+  --dye: #c2307a;
+  --dye-text: #ffffff;
+}
+.sound button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+.sound-by,
+.sound-licence {
+  overflow-wrap: anywhere;
+  font:
+    400 12px/1.4 var(--f-mono),
+    ui-monospace,
+    monospace;
+  color: var(--muted);
+}
+.stated {
+  margin-left: 0.6rem;
+  padding: 0 0.4rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* panels */
+.panel {
+  margin: 0 0 1.5rem;
+  padding: 1rem 0 0;
+  border-top: 1px solid var(--hair);
+}
+.cut-editor .track {
+  position: relative;
+  /* room above and below for the start and end tags */
+  margin: 28px 0;
+  height: 9.5rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  touch-action: none;
+  cursor: ew-resize;
+  user-select: none;
+}
+.cut-editor svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.wave-rest {
+  fill: var(--muted);
+  opacity: 0.45;
+}
+.wave-kept {
+  fill: var(--ink);
+}
+.track[data-inverted="true"] .wave-kept {
+  fill: var(--muted);
+}
+/* The two handles keep to their own sides of the cut's edges, so two handles close together never
+   cover each other: the start's touch area lies before its line and the end's after it. */
+.handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 44px;
+  display: flex;
+  outline-offset: -4px;
+  cursor: ew-resize;
+}
+.handle[data-handle="start"] {
+  margin-left: -44px;
+  justify-content: flex-end;
+}
+.handle[data-handle="end"] {
+  justify-content: flex-start;
+}
+/* The cut is a viewfinder frame: a bracket at each end, in the phosphor colour that means "the live
+   part" on the record, and a tag saying which end it is. The start bracket opens to the right and the
+   end bracket to the left, so together they frame what is kept. */
+.handle .grip {
+  position: relative;
+  width: 4px;
+  height: 100%;
+  background: var(--focus);
+  box-shadow: 0 0 0 1px var(--bg);
+  transform: translateX(4px);
+}
+.handle[data-handle="end"] .grip {
+  transform: translateX(-4px);
+}
+.handle .grip::before,
+.handle .grip::after {
+  content: "";
+  position: absolute;
+  left: 100%;
+  width: 16px;
+  height: 4px;
+  background: var(--focus);
+  box-shadow: 0 0 0 1px var(--bg);
+}
+.handle .grip::before {
+  top: 0;
+}
+.handle .grip::after {
+  bottom: 0;
+}
+.handle[data-handle="end"] .grip::before,
+.handle[data-handle="end"] .grip::after {
+  left: auto;
+  right: 100%;
+}
+.handle .tag {
+  position: absolute;
+  padding: 2px 8px;
+  background: var(--focus);
+  color: var(--bg);
+  font:
+    500 12px/1.4 var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* the start tag sits above the track, opening to the right; the end tag below it, to the left */
+.handle[data-handle="start"] .tag {
+  top: -26px;
+  left: 100%;
+  margin-left: -4px;
+}
+.handle[data-handle="end"] .tag {
+  bottom: -26px;
+  right: 100%;
+  margin-right: -4px;
+}
+.handle:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.cut-editor .help {
+  /* said to the eye as well as to a screen reader: the keyboard moves the brackets, and nothing else says so */
+  margin: 0.5rem 0 0;
+  font:
+    400 12px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+  color: var(--muted);
+}
+/* zoom: an aid for placing a bracket; off until asked for */
+.cut-editor .zoom-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.cut-editor .zoom-bar .gloss {
+  font-size: 12px;
+}
+.cut-editor .zoom-bar .pill[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--bg);
+}
+.cut-editor .track[data-zoomed="true"] {
+  cursor: crosshair;
+}
+/* a bracket outside the zoomed window waits at the edge it left by, its bracket dimmed (its label keeps
+   full strength: a dimmed label fails contrast) */
+.handle[data-offscreen] .grip {
+  opacity: 0.55;
+}
+/* the line that follows what is playing: thin, in the ink, never covering a bracket's touch area */
+.cut-editor .playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--ink);
+  box-shadow: 0 0 0 1px var(--bg);
+  pointer-events: none;
+  opacity: 0;
+}
+.cut-editor .playhead[data-on="true"] {
+  opacity: 1;
+}
+.cut-editor .readout {
+  margin: 0.5rem 0 0;
+  font:
+    400 12px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+  color: var(--muted);
+}
+.cut-editor .readout {
+  color: var(--ink);
+}
+
+/* the speed: one saturated field, set after what was done to the sound */
+.speed-readout {
+  --dye: #e0a526;
+  --dye-text: #14110e;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 100%;
+  margin-bottom: 1rem;
+  /* The torn edges are cut in pixels, not in percent of the height: the edge rises the same few pixels
+     whatever the size, so the last word of a long line under the number is never clipped. The padding
+     below and to the right keeps the words clear of those edges. */
+  padding: 0.1em 0.5em 0.5em 0.4em;
+  background: var(--dye);
+  color: var(--dye-text);
+  clip-path: polygon(0.8% 8px, 99% 0, 100% calc(100% - 6px), 0 100%);
+  transform: rotate(-2deg);
+}
+.speed-readout[data-k="up"] {
+  --dye: #d2342a;
+  --dye-text: #ffffff;
+}
+.speed-readout[data-k="down"] {
+  --dye: #1e8c84;
+  --dye-text: #0c0b0a;
+}
+:root[data-decor="off"] .speed-readout {
+  clip-path: none;
+  transform: none;
+}
+.speed-readout .percent {
+  font:
+    800 clamp(56px, 16vw, 104px) / 0.95 var(--f-cond),
+    ui-sans-serif,
+    sans-serif;
+  letter-spacing: -0.02em;
+}
+.speed-readout .interval {
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.speed-control {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.speed-control input[type="range"] {
+  flex: 1 1 auto;
+  min-height: 44px;
+  accent-color: var(--ink);
+}
+.nudge {
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font:
+    500 20px var(--f-mono),
+    ui-monospace,
+    monospace;
+}
+
+/* what you hear */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+}
+.actions .primary {
+  min-width: 112px;
+  min-height: 44px;
+  padding: 0 1.2rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  font:
+    500 13px var(--f-mono),
+    ui-monospace,
+    monospace;
+}
+.actions .primary:disabled {
+  background: transparent;
+  color: var(--muted);
+  border: 1px dashed var(--line);
+}
+.refusal {
+  margin: 0;
+  flex: 1 1 16rem;
+  font:
+    400 13px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+  color: var(--ink);
+}
+.result-rest .details {
+  margin-top: 0.75rem;
+}
+/* THE BAR: what you hear (hear it, publish, how long it comes out) stays in reach at the foot of the window
+   while the cut and speed above it are being worked, and sits in its own place once it is scrolled to. It
+   only ever moves up to the window's foot, never past its own place, so it never rides over what follows.
+   The page's ground reaches past the column on both sides, as the pinned line's does. */
+.panel.result {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 1rem;
+  margin: 0;
+  padding: 0.5rem 0 calc(0.5rem + env(safe-area-inset-bottom, 0px));
+  background: var(--bg);
+  box-shadow: 0 0 0 100vmax var(--bg);
+  clip-path: inset(0 -100vmax);
+}
+.panel.result > .kicker {
+  margin: 0;
+}
+.panel.result > .actions {
+  flex: 1 1 auto;
+  gap: 0.5rem 1rem;
+}
+.panel.result > .hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+/* the buttons say what they are: the group keeps its name for a screen reader, and the bar stays one row */
+.panel.result > .kicker {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.result-rest {
+  margin: 1rem 0 1.5rem;
+}
+/* keyboard focus is never left under the bar */
+html:has(.panel.result) {
+  scroll-padding-bottom: 6.5rem;
+}
+/* a closed disclosure says it opens */
+.details summary::before {
+  content: "+";
+  display: inline-block;
+  width: 1.4em;
+}
+.details[open] summary::before {
+  content: "\2212";
+}
+/* the way back to the roll */
+.make-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.25rem;
+}
+.make-bar .kicker {
+  margin: 0;
+}
+.make-bar .back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 1rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+}
+.result-rest .details code {
+  overflow-wrap: anywhere;
+  font-family: var(--f-mono), monospace;
+  font-size: 12px;
+}
+
+/* the publish step */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+.pill:disabled {
+  color: var(--muted);
+  border-style: dashed;
+}
+/* when the panel is scrolled to, its top lands below the steps bar and the line pinned under it */
+.publish {
+  scroll-margin-top: 8.5rem;
+  margin: 0 0 1.5rem;
+  padding: 1rem 0 0;
+  border-top: 1px solid var(--hair);
+}
+.publish .public {
+  margin: 0 0 0.5rem;
+  font:
+    800 clamp(28px, 6vw, 44px) / 1 var(--f-cond),
+    ui-sans-serif,
+    sans-serif;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+}
+.publish .field {
+  margin: 0 0 0.75rem;
+}
+.publish label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.publish input[type="text"] {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.25rem 0.6rem;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 1rem;
+}
+.publish input[aria-invalid="true"] {
+  border-color: #d2342a;
+}
+.publish .hint,
+.publish .progress {
+  min-height: 1.5em;
+  margin: 0.25rem 0 0;
+  font:
+    400 12px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+  color: var(--muted);
+}
+.publish .problem {
+  margin-top: 0.75rem;
+  font:
+    400 13px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+}
+.publish .problem:empty {
+  display: none;
+}
+.publish .problem p {
+  margin: 0 0 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-left: 6px solid #d2342a;
+  background: var(--surface);
+}
+.publish .link {
+  display: block;
+  padding: 0.6rem 0;
+  min-height: 44px;
+  overflow-wrap: anywhere;
+  font-family: var(--f-mono), monospace;
+  color: var(--ink);
+}
+.publish .manage-key code {
+  display: block;
+  padding: 0.6rem 0.75rem;
+  overflow-wrap: anywhere;
+  border: 2px dashed var(--ink);
+  background: var(--surface);
+  font:
+    500 14px var(--f-mono),
+    ui-monospace,
+    monospace;
+}
+.publish .check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  min-height: 44px;
+  text-transform: none;
+  letter-spacing: 0;
+  font:
+    400 14px/1.4 var(--f-sans),
+    sans-serif;
+}
+.publish .check input {
+  width: 24px;
+  height: 24px;
+  margin-top: 0.1rem;
+}
+.publish .notice {
+  margin-bottom: 1rem;
+}
+
+/* the manage screen, the report dialog and the about page */
+.manage input[type="password"],
+.manage input[type="text"],
+.report-dialog textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.4rem 0.6rem;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+.manage .control {
+  margin: 0 0 1rem;
+}
+.manage .hint,
+.report-dialog .hint {
+  margin: 0.4rem 0 0;
+  font:
+    400 12px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+  color: var(--muted);
+}
+.sound-title-plain {
+  margin: 0;
+  overflow-wrap: anywhere;
+  unicode-bidi: isolate;
+  font:
+    700 1.4rem/1.2 var(--f-sans),
+    sans-serif;
+}
+.report-dialog {
+  overflow-wrap: anywhere;
+  max-width: min(36rem, calc(100vw - 2rem));
+  padding: 1.25rem;
+  border: 2px solid var(--ink);
+  background: var(--bg);
+  color: var(--ink);
+}
+.report-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+}
+.report-dialog fieldset {
+  margin: 0 0 1rem;
+  padding: 0;
+  border: 0;
+}
+.report-dialog legend {
+  margin-bottom: 0.4rem;
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.report-dialog .choice {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 44px;
+}
+.report-dialog .choice input {
+  width: 24px;
+  height: 24px;
+}
+.report-dialog .problem-line {
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 6px solid #d2342a;
+  background: var(--surface);
+}
+.flip.report {
+  margin-left: 0.5rem;
+}
+.about ul {
+  padding-left: 1.2rem;
+}
+.about li {
+  margin: 0.4rem 0;
+}
+/* each part of the page is its own paper strip: a hairline above, and room */
+.about section {
+  margin-top: 2rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--hair);
+}
+.about h2.kicker {
+  margin-top: 0;
+}
+/* the four dyes of the record as a rule, and the sentence in the marker hand under the title */
+.about .dye-rule {
+  display: flex;
+  height: 8px;
+  margin: 0.6rem 0 0.4rem;
+}
+.about .dye-rule i {
+  flex: 1;
+}
+.about .dye-rule i:nth-child(1) {
+  background: var(--dye-0);
+}
+.about .dye-rule i:nth-child(2) {
+  background: var(--dye-1);
+}
+.about .dye-rule i:nth-child(3) {
+  background: var(--dye-2);
+}
+.about .dye-rule i:nth-child(4) {
+  background: var(--dye-3);
+}
+.about .about-sentence {
+  margin: 0.75rem 0 1.25rem;
+  font:
+    400 clamp(26px, 4.2vw, 36px) / 1.1 var(--f-brush),
+    cursive;
+}
+/* the three honesty states, each word drawn the way the roll draws it */
+.about .state-line {
+  margin: 0.6rem 0;
+}
+.about .state-word {
+  font-weight: 700;
+}
+.about .state-line[data-honesty="computed"] .state-word {
+  text-shadow:
+    0.8px 0 rgba(226, 54, 42, 0.6),
+    -0.8px 0 rgba(31, 184, 201, 0.6);
+}
+.about .state-line[data-honesty="unknown"] .state-word {
+  color: var(--muted);
+  font-style: italic;
+  font-weight: 400;
+}
+:root[data-decor="off"] .about .state-line[data-honesty="computed"] .state-word {
+  text-shadow: none;
+}
+/* the sounds made for graft: a short list in two columns where there is room */
+.about .sounds {
+  columns: 2 14rem;
+  column-gap: 2rem;
+  list-style: none;
+  padding-left: 0;
+}
+.about .sounds li {
+  margin: 0 0 0.4rem;
+  break-inside: avoid;
+}
+.report-dialog label .gloss {
+  display: block;
+  margin: 0.15rem 0 0.4rem;
+}
+.report-dialog .hint {
+  margin-bottom: 0.75rem;
+}
+.manage input[type="password"],
+.manage input[type="text"] {
+  margin-top: 0.5rem;
+}
+
+/* your own sound, and the declaration */
+.own {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--hair);
+}
+.pill.file {
+  position: relative;
+  cursor: pointer;
+}
+.pill.file input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.pill.file:focus-within {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.declaration {
+  margin: 0 0 1rem;
+  padding: 0.75rem 0 0;
+  border: 0;
+  border-top: 1px solid var(--hair);
+}
+.declaration legend {
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.declaration .choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  min-height: 44px;
+  padding: 0.3rem 0;
+  text-transform: none;
+  letter-spacing: 0;
+  font:
+    400 14px/1.4 var(--f-sans),
+    sans-serif;
+}
+.declaration .choice input {
+  width: 24px;
+  height: 24px;
+  flex: none;
+}
+
+/* where the maker is in the three steps */
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.25rem;
+  margin: 0 0 1.25rem;
+  /* the step stays in view while the page scrolls under it */
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding: 0.6rem 0;
+  background: var(--bg);
+  list-style: none;
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.steps .n {
+  display: inline-grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.steps li[data-state="now"] {
+  color: var(--ink);
+  font-weight: 600;
+}
+.steps li[data-state="now"] .n {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+}
+.steps li[data-state="done"] .n {
+  border-color: var(--ink);
+}
+.lede {
+  margin: 0 0 1.5rem;
+  max-width: 60ch;
+  font:
+    italic 400 clamp(17px, 2vw, 20px) / 1.45 var(--f-serif),
+    ui-serif,
+    Georgia,
+    serif;
+  color: var(--ink);
+}
+
+/* the note that publishing a sound of one's own is switched off: marked, so it is not skimmed past */
+.own-off {
+  margin: 0.75rem 0 0;
+  padding: 0.6rem 0.9rem;
+  border-left: 3px solid var(--ink);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+/* THE TICKET: the manage key as a cut-paper stub. The oscilloscope screen on the left is drawn from the
+   flip's public id; the key, which is secret, is only ever text, never part of a picture. */
+.stub {
+  display: block;
+  margin: 1.25rem 0;
+  padding-bottom: 12px;
+  color: #14110e;
+  transform: rotate(-0.4deg);
+}
+/* two pieces of paper that meet at the perforation, each cut with its own uneven edge, so the lower one can
+   come away from the upper one when the key is copied */
+.stub-screen {
+  background: #e0a526;
+  clip-path: polygon(0.4% 2%, 40% 0, 100% 1.2%, 100% 100%, 0 100%);
+}
+.stub-body {
+  background: #e0a526;
+  transform-origin: 8% 0;
+  clip-path: polygon(
+    0 0,
+    12% 0,
+    24% 0,
+    36% 0,
+    48% 0,
+    60% 0,
+    72% 0,
+    84% 0,
+    100% 0,
+    99.6% 98%,
+    60% 100%,
+    0 98.5%
+  );
+}
+/* copied: the lower piece comes away at the perforation and its top edge is torn. Said in words too (the
+   status beside the button); under reduced motion it is the same end state, reached without the movement. */
+.stub[data-torn="yes"] .stub-body {
+  transform: translate(3px, 9px) rotate(0.9deg);
+  clip-path: polygon(
+    0 1.5%,
+    12% 0,
+    24% 2%,
+    36% 0.2%,
+    48% 2.2%,
+    60% 0,
+    72% 1.8%,
+    84% 0.2%,
+    100% 1.6%,
+    99.6% 98%,
+    60% 100%,
+    0 98.5%
+  );
+}
+@media (prefers-reduced-motion: no-preference) {
+  .stub-body {
+    transition:
+      transform 0.55s cubic-bezier(0.2, 1.4, 0.4, 1),
+      clip-path 0.3s ease-out;
+  }
+}
+/* "kept in this browser" as a hole punched through the paper: the page shows through it. With no key kept
+   there is no hole, only a faint ring where it would be. */
+.stub-punch {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.stub-punch .hole {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px dashed rgb(20 17 14 / 0.38);
+  background: transparent;
+}
+.stub-punch .hole[data-punched="true"] {
+  border: 0;
+  background: var(--bg);
+  box-shadow:
+    inset 0 2px 3px rgb(0 0 0 / 0.45),
+    0 0 0 2px rgb(20 17 14 / 0.28);
+}
+.stub .kicker {
+  color: #14110e;
+}
+.stub-screen {
+  padding: 1rem 1.1rem 0.75rem;
+  /* the perforation */
+  border-bottom: 3px dotted #14110e;
+}
+.stub-screen .trace {
+  height: clamp(84px, 16vw, 130px);
+}
+.stub-caption {
+  margin: 0.5rem 0 0;
+  font:
+    400 12px/1.4 var(--f-mono),
+    ui-monospace,
+    monospace;
+}
+.stub-body {
+  padding: 1rem 1.1rem 1rem 1.25rem;
+  font:
+    500 14px/1.45 var(--f-sans),
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
+}
+.stub-body p {
+  margin: 0.4rem 0;
+}
+.stub-hand {
+  margin: 0.2rem 0 0.9rem;
+  font:
+    400 2rem/1.1 var(--f-brush),
+    cursive;
+  transform: rotate(-3deg);
+  transform-origin: left center;
+}
+.publish .stub .stub-body code {
+  display: block;
+  border: 0;
+  padding: 0.5rem 0.6rem;
+  background: #14110e;
+  color: #f6f1e6;
+  font:
+    500 13px/1.4 var(--f-mono),
+    ui-monospace,
+    monospace;
+  overflow-wrap: anywhere;
+}
+.stub .pill {
+  border-color: #14110e;
+  color: #14110e;
+  background: transparent;
+}
+.stub .refusal,
+.stub .gloss {
+  color: #14110e;
+}
+.stub .check {
+  color: #14110e;
+}
+.fixed-note {
+  margin: 0.75rem 0;
+  font:
+    italic 400 1.1rem/1.3 var(--f-serif),
+    serif;
+  color: var(--ink);
+}
+
+/* the oscilloscope screen: always dark, as a real one is */
+.trace {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.trace .beam,
+.trace .beam-glow,
+.trace .grid line {
+  vector-effect: non-scaling-stroke;
+}
+.trace .screen {
+  fill: #070908;
+}
+.trace .grid line {
+  stroke: var(--beam, #5dff9c);
+  stroke-opacity: 0.12;
+  stroke-width: 0.6;
+  transition: stroke 0.2s ease;
+}
+.trace .beam {
+  fill: none;
+  stroke: var(--beam, #5dff9c);
+  transition: stroke 0.2s ease;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.trace .beam-glow {
+  fill: none;
+  stroke: var(--beam, #5dff9c);
+  transition: stroke 0.2s ease;
+  stroke-width: 5;
+  stroke-opacity: 0.22;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+/* on a phone the three steps are three numbers and the words of the one in hand: one short line */
+@media (max-width: 560px) {
+  .steps {
+    flex-wrap: nowrap;
+    gap: 0.5rem 0.75rem;
+  }
+  .steps li:not([data-state="now"]) .t {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* a chain page opened while the service was asleep: said kindly, and it opens by itself when ready */
+.waking .waking-status {
+  margin: 0 0 14px;
+  font:
+    italic 400 clamp(18px, 2.2vw, 22px) / 1.3 var(--f-serif),
+    ui-serif,
+    Georgia,
+    serif;
+  color: var(--ink);
+}
+.waking-bar {
+  max-width: 320px;
+  height: 6px;
+  margin: 0 0 22px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.waking-bar span {
+  display: block;
+  width: 38%;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--ink);
+  animation: waking-slide 2.2s ease-in-out infinite;
+}
+@keyframes waking-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(270%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .waking-bar span {
+    width: 100%;
+    animation: none;
+    opacity: 0.18;
+  }
+}
+
+.waking .lede {
+  margin-top: 22px;
+}
+
+/* THE MAKE FLOW'S HINTS: one line in the marker hand, in a slot that keeps its height so nothing below
+   it moves when the line changes or goes. Only its skip takes a press. */
+.make-bar .how {
+  gap: 6px;
+  margin-left: auto;
+  cursor: pointer;
+  background: transparent;
+}
+.make-bar .how span {
+  font-weight: 700;
+}
+.make-guide {
+  /* pinned while the hints run, so the line is still in view when the visitor is down at the controls */
+  position: sticky;
+  top: 44px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  min-height: 52px;
+  margin: 0.25rem 0 0.5rem;
+  background: var(--bg);
+  /* the page's ground reaches past the column on both sides, so a bracket handle that sticks out of it
+     does not show beside the bar */
+  box-shadow: 0 0 0 100vmax var(--bg);
+  clip-path: inset(0 -100vmax);
+  font-size: clamp(20px, 2.4vw, 26px);
+}
+.make-guide-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font:
+    400 1em / 1.15 var(--f-brush),
+    cursive;
+  color: var(--ink);
+  transform: rotate(-0.5deg);
+  transform-origin: left center;
+  animation: make-guide-in 0.3s ease-out both;
+}
+/* two lines of room at every width, so a longer line (or one with show me beside it) never moves what is below */
+.make-guide {
+  min-height: calc(2 * 1.15em + 12px);
+}
+.make-guide-skip {
+  flex: none;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.1em;
+  text-decoration: underline;
+  cursor: pointer;
+}
+@keyframes make-guide-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) rotate(-0.5deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .make-guide-text {
+    animation: none;
+  }
+}
+
+/* the about page's way back to the guided play: a plain link that is also a 44 px target */
+.about .tour-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 1rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+}
+
+/* a narrow phone: the bar keeps one row, the page's name gives way to the buttons */
+.make-bar .back,
+.make-bar .how {
+  white-space: nowrap;
+}
+@media (max-width: 420px) {
+  .make-bar .kicker {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* your flips: the flips this browser holds a key for */
+.your-flips .flip-list {
+  list-style: none;
+  margin: 1rem 0;
+  padding: 0;
+}
+.your-flip {
+  padding: 1rem 0;
+  border-top: 1px solid var(--line);
+}
+.your-flip .flip-title {
+  margin: 0;
+  font:
+    700 1.4rem/1.2 var(--f-sans),
+    sans-serif;
+  overflow-wrap: anywhere;
+  unicode-bidi: isolate;
+}
+.your-flip .hint {
+  display: block;
+  margin: 0.25rem 0 0.75rem;
+}
+.your-flip .actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.your-flip .forget-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.your-flip .forget-ask .hint {
+  flex: 1 1 100%;
+  margin: 0;
+}
+.your-flips .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* the recording scope: an X-Y oscilloscope on an always-dark screen (the house screen colour), a 4:3 tube
+   with a still sheet of graticule and glass laid over the beam's canvas, as a real one is in front of the tube */
+.record-scope {
+  position: relative;
+  max-width: 520px;
+  margin: 0.75rem 0 0.25rem;
+  border-radius: 14px / 12px;
+  overflow: hidden;
+  background: #070908;
+  box-shadow:
+    inset 0 0 0 1px rgb(93 255 156 / 0.18),
+    inset 0 0 28px rgb(0 0 0 / 0.7);
+}
+.record-scope canvas {
+  display: block;
+  width: 100%;
+}
+.record-scope .scope-bloom {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* the glow of a tube is many times wider than its line: the small copy, blurred, added to the picture */
+  filter: blur(8px) saturate(1.2);
+  mix-blend-mode: screen;
+  /* the glass glows with the sound: a little at rest, a good deal at the loudest (--glow is set each frame) */
+  opacity: calc(0.28 + var(--glow, 0) * 0.5);
+}
+.record-scope .scope-sheet {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* the keys sheet: the same dialog as the report, with a list of keys and what they do */
+/* the sheet sits in the footer's markup on the roll: it takes nothing of the footer's look */
+.keys-dialog {
+  text-align: left;
+  font:
+    400 15px/1.5 var(--f-sans),
+    sans-serif;
+  letter-spacing: normal;
+  color: var(--ink);
+}
+.keys-dialog header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.keys-dialog header h2 {
+  margin: 0;
+}
+.keys-dialog h3 {
+  margin: 1rem 0 0.4rem;
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.keys-dialog dl {
+  margin: 0;
+}
+.keys-dialog dl > div {
+  display: grid;
+  grid-template-columns: minmax(7rem, 11rem) 1fr;
+  gap: 0.2rem 1rem;
+  padding: 0.45rem 0;
+  border-top: 1px solid var(--hair);
+}
+.keys-dialog dt {
+  font:
+    600 12px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+}
+.keys-dialog dd {
+  margin: 0;
+}
+.keys-dialog .actions {
+  margin-top: 1rem;
+}
+.keys-dialog {
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+}
+@media (max-width: 520px) {
+  .keys-dialog dl > div {
+    grid-template-columns: 1fr;
+  }
+}
+
+.make-guide-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.make-guide-keys {
+  margin: 0;
+  font:
+    400 12px/1.3 var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+/* sketches: private tries, listed under the editor and in the picker */
+.your-sketches {
+  margin: 1.5rem 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--hair);
+}
+.sketch-list {
+  list-style: none;
+  margin: 0.5rem 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.your-sketch {
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.your-sketch[data-open="true"] {
+  border-color: var(--ink);
+}
+.sketch-title {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+.your-sketch .hint {
+  margin: 0.15rem 0;
+  overflow-wrap: anywhere;
+}
+.sketch-ask,
+.sketch-rename {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+.sketch-rename input {
+  /* wide enough to read a note of 140 characters while it is edited */
+  flex: 1 1 min(100%, 24rem);
+  min-height: 44px;
+}
+.keep-sketch {
+  margin-top: 1rem;
+}
+.opened-notes {
+  margin-top: 0.75rem;
+}
+.keep-sketch .field {
+  margin: 0 0 0.75rem;
+}
+.keep-sketch label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.keep-sketch input[type="text"],
+.sketch-rename input[type="text"] {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.25rem 0.6rem;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 1rem;
+}
+.keep-sketch .hint,
+.your-sketches .hint,
+.opened-notes .hint {
+  min-height: 1.5em;
+  margin: 0.25rem 0 0;
+  overflow-wrap: anywhere;
+  font:
+    400 12px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+  color: var(--muted);
+}
+.keep-sketch .hint,
+.opened-notes .notice {
+  overflow-wrap: anywhere;
+}
+
+/* a sketchbook link or file asking to be added: fixed to the bottom, over the page, never over the editor's controls' focus */
+.sketch-arrival {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  z-index: 40;
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 32px));
+  max-height: 60vh;
+  overflow: auto;
+  padding: 0.9rem 1rem;
+  border: 2px solid var(--ink);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.25);
+}
+.sketch-arrival p {
+  margin: 0 0 0.4rem;
+  overflow-wrap: anywhere;
+}
+.sketch-arrival ul {
+  margin: 0 0 0.5rem;
+  padding-left: 1.2rem;
+  overflow-wrap: anywhere;
+}
+.move-sketches {
+  margin: 1.5rem 0;
+}
+.move-sketches summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  cursor: pointer;
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+/* a closed panel says it opens (the summary is a flex row, so it has no marker of its own) */
+.move-sketches summary::before {
+  content: "+";
+  display: inline-block;
+  width: 1.4em;
+}
+.move-sketches[open] summary::before {
+  content: "\2212";
+}
+.move-sketches .hint {
+  overflow-wrap: anywhere;
+  font:
+    400 12px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+  color: var(--muted);
+}
+/* on a page that has its own controls along the bottom (the roll), the offer sits under the header instead */
+.sketch-arrival.aside {
+  top: 64px;
+  bottom: auto;
+  left: auto;
+  right: 12px;
+  transform: none;
+  width: min(340px, calc(100vw - 24px));
+}
+@media (max-width: 480px) {
+  .sketch-arrival.aside {
+    left: 12px;
+    right: 12px;
+    width: auto;
+  }
+}
+
+/* a sketch in the strip: its hand-drawn trace beside what it is, in computed facts */
+.sketch-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.sketch-trace {
+  flex: none;
+  width: 72px;
+}
+.sketch-trace .trace {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 300 / 84;
+}
+.sketch-text {
+  min-width: 0;
+  flex: 1;
+}
+.sketch-marks {
+  display: inline-flex;
+  gap: 0.35rem;
+}
+.sketch-marks .mark {
+  min-width: 44px;
+  padding: 0;
+  justify-content: center;
+}
+.sketch-marks .mark[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--bg);
+}
+.compare {
+  margin: 0.5rem 0 1rem;
+}
+/* the sketch bank */
+.sketch-bank-panel {
+  margin: 1.5rem 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--hair);
+}
+.sketch-bank-panel .hint {
+  overflow-wrap: anywhere;
+  font:
+    400 12px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+  color: var(--muted);
+}
+.sketch-bank {
+  display: flex;
+  justify-content: center;
+  margin: 0.75rem 0;
+}
+.bank-order {
+  list-style: none;
+  margin: 0.75rem 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.bank-order li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.bank-n {
+  min-width: 1.5rem;
+  font-weight: 700;
+}
+.bank-title {
+  flex: 1 1 10rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* publish these: the plan, the progress of each sketch, and the one screen of links and keys */
+.set-publisher {
+  margin: 1.5rem 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--hair);
+}
+.set-publisher .field {
+  margin: 0 0 0.75rem;
+}
+.set-publisher label:not(.check) {
+  display: block;
+  margin-bottom: 0.25rem;
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.set-publisher input[type="text"] {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.25rem 0.6rem;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 1rem;
+}
+.set-publisher .hint,
+.set-publisher .progress {
+  margin: 0.25rem 0 0;
+  overflow-wrap: anywhere;
+  font:
+    400 12px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+  color: var(--muted);
+}
+.set-plan,
+.set-progress,
+.set-links {
+  margin: 0.5rem 0 1rem;
+  padding-left: 1.2rem;
+}
+.set-progress,
+.set-links {
+  list-style: none;
+  padding-left: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.set-progress li,
+.set-links li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.set-title {
+  flex: 1 1 10rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+.set-state {
+  font:
+    400 12px/1.5 var(--f-mono),
+    ui-monospace,
+    monospace;
+  color: var(--muted);
+}
+.set-progress li[data-status="published"] .set-state {
+  color: var(--ink);
+}
+.set-links a {
+  overflow-wrap: anywhere;
+}
+.set-links code {
+  flex: 1 1 100%;
+  overflow-wrap: anywhere;
+  padding: 0.4rem 0.6rem;
+  background: var(--ink);
+  color: var(--bg);
+}
+.set-publisher .problem {
+  margin-top: 0.75rem;
+}
+
+/* sentences are read, so they are set as sentences: the serif italic the page already uses for glosses, not small mono.
+   Facts (a cut, a speed, a count) stay in mono. Nothing on this page is set under 12px. */
+.make .local,
+.make .notice,
+.keep-sketch .hint,
+.your-sketches > .hint,
+.set-publisher .hint,
+.set-publisher .progress,
+.sketch-bank-panel .hint,
+.opened-notes .hint,
+.own-more p {
+  font:
+    italic 400 17px/1.4 var(--f-serif),
+    serif;
+  letter-spacing: 0;
+}
+.own-more {
+  margin: 0.5rem 0 0;
+}
+.own-more summary {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  color: var(--muted);
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.1em;
+  text-decoration: underline;
+}
+.make .kicker {
+  font-size: 12px;
+}
+
+/* how graft works: five steps in the page's own serif, numbered, one idea each */
+.how-card {
+  margin: 0 0 1.5rem;
+  padding: 0.25rem 0 0.75rem;
+  border-top: 1px solid var(--hair);
+  border-bottom: 1px solid var(--hair);
+}
+.how-card summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  cursor: pointer;
+  list-style: none;
+}
+.how-card summary::-webkit-details-marker {
+  display: none;
+}
+.how-card summary::after {
+  content: "+";
+  margin-left: auto;
+  padding-left: 1rem;
+  font:
+    500 16px var(--f-mono),
+    ui-monospace,
+    monospace;
+}
+.how-card[open] summary::after {
+  content: "\2212";
+}
+.how-title {
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.how-lead {
+  margin: 0.25rem 0 0.75rem;
+  max-width: 60ch;
+  font:
+    italic 400 clamp(18px, 2vw, 21px) / 1.4 var(--f-serif),
+    ui-serif,
+    Georgia,
+    serif;
+}
+.how-steps {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: how;
+}
+.how-steps li {
+  display: grid;
+  grid-template-columns: 2rem 1fr;
+  column-gap: 0.5rem;
+  counter-increment: how;
+  max-width: 62ch;
+}
+.how-steps li::before {
+  content: counter(how);
+  grid-row: 1 / span 2;
+  font:
+    400 28px/1 var(--f-brush),
+    cursive;
+}
+.how-name {
+  font:
+    500 12px var(--f-mono),
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.how-body {
+  font:
+    italic 400 17px/1.4 var(--f-serif),
+    ui-serif,
+    Georgia,
+    serif;
+}
+.how-own {
+  margin: 0.9rem 0 0;
+  max-width: 60ch;
+  font:
+    italic 400 17px/1.4 var(--f-serif),
+    ui-serif,
+    Georgia,
+    serif;
+  color: var(--muted);
+}
+
+/* a long recording: a small picture of the whole, a labelled control to move the minute shown */
+.trim-where {
+  margin: 0.5rem 0 1rem;
+}
+.trim-overview {
+  display: block;
+  width: 100%;
+  height: 56px;
+  margin: 0.5rem 0 0.25rem;
+  background: var(--surface);
+}
+.trim-window {
+  fill: var(--ink);
+  opacity: 0.22;
+}
+.trim-where input[type="range"] {
+  width: 100%;
+  min-height: 44px;
+  accent-color: var(--ink);
+}
+
+/* where a flip sits: said at the top of the editor, on each published panel and on each row of your flips */
+.making-from {
+  margin: 0.25rem 0 1rem;
+  font-family: var(--serif, inherit);
+  font-style: italic;
+  font-size: 1.05rem;
+  line-height: 1.4;
+}
+.making-from:empty {
+  display: none;
+}
+.publish .named {
+  margin: 0.25rem 0 0.5rem;
+  font-weight: 600;
+}
+.publish.done.folded {
+  padding: 0.6rem 0;
+  border-top: 1px solid currentColor;
+  border-top-color: color-mix(in srgb, currentColor 25%, transparent);
+}
+.publish.done.folded .folded-line {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.75rem;
+  align-items: baseline;
+}
+.your-flip .flip-place {
+  margin: 0 0 0.25rem;
+}
+.your-flips .flip-group {
+  list-style: none;
+  margin: 1.25rem 0 0.25rem;
+}
+.your-flips .flip-group .kicker {
+  margin: 0;
+}
+
+/* a speed typed as a percentage */
+.typed-speed {
+  margin-top: 0.75rem;
+}
+.typed-speed .typed-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+.typed-speed input {
+  font:
+    500 16px var(--f-mono),
+    ui-monospace,
+    monospace;
+  padding: 0.4rem 0.5rem;
+  min-height: 44px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+.typed-speed .hint {
+  margin: 0.25rem 0 0;
+  min-height: 1.5em;
+}
+
+/* a sketch's note: one quiet line under its title */
+.sketch-note {
+  margin: 0.15rem 0 0.25rem;
+  font-size: 0.9rem;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+/* a short window (a laptop with its toolbars): the bar of hear it and publish sits over the foot of the page, so
+   the editor is made a little more compact to keep the waveform above it. Everything stays; only the air
+   and the size of the title slab and the waveform give way. */
+@media (max-height: 700px) {
+  .make .steps {
+    margin-bottom: 0.5rem;
+  }
+  .make .stage-head {
+    margin-bottom: 0.5rem;
+  }
+  .make .slab-text {
+    font-size: clamp(32px, 6vw, 48px);
+  }
+  .make .making-from {
+    margin: 0.1rem 0 0.5rem;
+  }
+  .cut-editor .track {
+    height: 7rem;
+  }
+}

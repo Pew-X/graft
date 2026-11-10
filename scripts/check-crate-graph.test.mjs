@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ALLOWED, violations } from "./check-crate-graph.mjs";
+import { ALLOWED, EXTERNAL_ONLY, violations } from "./check-crate-graph.mjs";
 
 const pkg = (name, ...deps) => ({
   name,
@@ -35,4 +35,18 @@ test("nothing may depend on api", () => {
 
 test("a crate missing from the map is reported so the map cannot rot", () => {
   assert.match(violations([...clean(), pkg("graft-new")]).join("\n"), /graft-new: not in the crate map/);
+});
+
+test("the render host may use only its allowlisted external crates (no network surface)", () => {
+  const withExternal = (...names) =>
+    replace(clean(), pkg("graft-render-host", "graft-domain", ...names));
+  assert.deepEqual(violations(withExternal(...EXTERNAL_ONLY["graft-render-host"])), []);
+  assert.match(
+    violations(withExternal("hyper")).join("\n"),
+    /graft-render-host: external dependency hyper is not on its allowlist/,
+  );
+  assert.match(
+    violations(withExternal("tokio")).join("\n"),
+    /external dependency tokio is not on its allowlist/,
+  );
 });

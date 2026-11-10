@@ -16,3 +16,20 @@ node_modules/
 out/
 *.tsbuildinfo
 next-env.d.ts
+__pycache__/
+*.pyc
+
+# Vector tooling build output
+tools/vectors/dist/
+tools/vectors/test-results/
+
+# Browser test build output
+web/e2e/dist/
+web/test-results/
+
+# Local deploy settings (account id, profile, ledger path): never committed
+.aws-dev.env
+.deploy/
+
+# Local convenience targets (park, unpark, status): never committed
+GNUmakefile

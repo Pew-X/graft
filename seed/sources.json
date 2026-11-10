@@ -1,0 +1,104 @@
+{
+  "sources": [
+    {
+      "key": "seed:808-sub:source",
+      "title": "808 sub",
+      "author": "graft",
+      "audio_file": "sources/808-sub.pcm",
+      "audio_sha256": "aa71c95442da8d6b1e92b8cc0d26f764ca19a929032ce5000430136783ef6b68",
+      "licence": "own work, synthesized for graft",
+      "work_title": "an 808 kick with a long sub tail",
+      "work_author": "graft"
+    },
+    {
+      "key": "seed:chip-arp:source",
+      "title": "chip arpeggio",
+      "author": "graft",
+      "audio_file": "sources/chip-arp.pcm",
+      "audio_sha256": "ab8a9b35a4ffa214ed7959a12619e4503a2f5bf57ab6c5ee3368928f7ebb8c1d",
+      "licence": "own work, synthesized for graft",
+      "work_title": "a four-bit pulse arpeggio",
+      "work_author": "graft"
+    },
+    {
+      "key": "seed:powerup:source",
+      "title": "power up",
+      "author": "graft",
+      "audio_file": "sources/powerup.pcm",
+      "audio_sha256": "6e47c405509f77e5ca846f078be508d65d1da8786d3df9eba267cfecf4e81046",
+      "licence": "own work, synthesized for graft",
+      "work_title": "a rising pentatonic run that holds",
+      "work_author": "graft"
+    },
+    {
+      "key": "seed:saber-hum:source",
+      "title": "saber hum",
+      "author": "graft",
+      "audio_file": "sources/saber-hum.pcm",
+      "audio_sha256": "e02c05e11539495210865b44951d2e36413d74274df325e1b9e0ea9591fd131f",
+      "licence": "own work, synthesized for graft",
+      "work_title": "detuned saws with a slow swing",
+      "work_author": "graft"
+    },
+    {
+      "key": "seed:laser-zap:source",
+      "title": "laser zap",
+      "author": "graft",
+      "audio_file": "sources/laser-zap.pcm",
+      "audio_sha256": "c4f11f3dfbbe9d4132694813196c4f3de3707039529dd7c10dc9e336f59b4a02",
+      "licence": "own work, synthesized for graft",
+      "work_title": "a falling saw sweep",
+      "work_author": "graft"
+    },
+    {
+      "key": "seed:metal-clang:source",
+      "title": "metal clang",
+      "author": "graft",
+      "audio_file": "sources/metal-clang.pcm",
+      "audio_sha256": "b9ad5c367cbcd54bd78850d0524662d406647e4dea6e93f8adf1468ce1c22fc0",
+      "licence": "own work, synthesized for graft",
+      "work_title": "inharmonic metal partials with a noise burst",
+      "work_author": "graft"
+    },
+    {
+      "key": "seed:house-stab:source",
+      "title": "house stab",
+      "author": "graft",
+      "audio_file": "sources/house-stab.pcm",
+      "audio_sha256": "9cc26dc64b5a8c46ed739b6318d20c14f65732abe38e6cb9eb79e2819511c27b",
+      "licence": "own work, synthesized for graft",
+      "work_title": "a detuned minor ninth chord, hit twice",
+      "work_author": "graft"
+    },
+    {
+      "key": "seed:jazz-rhodes:source",
+      "title": "dm9 chord",
+      "author": "graft",
+      "audio_file": "sources/jazz-rhodes.pcm",
+      "audio_sha256": "4e22bb6233c6783823d2f94fb1593dab34ee5a32816524de0ad019d6e4c6d38c",
+      "licence": "own work, synthesized for graft",
+      "work_title": "dm9 electric piano chord",
+      "work_author": "graft"
+    },
+    {
+      "key": "seed:upright-bass:source",
+      "title": "upright bass",
+      "author": "graft",
+      "audio_file": "sources/upright-bass.pcm",
+      "audio_sha256": "98cc49c23dc078313bbf3a4c6420afa14432f89994ca48908da0914fd58865ba",
+      "licence": "own work, synthesized for graft",
+      "work_title": "a plucked four-note bass line",
+      "work_author": "graft"
+    },
+    {
+      "key": "seed:trap-hats:source",
+      "title": "trap hats",
+      "author": "graft",
+      "audio_file": "sources/trap-hats.pcm",
+      "audio_sha256": "c535a2a4c12907fe1b94b4d5b0be4d889c329eed0ca4c0f4745f3c28b9ae25eb",
+      "licence": "own work, synthesized for graft",
+      "work_title": "a kick and an accelerating hat roll",
+      "work_author": "graft"
+    }
+  ]
+}

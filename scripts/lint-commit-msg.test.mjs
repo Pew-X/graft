@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { lintMessage, stripEditorTemplate } from "./lint-commit-msg.mjs";
+import { isAccepted, lintMessage, stripEditorTemplate } from "./lint-commit-msg.mjs";
 
 const ok = (m) => assert.deepEqual(lintMessage(m), [], m);
 const bad = (m, pattern) => assert.match(lintMessage(m).join("\n"), pattern, m);
@@ -55,4 +55,13 @@ test("any other trailer-shaped final line is rejected, an allowlisted key is fin
   bad("feat: x\n\nBody.\n\nChange-Id: I123", /forbidden trailer/);
   ok("fix: x\n\nBody.\n\nRefs: 12");
   ok("feat: x\n\nA body paragraph that mentions a colon: here.");
+});
+
+test("the one merged squash commit that began with a sentence is accepted, and nothing else is", () => {
+  assert.equal(isAccepted("f5f89e7d0b4bab5f38c358b16f9ef0ec86ecbb5b"), true);
+  assert.equal(isAccepted("f5f89e7d0"), true);
+  assert.equal(isAccepted("f5f89e7d1"), false);
+  assert.equal(isAccepted("4a92322eb"), false);
+  // and the rule itself is unchanged: such a body is still refused in a new commit
+  bad("feat: x\n\nPerform: number keys and pads.", /forbidden trailer \(Perform\)/);
 });

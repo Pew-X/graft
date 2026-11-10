@@ -5,6 +5,7 @@ on:
     types: [opened, synchronize, reopened, edited]
   push:
     branches: [dev, staging, main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -18,9 +19,61 @@ env:
   CARGO_INCREMENTAL: "0"
 
 jobs:
+  # Decides which of the slow jobs a pull request can affect, so the others are skipped (a skipped
+  # job counts as passing for a required check). Pushes to dev, staging and main, and manual runs,
+  # always run everything: the evidence for what ships is never skipped.
+  changes:
+    name: what changed
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      renderer: ${{ steps.f.outputs.renderer }}
+      image: ${{ steps.f.outputs.image }}
+      web: ${{ steps.f.outputs.web }}
+      service: ${{ steps.f.outputs.service }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - id: f
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.base_ref }}
+        run: |
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "renderer=true" >> "$GITHUB_OUTPUT"; echo "image=true" >> "$GITHUB_OUTPUT"; echo "web=true" >> "$GITHUB_OUTPUT"; echo "service=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          changed=$(git diff --name-only "origin/$BASE...HEAD")
+          printf '%s\n' "$changed"
+          # Anything that can change a renderer hash or the vector evidence.
+          if printf '%s\n' "$changed" | grep -E -q '^(crates/(render|render-host|vectors)/|fixtures/|tools/vectors/|scripts/|Cargo\.(toml|lock)|rust-toolchain\.toml|\.github/workflows/ci\.yml)'; then
+            echo "renderer=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "renderer=false" >> "$GITHUB_OUTPUT"
+          fi
+          # The web app and its browser tests (the renderer's wasm is built by the test itself).
+          if printf '%s\n' "$changed" | grep -E -q '^(web/|openapi/|seed/|\.github/workflows/ci\.yml)'; then
+            echo "web=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "web=false" >> "$GITHUB_OUTPUT"
+          fi
+          # The browser tests that need the real service: anything the service or the site is made of.
+          if printf '%s\n' "$changed" | grep -E -q '^(web/|crates/|openapi/|seed/|scripts/|Cargo\.(toml|lock)|rust-toolchain\.toml|\.github/workflows/ci\.yml)'; then
+            echo "service=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "service=false" >> "$GITHUB_OUTPUT"
+          fi
+          # The throwaway check image and what it is built from.
+          if printf '%s\n' "$changed" | grep -E -q '^(Dockerfile|\.dockerignore|crates/(host-check|render|render-host|vectors)/|fixtures/|Cargo\.(toml|lock)|rust-toolchain\.toml|\.github/workflows/ci\.yml)'; then
+            echo "image=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "image=false" >> "$GITHUB_OUTPUT"
+          fi
+
   repo:
     name: repo hygiene and scripts
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -29,7 +82,7 @@ jobs:
         with:
           node-version-file: .node-version
       - name: Tests for the repository scripts
-        run: node --test scripts/*.test.mjs
+        run: node --test scripts/*.test.mjs loadtest/*.test.mjs tools/wake/*.test.mjs
       - name: Only code, scripts, README and ARCHITECTURE are tracked; no emails; vocabulary
         run: node scripts/check-repo.mjs
       - name: Pull request title is a plain conventional message
@@ -45,7 +98,45 @@ jobs:
 
   rust:
     name: rust
+    needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    # A fresh Postgres 16 per job: the HTTP seam and the store tests run against the real engine.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: graft
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+      # An S3-compatible object store for the blob tests (MinIO no longer publishes images, so
+      # this is rustfs, pinned by digest). The signed-URL, expiry and credential tests need a real
+      # server; it is a service of this job, not a separate job, to avoid building the workspace twice.
+      s3:
+        image: rustfs/rustfs@sha256:9ca9559533b537d10482fe923288b676ad08f92a7069d9a17327fbae3cab688b
+        env:
+          RUSTFS_ACCESS_KEY: graftaccess
+          RUSTFS_SECRET_KEY: graftsecret12345
+        ports:
+          - 59000:9000
+      # A queue service for the event queue tests (an emulator, pinned by digest: no AWS account is
+      # touched). The tests that need it are ignored in a plain `cargo test` and run explicitly below.
+      sqs:
+        image: softwaremill/elasticmq-native@sha256:e4580ab9ad1bd5cd37b4ba04911bc5ccc8cd2d9ab4de56ece65acee71c24e05c
+        ports:
+          - 59324:9324
+    env:
+      GRAFT_TEST_DATABASE_URL: postgres://postgres:graft@localhost:5432/postgres
+      GRAFT_TEST_S3_ENDPOINT: http://127.0.0.1:59000
+      GRAFT_TEST_SQS_ENDPOINT: http://127.0.0.1:59324
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_REGION: us-east-1
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -54,15 +145,226 @@ jobs:
       - name: Install the pinned toolchain
         run: rustup toolchain install
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Create the test bucket on the object-store service
+        run: |
+          for i in $(seq 1 40); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -m 2 "$GRAFT_TEST_S3_ENDPOINT/" || true)
+            [ "$code" != "000" ] && break
+            sleep 1
+          done
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X PUT --aws-sigv4 "aws:amz:us-east-1:s3" \
+            --user graftaccess:graftsecret12345 "$GRAFT_TEST_S3_ENDPOINT/graft-test")
+          echo "create bucket: HTTP $code"
+          [ "$code" = "200" ] || [ "$code" = "409" ]
       - run: cargo fmt --all --check
-      - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo test --workspace
+      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - run: cargo test --workspace --all-features
+      - name: The event queue against a real queue service (the SDK, long polling, the dead-letter queue)
+        run: |
+          for i in $(seq 1 30); do
+            curl -s -o /dev/null -m 2 "$GRAFT_TEST_SQS_ENDPOINT/" && break
+            sleep 1
+          done
+          cargo test -p graft-queue --test emulator -- --ignored --test-threads=1
+      - name: The event queue through the real service
+        if: needs.changes.outputs.service == 'true'
+        run: sh scripts/queue-e2e.sh
+      - name: The committed OpenAPI document matches the service
+        run: |
+          cargo run -q -p graft-api --bin graft-openapi > "$RUNNER_TEMP/openapi.json"
+          diff -u openapi/openapi.json "$RUNNER_TEMP/openapi.json"
+      # The site against the real service, database and bucket this job already has: a flip is
+      # published through the API, the operator hides and clears it, and Chromium opens the link.
+      # Chromium comes from a cache keyed on the Playwright version; only its system libraries are installed each run.
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        if: needs.changes.outputs.service == 'true'
+        with:
+          package_json_file: web/package.json
+      - name: Web dependencies and the Playwright version, for the service tests
+        if: needs.changes.outputs.service == 'true'
+        run: |
+          cd web
+          pnpm install --frozen-lockfile
+          echo "PLAYWRIGHT_VERSION=$(pnpm exec playwright --version | cut -d' ' -f2)" >> "$GITHUB_ENV"
+          command -v psql >/dev/null || (sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -qq && sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y -qq --no-install-recommends postgresql-client)
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        if: needs.changes.outputs.service == 'true'
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}
+      - name: Chromium and its system libraries
+        if: needs.changes.outputs.service == 'true'
+        working-directory: web
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Browser tests against the real service
+        if: needs.changes.outputs.service == 'true'
+        run: sh scripts/service-e2e.sh e2e/service
       - name: Crate dependency direction
         run: node scripts/check-crate-graph.mjs
+
+  renderer:
+    name: renderer
+    needs: changes
+    if: needs.changes.outputs.renderer == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - name: Install the pinned toolchain
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: The committed vector table matches the independent reference
+        run: python3 scripts/vectors/generate.py --check
+      - name: Two builds from different directories are byte-identical
+        run: sh scripts/check-reproducible.sh
+      - name: Build the artefact
+        run: sh scripts/build-wasm.sh
+      - name: Hash matches the pin for this renderer version, pins are append-only
+        env:
+          BASE: ${{ github.base_ref }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          art=target/wasm32-unknown-unknown/wasm/graft_render.wasm
+          if [ -n "$BASE" ]; then
+            node scripts/check-wasm-pin.mjs "$art" --base "origin/$BASE"
+          elif [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            node scripts/check-wasm-pin.mjs "$art" --base "$BEFORE"
+          else
+            node scripts/check-wasm-pin.mjs "$art"
+          fi
+      - name: Vectors on native, wasmtime and the render host; module shape; host tests
+        run: cargo test -p graft-vectors -p graft-render-host
+      - name: Measure the render host on the worst-case renders
+        run: |
+          cargo run --release -q -p graft-vectors --bin render-measure -- \
+            target/wasm32-unknown-unknown/wasm/graft_render.wasm | tee measure.txt
+          { echo '### Render host measurements'; echo '```'; cat measure.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+  cross-host-linux:
+    name: cross-host vectors (ubuntu-24.04)
+    needs: changes
+    if: needs.changes.outputs.renderer == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # The image carries the browsers' system libraries, which otherwise take ~9 minutes to install.
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:7852dc5a7d72f5fe458a597d690f6c42fbc8e9e26ddfa95f8e6ef552558d9bbf
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Tools the container lacks (C linker, curl)
+        # The package mirror has stalled this step for a quarter of an hour twice: retries and
+        # network timeouts make it fail or recover in minutes, and the step limit bounds the rest.
+        timeout-minutes: 5
+        run: |
+          apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -qq
+          apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y -qq --no-install-recommends build-essential curl ca-certificates git
+      - name: Install the pinned toolchain (rustup 1.28.2, checksum pinned)
+        run: |
+          curl -sSfL -o /tmp/rustup-init https://static.rust-lang.org/rustup/archive/1.28.2/x86_64-unknown-linux-gnu/rustup-init
+          echo "20a06e644b0d9bd2fbdbfd52d42540bdde820ea7df86e92e533c073da0cdd43c  /tmp/rustup-init" | sha256sum -c -
+          chmod +x /tmp/rustup-init
+          /tmp/rustup-init -y --default-toolchain none --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          "$HOME/.cargo/bin/rustup" toolchain install
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: tools/vectors/package.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: tools/vectors/pnpm-lock.yaml
+      - name: Rust hosts, pin, replay command
+        env:
+          HOME: /root
+        run: sh scripts/cross-host.sh
+      - name: Node, TypeScript port, Chromium, Firefox, WebKit
+        working-directory: tools/vectors
+        env:
+          HOME: /root
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm typecheck
+          pnpm lint
+          pnpm format:check
+          pnpm audit --audit-level high
+          pnpm test
+
+  cross-host-macos:
+    name: cross-host vectors (macos-15)
+    # macOS minutes cost ten times Linux minutes, so this runs only when started by hand (Actions,
+    # "Run workflow"): before a release, or when a change could behave differently on arm64. The
+    # builder's own machine is macOS arm64 and runs the same tests locally.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: macos-15
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: tools/vectors
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: tools/vectors/package.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: tools/vectors/pnpm-lock.yaml
+      - name: Install the pinned toolchain
+        working-directory: .
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install chromium firefox webkit
+      - name: Rust hosts, pin, replay command
+        working-directory: .
+        run: sh scripts/cross-host.sh
+      - name: Node, TypeScript port, Chromium, Firefox, WebKit
+        run: |
+          pnpm typecheck
+          pnpm lint
+          pnpm audit --audit-level high
+          pnpm test
+
+  host-check-image:
+    name: check image (container)
+    needs: changes
+    if: needs.changes.outputs.image == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build the check image
+        run: docker build -t graft-host-check .
+      - name: Run it at the target size (512 MB, one CPU) and read its own results
+        shell: bash
+        run: |
+          docker run -d --name check --memory 512m --cpus 1 -p 8080:8080 graft-host-check
+          for i in $(seq 1 60); do
+            curl -fsS localhost:8080/health >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS localhost:8080/health
+          curl -fsS localhost:8080/results | tee results.json
+          python3 -c "import json; d=json.load(open('results.json')); assert d['checks']['total']>100 and d['checks']['failed']==0, d['checks']; print('vectors passed in the container:', d['checks']['passed'], 'of', d['checks']['total'])"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST --data 'x' localhost:8080/results)" = 405
+          test "$(curl -s -o /dev/null -w '%{http_code}' localhost:8080/render)" = 404
+          { echo '### Check image results (512 MB, 1 CPU container)'; echo '```json'; cat results.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Container log
+        if: always()
+        run: docker logs check || true
 
   supply-chain:
     name: supply chain
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2.87.30
@@ -74,6 +376,7 @@ jobs:
   secrets:
     name: secret scan
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -87,12 +390,23 @@ jobs:
 
   web:
     name: web
+    needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # The image carries Chromium and its system libraries; the browser tests (the playback engine
+    # over real Web Audio, the roll at a phone viewport) run here, only when web/ can have changed.
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:7852dc5a7d72f5fe458a597d690f6c42fbc8e9e26ddfa95f8e6ef552558d9bbf
+      env:
+        HOME: /root
     defaults:
       run:
         working-directory: web
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: git, for the typed-client drift check (the image may not carry it)
+        run: command -v git >/dev/null || (apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -qq && apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y -qq --no-install-recommends git)
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           package_json_file: web/package.json
@@ -102,9 +416,22 @@ jobs:
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
+      - name: The typed client is generated from the committed OpenAPI document
+        run: |
+          pnpm generate:api
+          git diff --exit-code -- lib/api/schema.d.ts
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm format:check
+      - run: pnpm test
       - run: pnpm build
+      - name: Browser tests (Chromium)
+        if: needs.changes.outputs.web == 'true'
+        env:
+          CI: "true"
+          # GitHub points HOME at /github/home in a container step, and Firefox will not start as
+          # root there; the container-level setting does not reach the step.
+          HOME: /root
+        run: pnpm exec playwright test
       - name: Dependency audit
         run: pnpm audit --audit-level high

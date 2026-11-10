@@ -8,6 +8,12 @@ publish.workspace = true
 
 [dependencies]
 graft-domain.workspace = true
+sha2 = "0.11"
+thiserror = "2"
+wasmtime = { version = "50", default-features = false, features = ["runtime", "cranelift"] }
+
+[dev-dependencies]
+wat = "1"
 
 [lints]
 workspace = true

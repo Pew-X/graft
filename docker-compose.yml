@@ -1,0 +1,114 @@
+# graft with only Docker installed: Postgres, an S3-compatible store, the service (with the chain seeded)
+# and the site. Everything is built from this checkout.
+#
+#   docker compose up --build        then open http://127.0.0.1:3100
+#   docker compose down              stop it (add -v to forget the database and the audio)
+#
+# These are throwaway credentials for a throwaway stack, bound to 127.0.0.1 only. For development with
+# the tests and hot builds, README.md ("Run it") uses the pieces on the host instead.
+#
+# Why the service shares the store's network: the service signs audio addresses with the store's address,
+# and the browser must reach that same address. Sharing one network namespace makes 127.0.0.1:59000 the
+# store for both the service and the browser, on Linux, macOS and Windows alike.
+name: graft
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: graft
+      POSTGRES_DB: graft
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d graft"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  s3:
+    image: rustfs/rustfs@sha256:9ca9559533b537d10482fe923288b676ad08f92a7069d9a17327fbae3cab688b
+    environment:
+      RUSTFS_ACCESS_KEY: graftaccess
+      RUSTFS_SECRET_KEY: graftsecret12345
+      RUSTFS_ADDRESS: ":59000"
+    volumes:
+      - s3data:/data
+    # the store, the service and the site's server all answer on this one namespace
+    ports:
+      - "127.0.0.1:59000:59000"
+      - "127.0.0.1:3300:3300"
+
+  bucket:
+    image: curlimages/curl:8.11.1
+    network_mode: "service:s3"
+    depends_on:
+      - s3
+    restart: "no"
+    # the bucket, then a rule that lets the site (and only the site) read audio from the browser
+    entrypoint:
+      - sh
+      - -c
+      - |
+        s3="http://127.0.0.1:59000/graft-test"
+        sign='--aws-sigv4 aws:amz:us-east-1:s3 --user graftaccess:graftsecret12345'
+        until curl -fsS -o /dev/null -X PUT $$sign "$$s3"; do sleep 1; done
+        curl -fsS -o /dev/null -X PUT $$sign -H "Content-Type: application/xml" \
+          --data-binary '<CORSConfiguration><CORSRule><AllowedOrigin>http://127.0.0.1:3100</AllowedOrigin><AllowedMethod>GET</AllowedMethod><AllowedMethod>HEAD</AllowedMethod><AllowedHeader>*</AllowedHeader><MaxAgeSeconds>3600</MaxAgeSeconds></CORSRule></CORSConfiguration>' "$$s3?cors"
+
+  seed:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+    image: graft-service:compose
+    network_mode: "service:s3"
+    depends_on:
+      db:
+        condition: service_healthy
+      bucket:
+        condition: service_completed_successfully
+    restart: "no"
+    environment: &service-env
+      GRAFT_DATABASE_URL: postgres://postgres:graft@db:5432/graft
+      GRAFT_ENVIRONMENT: local
+      GRAFT_BLOB_S3_BUCKET: graft-test
+      GRAFT_BLOB_S3_PREFIX: compose
+      GRAFT_BLOB_S3_ENDPOINT: http://127.0.0.1:59000
+      GRAFT_BLOB_S3_ALLOW_HTTP: "true"
+      GRAFT_BLOB_S3_ACCESS_KEY_ID: graftaccess
+      GRAFT_BLOB_S3_SECRET_ACCESS_KEY: graftsecret12345
+    command: ["graft-seed-chain", "--manifest", "seed/chain.json"]
+
+  api:
+    image: graft-service:compose
+    pull_policy: never
+    network_mode: "service:s3"
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    environment:
+      <<: *service-env
+      GRAFT_BIND: 0.0.0.0:3300
+      GRAFT_CORS_ORIGINS: http://127.0.0.1:3100
+      GRAFT_ADMIN_SECRET: local-admin-secret-0123456789
+      GRAFT_UPLOADS: "on"
+
+  web:
+    build:
+      context: web
+      dockerfile: ../Dockerfile.web
+      args:
+        GRAFT_PUBLIC_API_URL: http://127.0.0.1:3300
+        GRAFT_CONNECT_ORIGINS: http://127.0.0.1:3300,http://127.0.0.1:59000
+    depends_on:
+      - api
+    restart: unless-stopped
+    environment:
+      GRAFT_API_URL: http://s3:3300
+    ports:
+      - "127.0.0.1:3100:3100"
+
+volumes:
+  dbdata:
+  s3data:

@@ -62,6 +62,13 @@ export function lintMessage(message) {
   return problems;
 }
 
+// Commits already on dev whose message cannot be rewritten (dev's history is never rewritten) and that a
+// reader would not call a trailer: a squash body that began with the sentence "Perform: number keys, pads...".
+// Each entry is the first nine characters of the commit's hash. Nothing else is exempt, and a new commit
+// is never added here to get past the rule: the message is changed instead.
+const ACCEPTED = new Set(["f5f89e7d0"]);
+export const isAccepted = (sha) => ACCEPTED.has(sha.slice(0, 9));
+
 function commitsInRange(range) {
   const raw = execFileSync("git", ["log", "--no-merges", "--format=%H%x00%B%x01", range], { encoding: "utf8" });
   return raw
@@ -81,7 +88,7 @@ function main(argv) {
   let items;
   if (flag === "--file" && value) items = [{ label: value, message: stripEditorTemplate(readFileSync(value, "utf8")) }];
   else if (flag === "--title" && value) items = [{ label: "title", message: value }];
-  else if (flag === "--range" && value) items = commitsInRange(value).map((c) => ({ label: c.sha, message: c.message }));
+  else if (flag === "--range" && value) items = commitsInRange(value).filter((c) => !isAccepted(c.sha)).map((c) => ({ label: c.sha, message: c.message }));
   else {
     console.error("usage: lint-commit-msg.mjs --file <path> | --title <text> | --range <base>..<head>");
     return 2;
